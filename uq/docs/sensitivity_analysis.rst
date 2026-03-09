@@ -1,0 +1,278 @@
+Sensitivity Analysis
+====================
+
+The UQ framework implements global sensitivity analysis using Polynomial Chaos
+Expansion (PCE) surrogate methods and Sobol indices, as specified in the
+Milestone 08.4.2 requirements.
+
+Overview
+--------
+
+Sensitivity analysis answers the question: **Which input parameters have the
+greatest influence on simulation outputs?**
+
+The framework uses:
+
+* **PCE (Polynomial Chaos Expansion)**: Builds a polynomial surrogate model
+* **Sobol indices**: Quantifies variance-based sensitivity
+* **UQPy/PyTUQ**: Industry-standard uncertainty quantification libraries
+
+Sobol Sensitivity Indices
+-------------------------
+
+Sobol indices decompose output variance into contributions from each input parameter:
+
+First-Order Index (S₁)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Measures the **main effect** of a single parameter:
+
+.. math::
+
+   S_i = \\frac{V[E[Y|X_i]]}{V[Y]}
+
+where :math:`V[E[Y|X_i]]` is the variance of the expected output when :math:`X_i` is fixed.
+
+Total-Order Index (Sₜ)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Measures the **total effect** including all interactions:
+
+.. math::
+
+   S_{Ti} = 1 - \\frac{V[E[Y|X_{\\sim i}]]}{V[Y]}
+
+where :math:`X_{\\sim i}` represents all parameters except :math:`X_i`.
+
+**Interpretation**:
+
+* :math:`S_i \\approx S_{Ti}`: Parameter has minimal interactions
+* :math:`S_{Ti} >> S_i`: Parameter has significant interactions with others
+* :math:`\\sum S_i < 1`: Significant interaction effects exist
+
+PCE Surrogate Method
+--------------------
+
+The recommended method builds a PCE surrogate model from simulation data:
+
+.. code-block:: python
+
+   from uq import SensitivityAnalyzer, InputParameterSpace
+
+   param_space = InputParameterSpace(include_vio=True, include_mecillinam=True)
+   analyzer = SensitivityAnalyzer(param_space, wrapper)
+
+   # Build PCE surrogate and compute Sobol indices
+   sobol_indices, pce_surrogate = analyzer.analyze_with_pce(
+       polynomial_order=3,  # Polynomial degree
+       n_samples=100,       # Training samples
+       use_uqpy=True,       # Use UQPy (default)
+   )
+
+**Advantages**:
+
+* Efficient: Sobol indices computed analytically from PCE coefficients
+* Accurate: Captures nonlinear relationships
+* Interpretable: Surrogate can be used for rapid predictions
+
+Polynomial Order Selection
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The polynomial order controls model complexity:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - Order
+     - Pros
+     - Cons
+   * - 1-2
+     - Few samples needed, fast
+     - May miss nonlinear effects
+   * - 3-4
+     - Good balance
+     - Moderate sample requirements
+   * - 5+
+     - Captures complex behavior
+     - Many samples needed, potential overfitting
+
+**Rule of thumb**: Start with order 3, increase if :math:`R^2 < 0.9`.
+
+Sample Size Selection
+^^^^^^^^^^^^^^^^^^^^^
+
+The number of samples should scale with input dimension and polynomial order:
+
+.. math::
+
+   N_{min} \\approx 2 \\times \\binom{d + p}{p}
+
+where :math:`d` is the number of parameters and :math:`p` is the polynomial order.
+
+For 3 parameters and order 3: :math:`N_{min} \\approx 2 \\times 20 = 40`
+
+Using UQPy
+----------
+
+The framework integrates with UQPy for sensitivity analysis:
+
+.. code-block:: python
+
+   from uq import create_uqpy_model, InputParameterSpace, WrapperConfig
+
+   param_space = InputParameterSpace(include_vio=True, include_mecillinam=True)
+   config = WrapperConfig(
+       sim_data_path="./sim_data.cPickle",
+       output_dir="./uq_outputs",
+   )
+
+   # Create UQPy-compatible model
+   model = create_uqpy_model(config, param_space)
+
+   # Use with UQPy directly
+   from UQpy.distributions import Uniform, JointIndependent
+   from UQpy.sampling import LatinHypercubeSampling
+   from UQpy.surrogates.polynomial_chaos import PolynomialChaosExpansion
+
+   distributions = param_space.get_uqpy_distributions()
+   joint = JointIndependent(marginals=distributions)
+   lhs = LatinHypercubeSampling(distributions=joint, nsamples=100)
+
+Using PyTUQ
+-----------
+
+Alternative integration with PyTUQ:
+
+.. code-block:: python
+
+   from uq import create_pytuq_model
+
+   model_func = create_pytuq_model(config, param_space)
+   lb, ub = param_space.get_pytuq_bounds()
+
+   # Use with PyTUQ
+   # from pytuq.surrogates import PCE
+   # pce = PCE(order=3, bounds=(lb, ub))
+   # pce.fit(X, model_func(X))
+
+Direct Sobol Analysis
+---------------------
+
+For cases where PCE assumptions may not hold, direct Monte Carlo Sobol analysis
+is available:
+
+.. code-block:: python
+
+   sobol = analyzer.analyze_with_sobol(
+       n_samples=1024,           # Base samples (total = N * (2d + 2))
+       calc_second_order=True,   # Include interaction indices
+   )
+
+   print(f"First-order: {sobol.first_order}")
+   print(f"Total-order: {sobol.total_order}")
+   print(f"Second-order: {sobol.second_order}")  # If calc_second_order=True
+
+**Note**: Direct Sobol analysis requires many more samples than PCE
+(:math:`N \\times (2d + 2)` evaluations).
+
+Interpreting Results
+--------------------
+
+Working with SobolIndices
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   # Get most influential parameters
+   top_params = sobol_indices.get_most_influential(n=5, index_type="total")
+   for name, value in top_params:
+       print(f"{name}: {value:.4f}")
+
+   # Access raw indices
+   print(f"First-order: {sobol_indices.first_order}")
+   print(f"Total-order: {sobol_indices.total_order}")
+   print(f"Parameters: {sobol_indices.parameter_names}")
+
+Visualization
+^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   import matplotlib.pyplot as plt
+   import numpy as np
+
+   names = sobol_indices.parameter_names
+   s1 = sobol_indices.first_order
+   st = sobol_indices.total_order
+
+   x = np.arange(len(names))
+   width = 0.35
+
+   fig, ax = plt.subplots()
+   ax.bar(x - width/2, s1, width, label='First-order')
+   ax.bar(x + width/2, st, width, label='Total-order')
+   ax.set_ylabel('Sobol Index')
+   ax.set_xticks(x)
+   ax.set_xticklabels(names, rotation=45)
+   ax.legend()
+   plt.tight_layout()
+   plt.savefig('sensitivity_indices.png')
+
+Multi-Output Analysis
+^^^^^^^^^^^^^^^^^^^^^
+
+When analyzing multiple outputs, indices have shape ``(n_outputs, n_params)``:
+
+.. code-block:: python
+
+   # Average across outputs
+   avg_first_order = np.mean(sobol_indices.first_order, axis=0)
+   avg_total_order = np.mean(sobol_indices.total_order, axis=0)
+
+   # Or analyze specific outputs
+   output_idx = 0  # First output
+   s1_output0 = sobol_indices.first_order[output_idx]
+
+Convenience Functions
+---------------------
+
+For quick analysis, use the convenience functions:
+
+.. code-block:: python
+
+   from uq import run_sensitivity_analysis, analyze_precomputed_results
+
+   # Run complete analysis workflow
+   sobol, pce = run_sensitivity_analysis(
+       sim_data_path="./sim_data.cPickle",
+       output_dir="./uq_analysis",
+       aggregation_strategy=AggregationStrategy.UNIFORM,
+       polynomial_order=3,
+       include_vio=True,
+       include_mecillinam=True,
+   )
+
+   # Analyze existing simulation results
+   sobol, pce = analyze_precomputed_results(
+       data_dir="./simulation_outputs",
+       aggregation_strategy=AggregationStrategy.BY_GENERATION,
+   )
+
+Best Practices
+--------------
+
+1. **Start simple**: Begin with order 3 PCE and ~100 samples
+2. **Check convergence**: Increase samples until indices stabilize
+3. **Validate surrogate**: Check :math:`R^2` of PCE fit
+4. **Use appropriate aggregation**: Match strategy to analysis goals
+5. **Filter transients**: Use ``generation_lower_bound`` to skip initial behavior
+6. **Consider interactions**: If :math:`S_{Ti} >> S_i`, explore interaction effects
+
+See Also
+--------
+
+* :doc:`api/sensitivity` - Full API reference
+* :doc:`tutorials/basic_sensitivity` - Step-by-step tutorial
+* `UQPy Documentation <https://uqpyproject.readthedocs.io/>`_
+* `PyTUQ Documentation <https://sandialabs.github.io/pytuq/>`_

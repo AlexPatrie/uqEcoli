@@ -1,0 +1,1328 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>uq.aggregation &mdash; vEcoli UQ Framework 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=74eb3eb4" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            vEcoli UQ Framework
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#basic-concepts">Basic Concepts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#input-parameters">Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#output-variables">Output Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#aggregation-strategies">Aggregation Strategies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#sensitivity-analysis">Sensitivity Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#your-first-analysis">Your First Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#using-precomputed-results">Using Precomputed Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../aggregation_strategies.html">Aggregation Strategies</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-1-uniform-aggregation">Strategy 1: Uniform Aggregation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-2-by-generation">Strategy 2: By Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-3-by-lineage-seed">Strategy 3: By Lineage Seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-4-by-cell-cycle">Strategy 4: By Cell Cycle</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../aggregation_strategies.html#cell-cycle-variables">Cell Cycle Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#filtering-data">Filtering Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#choosing-a-strategy">Choosing a Strategy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sensitivity_analysis.html">Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#sobol-sensitivity-indices">Sobol Sensitivity Indices</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#first-order-index-s1">First-Order Index (S₁)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#total-order-index-st">Total-Order Index (Sₜ)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#pce-surrogate-method">PCE Surrogate Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#polynomial-order-selection">Polynomial Order Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#sample-size-selection">Sample Size Selection</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#using-uqpy">Using UQPy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#using-pytuq">Using PyTUQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#interpreting-results">Interpreting Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#working-with-sobolindices">Working with SobolIndices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#visualization">Visualization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#multi-output-analysis">Multi-Output Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../cell_cycle.html">Cell Cycle Stratification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#cell-cycle-variables">Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#built-in-variables">Built-in Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#using-the-cell-cycle-aggregator">Using the Cell Cycle Aggregator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#computing-cell-cycle-profiles">Computing Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#direct-aggregation">Direct Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#computing-raw-cell-cycle-values">Computing Raw Cell Cycle Values</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#custom-cell-cycle-variables">Custom Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#using-compositecellcyclevariable">Using CompositeCellCycleVariable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#implementing-cellcyclevariablecomputer">Implementing CellCycleVariableComputer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#integration-with-sensitivity-analysis">Integration with Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#plot-cell-cycle-profiles">Plot Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#compare-variables">Compare Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#future-directions">Future Directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/basic_sensitivity.html">Tutorial: Basic Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-1-define-input-parameters">Step 1: Define Input Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-2-configure-the-wrapper">Step 2: Configure the Wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-3-run-sensitivity-analysis">Step 3: Run Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-4-interpret-results">Step 4: Interpret Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-5-visualize-results">Step 5: Visualize Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#complete-script">Complete Script</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/variance_decomposition.html">Tutorial: Variance Decomposition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-1-aggregate-with-different-strategies">Step 1: Aggregate with Different Strategies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-2-compute-variance-decomposition">Step 2: Compute Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-3-analyze-per-gene-variance">Step 3: Analyze Per-Gene Variance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-4-visualize-variance-components">Step 4: Visualize Variance Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-5-compare-output-types">Step 5: Compare Output Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#interpretation-guide">Interpretation Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html">Tutorial: Cell Cycle Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-1-create-cell-cycle-aggregator">Step 1: Create Cell Cycle Aggregator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-2-compute-cell-cycle-variable">Step 2: Compute Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-3-get-cell-cycle-profiles">Step 3: Get Cell Cycle Profiles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-4-analyze-multiple-outputs">Step 4: Analyze Multiple Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-5-compare-cell-cycle-variables">Step 5: Compare Cell Cycle Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-6-transcriptome-cell-cycle-dynamics">Step 6: Transcriptome Cell Cycle Dynamics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-7-custom-cell-cycle-variable">Step 7: Custom Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#key-takeaways">Key Takeaways</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/inputs.html">Input Parameters API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/inputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#mediacondition">MediaCondition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.MediaCondition"><code class="docutils literal notranslate"><span class="pre">MediaCondition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#viopathwayparams">VioPathwayParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.VioPathwayParams"><code class="docutils literal notranslate"><span class="pre">VioPathwayParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#mecillinamparams">MecillinamParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.MecillinamParams"><code class="docutils literal notranslate"><span class="pre">MecillinamParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#geneknockoutparams">GeneKnockoutParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.GeneKnockoutParams"><code class="docutils literal notranslate"><span class="pre">GeneKnockoutParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#uqinputparameters">UQInputParameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.UQInputParameters"><code class="docutils literal notranslate"><span class="pre">UQInputParameters</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#inputparameterspace">InputParameterSpace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.InputParameterSpace"><code class="docutils literal notranslate"><span class="pre">InputParameterSpace</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/inputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#defining-input-parameters">Defining Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#creating-parameter-spaces">Creating Parameter Spaces</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/outputs.html">Output Variables API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputtype">OutputType</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputType"><code class="docutils literal notranslate"><span class="pre">OutputType</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputvariables">OutputVariables</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputVariables"><code class="docutils literal notranslate"><span class="pre">OutputVariables</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputextractor">OutputExtractor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputExtractor"><code class="docutils literal notranslate"><span class="pre">OutputExtractor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#get-output-variable-info">get_output_variable_info</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.get_output_variable_info"><code class="docutils literal notranslate"><span class="pre">get_output_variable_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#extracting-outputs">Extracting Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#output-column-names">Output Column Names</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/aggregation.html">Aggregation API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregationstrategy">AggregationStrategy</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.AggregationStrategy"><code class="docutils literal notranslate"><span class="pre">AggregationStrategy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregatedoutput">AggregatedOutput</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.AggregatedOutput"><code class="docutils literal notranslate"><span class="pre">AggregatedOutput</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregator">Aggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.Aggregator"><code class="docutils literal notranslate"><span class="pre">Aggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#compute-variance-decomposition">compute_variance_decomposition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.compute_variance_decomposition"><code class="docutils literal notranslate"><span class="pre">compute_variance_decomposition()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#basic-aggregation">Basic Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/wrappers.html">Wrappers API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#wrapperconfig">WrapperConfig</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.WrapperConfig"><code class="docutils literal notranslate"><span class="pre">WrapperConfig</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#simulationwrapper">SimulationWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.SimulationWrapper"><code class="docutils literal notranslate"><span class="pre">SimulationWrapper</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#precomputedwrapper">PrecomputedWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.PrecomputedWrapper"><code class="docutils literal notranslate"><span class="pre">PrecomputedWrapper</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#create-uqpy-model">create_uqpy_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.create_uqpy_model"><code class="docutils literal notranslate"><span class="pre">create_uqpy_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#create-pytuq-model">create_pytuq_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.create_pytuq_model"><code class="docutils literal notranslate"><span class="pre">create_pytuq_model()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#id10">SimulationWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#id11">PrecomputedWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#uqpy-integration">UQPy Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#pytuq-integration">PyTUQ Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#caching">Caching</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/sensitivity.html">Sensitivity Analysis API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sensitivitymethod">SensitivityMethod</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SensitivityMethod"><code class="docutils literal notranslate"><span class="pre">SensitivityMethod</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sobolindices">SobolIndices</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SobolIndices"><code class="docutils literal notranslate"><span class="pre">SobolIndices</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#pcesurrogate">PCESurrogate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.PCESurrogate"><code class="docutils literal notranslate"><span class="pre">PCESurrogate</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sensitivityanalyzer">SensitivityAnalyzer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">SensitivityAnalyzer</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#run-sensitivity-analysis">run_sensitivity_analysis</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.run_sensitivity_analysis"><code class="docutils literal notranslate"><span class="pre">run_sensitivity_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#analyze-precomputed-results">analyze_precomputed_results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.analyze_precomputed_results"><code class="docutils literal notranslate"><span class="pre">analyze_precomputed_results()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#pce-based-analysis">PCE-Based Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#precomputed-results">Precomputed Results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cell_cycle.html">Cell Cycle API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclephase">CellCyclePhase</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCyclePhase"><code class="docutils literal notranslate"><span class="pre">CellCyclePhase</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclevariable">CellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclevariablecomputer">CellCycleVariableComputer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleVariableComputer"><code class="docutils literal notranslate"><span class="pre">CellCycleVariableComputer</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#massbasedcellcyclevariable">MassBasedCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.MassBasedCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">MassBasedCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#dnareplicationcellcyclevariable">DNAReplicationCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.DNAReplicationCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">DNAReplicationCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellanglecellcyclevariable">CellAngleCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellAngleCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellAngleCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#compositecellcyclevariable">CompositeCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CompositeCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CompositeCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcycleaggregator">CellCycleAggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleAggregator"><code class="docutils literal notranslate"><span class="pre">CellCycleAggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#register-cell-cycle-variable">register_cell_cycle_variable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.register_cell_cycle_variable"><code class="docutils literal notranslate"><span class="pre">register_cell_cycle_variable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#custom-variables">Custom Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#available-variables">Available Variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../design_document.html">Design Document</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#vision">Vision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#implementation-status">Implementation Status</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../design_document.html#phase-1-ms-08-4-2">Phase 1 (MS-08.4.2)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../design_document.html#phase-2-cd2-milestone-10">Phase 2 (CD2/Milestone 10)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#libraries">Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#future-directions">Future Directions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../changelog.html#id1">[0.1.0] - 2026-03-03</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../changelog.html#added">Added</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../changelog.html#dependencies">Dependencies</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vEcoli UQ Framework</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">uq.aggregation</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for uq.aggregation</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Aggregation strategies for uncertainty quantification.</span>
+
+<span class="sd">This module implements the four aggregation strategies specified in the UQ framework:</span>
+
+<span class="sd">1. Uniform aggregation: Across all simulated cells and times (baseline)</span>
+<span class="sd">2. Stratified by generation: Control of convergence towards steady-state growth</span>
+<span class="sd">3. Stratified by lineage seed: Control of exogenous variance</span>
+<span class="sd">4. Stratified by cell cycle stage: Time course within a cell&#39;s lifespan (Phase 2)</span>
+
+<span class="sd">These strategies enable deconvolution of different types of uncertainty and</span>
+<span class="sd">accurate modeling of the relationship between &quot;bulk&quot; and &quot;single-cell&quot; attributes.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">duckdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">DuckDBPyConnection</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">reconstruction.ecoli.simulation_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimulationDataEcoli</span>
+
+
+<div class="viewcode-block" id="AggregationStrategy">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.AggregationStrategy">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AggregationStrategy</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Available aggregation strategies for UQ analysis.&quot;&quot;&quot;</span>
+
+    <span class="n">UNIFORM</span> <span class="o">=</span> <span class="s2">&quot;uniform&quot;</span>
+    <span class="n">BY_GENERATION</span> <span class="o">=</span> <span class="s2">&quot;by_generation&quot;</span>
+    <span class="n">BY_LINEAGE_SEED</span> <span class="o">=</span> <span class="s2">&quot;by_lineage_seed&quot;</span>
+    <span class="n">BY_CELL_CYCLE</span> <span class="o">=</span> <span class="s2">&quot;by_cell_cycle&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AggregatedOutput">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.AggregatedOutput">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AggregatedOutput</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Container for aggregated output statistics.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        mean: Mean values across the aggregation dimension</span>
+<span class="sd">        std: Standard deviation across the aggregation dimension</span>
+<span class="sd">        n_samples: Number of samples in each aggregation group</span>
+<span class="sd">        groups: Group labels (generation, lineage_seed, etc.) if stratified</span>
+<span class="sd">        raw_data: Optional raw data before aggregation</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">mean</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">std</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">groups</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">raw_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="Aggregator">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Aggregator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Performs aggregation of simulation outputs according to specified strategies.</span>
+
+<span class="sd">    This class extracts subsampled time points and variables from emitted</span>
+<span class="sd">    simulation trajectories and aggregates them into output variables Y</span>
+<span class="sd">    for sensitivity analysis.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Column names</span>
+    <span class="n">ID_COLS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;experiment_id&quot;</span><span class="p">,</span> <span class="s2">&quot;variant&quot;</span><span class="p">,</span> <span class="s2">&quot;lineage_seed&quot;</span><span class="p">,</span> <span class="s2">&quot;generation&quot;</span><span class="p">,</span> <span class="s2">&quot;agent_id&quot;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Aggregator.__init__">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">conn</span><span class="p">:</span> <span class="n">DuckDBPyConnection</span><span class="p">,</span>
+        <span class="n">history_sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">config_sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">sim_data</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;SimulationDataEcoli&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the aggregator.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            conn: DuckDB connection</span>
+<span class="sd">            history_sql: SQL subquery for history (timeseries) data</span>
+<span class="sd">            config_sql: SQL subquery for configuration data</span>
+<span class="sd">            sim_data: Optional SimulationDataEcoli for metadata lookup</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conn</span> <span class="o">=</span> <span class="n">conn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">history_sql</span> <span class="o">=</span> <span class="n">history_sql</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config_sql</span> <span class="o">=</span> <span class="n">config_sql</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sim_data</span> <span class="o">=</span> <span class="n">sim_data</span></div>
+
+
+<div class="viewcode-block" id="Aggregator.aggregate">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.aggregate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">,</span>
+        <span class="n">group_labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AggregatedOutput</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate data according to the specified strategy.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data: Input data array of shape (n_samples, n_features)</span>
+<span class="sd">            strategy: Aggregation strategy to use</span>
+<span class="sd">            group_labels: Group labels for stratified aggregation</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            AggregatedOutput containing statistics</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aggregate_uniform</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">strategy</span> <span class="ow">in</span> <span class="p">(</span>
+            <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">,</span>
+            <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_LINEAGE_SEED</span><span class="p">,</span>
+            <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_CELL_CYCLE</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="n">group_labels</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;group_labels required for </span><span class="si">{</span><span class="n">strategy</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2"> aggregation&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_aggregate_stratified</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">group_labels</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown aggregation strategy: </span><span class="si">{</span><span class="n">strategy</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_aggregate_uniform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AggregatedOutput</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate uniformly across all samples (Strategy 1).</span>
+
+<span class="sd">        This is the baseline aggregation that computes mean and std</span>
+<span class="sd">        across all cells and all timepoints.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data: Input data array of shape (n_samples, n_features)</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            AggregatedOutput with single mean/std values per feature</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanstd</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+            <span class="n">mean</span><span class="o">=</span><span class="n">mean</span><span class="p">,</span>
+            <span class="n">std</span><span class="o">=</span><span class="n">std</span><span class="p">,</span>
+            <span class="n">n_samples</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">raw_data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_aggregate_stratified</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">data</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">group_labels</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AggregatedOutput</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate stratified by group labels (Strategies 2, 3, 4).</span>
+
+<span class="sd">        This computes mean and std within each group, enabling</span>
+<span class="sd">        analysis of variance attributable to different factors.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data: Input data array of shape (n_samples, n_features)</span>
+<span class="sd">            group_labels: Array of group labels for each sample</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            AggregatedOutput with per-group statistics</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">unique_groups</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">group_labels</span><span class="p">)</span>
+        <span class="n">n_groups</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique_groups</span><span class="p">)</span>
+        <span class="n">n_features</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">1</span>
+
+        <span class="n">means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_groups</span><span class="p">,</span> <span class="n">n_features</span><span class="p">))</span>
+        <span class="n">stds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_groups</span><span class="p">,</span> <span class="n">n_features</span><span class="p">))</span>
+        <span class="n">n_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n_groups</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">unique_groups</span><span class="p">):</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">group_labels</span> <span class="o">==</span> <span class="n">group</span>
+            <span class="n">group_data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span>
+            <span class="n">means</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">(</span><span class="n">group_data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">stds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nanstd</span><span class="p">(</span><span class="n">group_data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">n_samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+            <span class="n">mean</span><span class="o">=</span><span class="n">means</span><span class="p">,</span>
+            <span class="n">std</span><span class="o">=</span><span class="n">stds</span><span class="p">,</span>
+            <span class="n">n_samples</span><span class="o">=</span><span class="n">n_samples</span><span class="p">,</span>
+            <span class="n">groups</span><span class="o">=</span><span class="n">unique_groups</span><span class="p">,</span>
+            <span class="n">raw_data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="Aggregator.aggregate_transcriptome">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.aggregate_transcriptome">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate_transcriptome</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">,</span>
+        <span class="n">generation_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AggregatedOutput</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate transcriptome data according to the specified strategy.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            strategy: Aggregation strategy to use</span>
+<span class="sd">            generation_lower_bound: Only include data from this generation onwards</span>
+<span class="sd">            time_lower_bound: Only include data from this time onwards</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (AggregatedOutput, cistron_ids)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">ecoli.library.parquet_emitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_stacked_columns</span><span class="p">,</span> <span class="n">field_metadata</span>
+
+        <span class="n">mrna_col</span> <span class="o">=</span> <span class="s2">&quot;listeners__rna_counts__mRNA_cistron_counts&quot;</span>
+        <span class="n">mrna_ids</span> <span class="o">=</span> <span class="n">field_metadata</span><span class="p">(</span>
+            <span class="n">conn</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="p">,</span>
+            <span class="n">config_subquery</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config_sql</span><span class="p">,</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">mrna_col</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">history_subquery</span> <span class="o">=</span> <span class="n">read_stacked_columns</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">history_sql</span><span class="p">,</span>
+            <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mrna_col</span><span class="si">}</span><span class="s2"> AS mrna_counts&quot;</span><span class="p">],</span>
+            <span class="n">order_results</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">filter_clause</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_filter_clause</span><span class="p">(</span>
+            <span class="n">generation_lower_bound</span><span class="p">,</span> <span class="n">time_lower_bound</span>
+        <span class="p">)</span>
+
+        <span class="n">group_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_column</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(mrna_counts) AS mrna_count,</span>
+<span class="s2">                        generate_subscripts(mrna_counts, 1) AS idx</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    AVG(mrna_count) AS mean_count,</span>
+<span class="s2">                    STDDEV(mrna_count) AS std_count,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx</span>
+<span class="s2">                ORDER BY idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">mrna_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;mean_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;std_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="p">),</span>
+                <span class="n">mrna_ids</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(mrna_counts) AS mrna_count,</span>
+<span class="s2">                        generate_subscripts(mrna_counts, 1) AS idx,</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2"> AS group_label,</span>
+<span class="s2">                    AVG(mrna_count) AS mean_count,</span>
+<span class="s2">                    STDDEV(mrna_count) AS std_count,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx, </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                ORDER BY </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2">, idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">mrna_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="c1"># Reshape to (n_groups, n_features)</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;group_label&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mrna_ids</span><span class="p">)</span>
+            <span class="n">means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">stds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">n_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">groups</span><span class="p">):</span>
+                <span class="n">group_data</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;group_label&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">group</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="s2">&quot;idx&quot;</span><span class="p">)</span>
+                <span class="n">means</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;mean_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">stds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;std_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">n_samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">means</span><span class="p">,</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">stds</span><span class="p">,</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="n">n_samples</span><span class="p">,</span>
+                    <span class="n">groups</span><span class="o">=</span><span class="n">groups</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">mrna_ids</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Aggregator.aggregate_proteome">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.aggregate_proteome">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate_proteome</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">,</span>
+        <span class="n">generation_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AggregatedOutput</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate proteome data according to the specified strategy.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            strategy: Aggregation strategy to use</span>
+<span class="sd">            generation_lower_bound: Only include data from this generation onwards</span>
+<span class="sd">            time_lower_bound: Only include data from this time onwards</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (AggregatedOutput, monomer_ids)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">ecoli.library.parquet_emitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_stacked_columns</span><span class="p">,</span> <span class="n">field_metadata</span>
+
+        <span class="n">monomer_col</span> <span class="o">=</span> <span class="s2">&quot;listeners__monomer_counts&quot;</span>
+        <span class="n">monomer_ids</span> <span class="o">=</span> <span class="n">field_metadata</span><span class="p">(</span>
+            <span class="n">conn</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="p">,</span>
+            <span class="n">config_subquery</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config_sql</span><span class="p">,</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">monomer_col</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">history_subquery</span> <span class="o">=</span> <span class="n">read_stacked_columns</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">history_sql</span><span class="p">,</span>
+            <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">monomer_col</span><span class="si">}</span><span class="s2"> AS monomer_counts&quot;</span><span class="p">],</span>
+            <span class="n">order_results</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">filter_clause</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_filter_clause</span><span class="p">(</span>
+            <span class="n">generation_lower_bound</span><span class="p">,</span> <span class="n">time_lower_bound</span>
+        <span class="p">)</span>
+
+        <span class="n">group_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_column</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(monomer_counts) AS monomer_count,</span>
+<span class="s2">                        generate_subscripts(monomer_counts, 1) AS idx</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    AVG(monomer_count) AS mean_count,</span>
+<span class="s2">                    STDDEV(monomer_count) AS std_count,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx</span>
+<span class="s2">                ORDER BY idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">monomer_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;mean_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;std_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="p">),</span>
+                <span class="n">monomer_ids</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(monomer_counts) AS monomer_count,</span>
+<span class="s2">                        generate_subscripts(monomer_counts, 1) AS idx,</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2"> AS group_label,</span>
+<span class="s2">                    AVG(monomer_count) AS mean_count,</span>
+<span class="s2">                    STDDEV(monomer_count) AS std_count,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx, </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                ORDER BY </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2">, idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">monomer_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="n">groups</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;group_label&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">monomer_ids</span><span class="p">)</span>
+            <span class="n">means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">stds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">n_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">groups</span><span class="p">):</span>
+                <span class="n">group_data</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;group_label&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">group</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="s2">&quot;idx&quot;</span><span class="p">)</span>
+                <span class="n">means</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;mean_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">stds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;std_count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">n_samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">means</span><span class="p">,</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">stds</span><span class="p">,</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="n">n_samples</span><span class="p">,</span>
+                    <span class="n">groups</span><span class="o">=</span><span class="n">groups</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">monomer_ids</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Aggregator.aggregate_fluxes">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.aggregate_fluxes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate_fluxes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">,</span>
+        <span class="n">generation_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">exchange_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">AggregatedOutput</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate metabolic flux data according to the specified strategy.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            strategy: Aggregation strategy to use</span>
+<span class="sd">            generation_lower_bound: Only include data from this generation onwards</span>
+<span class="sd">            time_lower_bound: Only include data from this time onwards</span>
+<span class="sd">            exchange_only: If True, only return exchange reaction fluxes</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (AggregatedOutput, reaction_ids)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">ecoli.library.parquet_emitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_stacked_columns</span><span class="p">,</span> <span class="n">field_metadata</span>
+
+        <span class="n">flux_col</span> <span class="o">=</span> <span class="s2">&quot;listeners__fba_results__base_reaction_fluxes&quot;</span>
+        <span class="n">mass_col</span> <span class="o">=</span> <span class="s2">&quot;listeners__mass__cell_mass&quot;</span>
+        <span class="n">dry_mass_col</span> <span class="o">=</span> <span class="s2">&quot;listeners__mass__dry_mass&quot;</span>
+
+        <span class="n">rxn_ids</span> <span class="o">=</span> <span class="n">field_metadata</span><span class="p">(</span>
+            <span class="n">conn</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="p">,</span>
+            <span class="n">config_subquery</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config_sql</span><span class="p">,</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">flux_col</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Get cell density</span>
+        <span class="n">cell_density</span> <span class="o">=</span> <span class="mf">1100.0</span>  <span class="c1"># Default g/L</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sim_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">wholecell.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">units</span>
+
+            <span class="n">cd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sim_data</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">cell_density</span>
+            <span class="n">cell_density</span> <span class="o">=</span> <span class="n">cd</span><span class="o">.</span><span class="n">asNumber</span><span class="p">(</span><span class="n">units</span><span class="o">.</span><span class="n">g</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">L</span><span class="p">)</span>
+
+        <span class="n">history_subquery</span> <span class="o">=</span> <span class="n">read_stacked_columns</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">history_sql</span><span class="p">,</span>
+            <span class="p">[</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">flux_col</span><span class="si">}</span><span class="s2"> AS fluxes&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mass_col</span><span class="si">}</span><span class="s2"> AS cell_mass&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dry_mass_col</span><span class="si">}</span><span class="s2"> AS dry_mass&quot;</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="n">order_results</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">filter_clause</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_filter_clause</span><span class="p">(</span>
+            <span class="n">generation_lower_bound</span><span class="p">,</span> <span class="n">time_lower_bound</span>
+        <span class="p">)</span>
+
+        <span class="n">group_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_column</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *,</span>
+<span class="s2">                        dry_mass / cell_mass * </span><span class="si">{</span><span class="n">cell_density</span><span class="si">}</span><span class="s2"> AS conversion_coeff</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(fluxes) / conversion_coeff AS flux,</span>
+<span class="s2">                        generate_subscripts(fluxes, 1) AS idx</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    AVG(flux) AS mean_flux,</span>
+<span class="s2">                    STDDEV(flux) AS std_flux,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx</span>
+<span class="s2">                ORDER BY idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">rxn_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="n">mean</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;mean_flux&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+            <span class="n">std</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;std_flux&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">exchange_only</span><span class="p">:</span>
+                <span class="n">exchange_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="s2">&quot;EX_&quot;</span> <span class="ow">in</span> <span class="n">rxn_id</span> <span class="k">for</span> <span class="n">rxn_id</span> <span class="ow">in</span> <span class="n">rxn_ids</span><span class="p">])</span>
+                <span class="n">rxn_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">rxn_id</span> <span class="k">for</span> <span class="n">rxn_id</span> <span class="ow">in</span> <span class="n">rxn_ids</span> <span class="k">if</span> <span class="s2">&quot;EX_&quot;</span> <span class="ow">in</span> <span class="n">rxn_id</span><span class="p">]</span>
+                <span class="n">mean</span> <span class="o">=</span> <span class="n">mean</span><span class="p">[</span><span class="n">exchange_mask</span><span class="p">]</span>
+                <span class="n">std</span> <span class="o">=</span> <span class="n">std</span><span class="p">[</span><span class="n">exchange_mask</span><span class="p">]</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">mean</span><span class="p">,</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">std</span><span class="p">,</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="p">),</span>
+                <span class="n">rxn_ids</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                filtered AS (</span>
+<span class="s2">                    SELECT *,</span>
+<span class="s2">                        dry_mass / cell_mass * </span><span class="si">{</span><span class="n">cell_density</span><span class="si">}</span><span class="s2"> AS conversion_coeff</span>
+<span class="s2">                    FROM history</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                ),</span>
+<span class="s2">                exploded AS (</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        unnest(fluxes) / conversion_coeff AS flux,</span>
+<span class="s2">                        generate_subscripts(fluxes, 1) AS idx,</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                )</span>
+<span class="s2">                SELECT</span>
+<span class="s2">                    idx,</span>
+<span class="s2">                    </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2"> AS group_label,</span>
+<span class="s2">                    AVG(flux) AS mean_flux,</span>
+<span class="s2">                    STDDEV(flux) AS std_flux,</span>
+<span class="s2">                    COUNT(*) AS n_samples</span>
+<span class="s2">                FROM exploded</span>
+<span class="s2">                GROUP BY idx, </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                ORDER BY </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2">, idx</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="n">rxn_ids</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="n">groups</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;group_label&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rxn_ids</span><span class="p">)</span>
+            <span class="n">means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">stds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="n">n_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">groups</span><span class="p">):</span>
+                <span class="n">group_data</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;group_label&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">group</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="s2">&quot;idx&quot;</span><span class="p">)</span>
+                <span class="n">means</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;mean_flux&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">stds</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;std_flux&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+                <span class="n">n_samples</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">group_data</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+            <span class="k">if</span> <span class="n">exchange_only</span><span class="p">:</span>
+                <span class="n">exchange_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="s2">&quot;EX_&quot;</span> <span class="ow">in</span> <span class="n">rxn_id</span> <span class="k">for</span> <span class="n">rxn_id</span> <span class="ow">in</span> <span class="n">rxn_ids</span><span class="p">])</span>
+                <span class="n">rxn_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">rxn_id</span> <span class="k">for</span> <span class="n">rxn_id</span> <span class="ow">in</span> <span class="n">rxn_ids</span> <span class="k">if</span> <span class="s2">&quot;EX_&quot;</span> <span class="ow">in</span> <span class="n">rxn_id</span><span class="p">]</span>
+                <span class="n">means</span> <span class="o">=</span> <span class="n">means</span><span class="p">[:,</span> <span class="n">exchange_mask</span><span class="p">]</span>
+                <span class="n">stds</span> <span class="o">=</span> <span class="n">stds</span><span class="p">[:,</span> <span class="n">exchange_mask</span><span class="p">]</span>
+
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">AggregatedOutput</span><span class="p">(</span>
+                    <span class="n">mean</span><span class="o">=</span><span class="n">means</span><span class="p">,</span>
+                    <span class="n">std</span><span class="o">=</span><span class="n">stds</span><span class="p">,</span>
+                    <span class="n">n_samples</span><span class="o">=</span><span class="n">n_samples</span><span class="p">,</span>
+                    <span class="n">groups</span><span class="o">=</span><span class="n">groups</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">rxn_ids</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Aggregator.aggregate_higher_order_properties">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.Aggregator.aggregate_higher_order_properties">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">aggregate_higher_order_properties</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">,</span>
+        <span class="n">generation_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AggregatedOutput</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aggregate higher-order properties according to the specified strategy.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            strategy: Aggregation strategy to use</span>
+<span class="sd">            generation_lower_bound: Only include data from this generation onwards</span>
+<span class="sd">            time_lower_bound: Only include data from this time onwards</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary mapping property names to AggregatedOutput</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">ecoli.library.parquet_emitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_stacked_columns</span>
+
+        <span class="n">property_cols</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot;listeners__mass__cell_mass AS cell_mass&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;listeners__mass__dry_mass AS dry_mass&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;listeners__mass__volume AS volume&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+
+        <span class="n">history_subquery</span> <span class="o">=</span> <span class="n">read_stacked_columns</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">history_sql</span><span class="p">,</span>
+            <span class="n">property_cols</span><span class="p">,</span>
+            <span class="n">order_results</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">filter_clause</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_filter_clause</span><span class="p">(</span>
+            <span class="n">generation_lower_bound</span><span class="p">,</span> <span class="n">time_lower_bound</span>
+        <span class="p">)</span>
+
+        <span class="n">group_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_group_column</span><span class="p">(</span><span class="n">strategy</span><span class="p">)</span>
+
+        <span class="n">results</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AggregatedOutput</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">prop_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;cell_mass&quot;</span><span class="p">,</span> <span class="s2">&quot;dry_mass&quot;</span><span class="p">,</span> <span class="s2">&quot;volume&quot;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">:</span>
+                <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                    WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                    filtered AS (</span>
+<span class="s2">                        SELECT *</span>
+<span class="s2">                        FROM history</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                    )</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        AVG(</span><span class="si">{</span><span class="n">prop_name</span><span class="si">}</span><span class="s2">) AS mean_val,</span>
+<span class="s2">                        STDDEV(</span><span class="si">{</span><span class="n">prop_name</span><span class="si">}</span><span class="s2">) AS std_val,</span>
+<span class="s2">                        COUNT(*) AS n_samples</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                &quot;&quot;&quot;</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                    <span class="n">results</span><span class="p">[</span><span class="n">prop_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">results</span><span class="p">[</span><span class="n">prop_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;mean_val&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;std_val&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                    <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                    WITH history AS (</span><span class="si">{</span><span class="n">history_subquery</span><span class="si">}</span><span class="s2">),</span>
+<span class="s2">                    filtered AS (</span>
+<span class="s2">                        SELECT *</span>
+<span class="s2">                        FROM history</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">filter_clause</span><span class="si">}</span>
+<span class="s2">                    )</span>
+<span class="s2">                    SELECT</span>
+<span class="s2">                        </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span><span class="s2"> AS group_label,</span>
+<span class="s2">                        AVG(</span><span class="si">{</span><span class="n">prop_name</span><span class="si">}</span><span class="s2">) AS mean_val,</span>
+<span class="s2">                        STDDEV(</span><span class="si">{</span><span class="n">prop_name</span><span class="si">}</span><span class="s2">) AS std_val,</span>
+<span class="s2">                        COUNT(*) AS n_samples</span>
+<span class="s2">                    FROM filtered</span>
+<span class="s2">                    GROUP BY </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                    ORDER BY </span><span class="si">{</span><span class="n">group_col</span><span class="si">}</span>
+<span class="s2">                &quot;&quot;&quot;</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conn</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_empty</span><span class="p">():</span>
+                    <span class="n">results</span><span class="p">[</span><span class="n">prop_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">results</span><span class="p">[</span><span class="n">prop_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">AggregatedOutput</span><span class="p">(</span>
+                        <span class="n">mean</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;mean_val&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                        <span class="n">std</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;std_val&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                        <span class="n">n_samples</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;n_samples&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                        <span class="n">groups</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;group_label&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
+                    <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">results</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_group_column</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strategy</span><span class="p">:</span> <span class="n">AggregationStrategy</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the SQL column name for grouping based on strategy.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;generation&quot;</span>
+        <span class="k">elif</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_LINEAGE_SEED</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;lineage_seed&quot;</span>
+        <span class="k">elif</span> <span class="n">strategy</span> <span class="o">==</span> <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_CELL_CYCLE</span><span class="p">:</span>
+            <span class="c1"># This will be defined by the cell cycle variable</span>
+            <span class="c1"># For now, return a placeholder</span>
+            <span class="k">return</span> <span class="s2">&quot;cell_cycle_stage&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_filter_clause</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">generation_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">time_lower_bound</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build SQL WHERE clause for filtering by generation and time.&quot;&quot;&quot;</span>
+        <span class="n">filters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">generation_lower_bound</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;generation &gt;= </span><span class="si">{</span><span class="n">generation_lower_bound</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">time_lower_bound</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;time &gt;= </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">time_lower_bound</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">filters</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;WHERE &quot;</span> <span class="o">+</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">filters</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="compute_variance_decomposition">
+<a class="viewcode-back" href="../../api/aggregation.html#uq.aggregation.compute_variance_decomposition">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_variance_decomposition</span><span class="p">(</span>
+    <span class="n">aggregated_by_gen</span><span class="p">:</span> <span class="n">AggregatedOutput</span><span class="p">,</span>
+    <span class="n">aggregated_by_seed</span><span class="p">:</span> <span class="n">AggregatedOutput</span><span class="p">,</span>
+    <span class="n">aggregated_uniform</span><span class="p">:</span> <span class="n">AggregatedOutput</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute variance decomposition across different stratification levels.</span>
+
+<span class="sd">    This decomposes total variance into components attributable to:</span>
+<span class="sd">    - Between-generation variance (convergence effects)</span>
+<span class="sd">    - Between-seed variance (exogenous stochasticity)</span>
+<span class="sd">    - Within-group variance (intrinsic stochasticity)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        aggregated_by_gen: Output aggregated by generation</span>
+<span class="sd">        aggregated_by_seed: Output aggregated by lineage seed</span>
+<span class="sd">        aggregated_uniform: Uniform aggregation (baseline)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Dictionary with variance components:</span>
+<span class="sd">        - &#39;total_variance&#39;: Total variance from uniform aggregation</span>
+<span class="sd">        - &#39;between_generation_variance&#39;: Variance between generations</span>
+<span class="sd">        - &#39;between_seed_variance&#39;: Variance between lineage seeds</span>
+<span class="sd">        - &#39;within_group_variance&#39;: Residual variance</span>
+<span class="sd">        - &#39;generation_fraction&#39;: Fraction of variance from generation</span>
+<span class="sd">        - &#39;seed_fraction&#39;: Fraction of variance from lineage seed</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">total_var</span> <span class="o">=</span> <span class="n">aggregated_uniform</span><span class="o">.</span><span class="n">std</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="c1"># Between-group variance is variance of group means</span>
+    <span class="n">gen_between_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">aggregated_by_gen</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">seed_between_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">aggregated_by_seed</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Within-group variance is mean of group variances</span>
+    <span class="n">gen_within_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">aggregated_by_gen</span><span class="o">.</span><span class="n">std</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">seed_within_var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">aggregated_by_seed</span><span class="o">.</span><span class="n">std</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Avoid division by zero</span>
+    <span class="n">total_var_safe</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">total_var</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">total_var</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;total_variance&quot;</span><span class="p">:</span> <span class="n">total_var</span><span class="p">,</span>
+        <span class="s2">&quot;between_generation_variance&quot;</span><span class="p">:</span> <span class="n">gen_between_var</span><span class="p">,</span>
+        <span class="s2">&quot;between_seed_variance&quot;</span><span class="p">:</span> <span class="n">seed_between_var</span><span class="p">,</span>
+        <span class="s2">&quot;within_generation_variance&quot;</span><span class="p">:</span> <span class="n">gen_within_var</span><span class="p">,</span>
+        <span class="s2">&quot;within_seed_variance&quot;</span><span class="p">:</span> <span class="n">seed_within_var</span><span class="p">,</span>
+        <span class="s2">&quot;generation_fraction&quot;</span><span class="p">:</span> <span class="n">gen_between_var</span> <span class="o">/</span> <span class="n">total_var_safe</span><span class="p">,</span>
+        <span class="s2">&quot;seed_fraction&quot;</span><span class="p">:</span> <span class="n">seed_between_var</span> <span class="o">/</span> <span class="n">total_var_safe</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, vEcoli Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

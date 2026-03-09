@@ -1,0 +1,76 @@
+[project]
+name = "uqEcoli"
+version = "0.0.1"
+description = "uqEcoli"
+authors = [{ name = "Alex Patrie", email = "alexanderpatrie@gmail.com" }]
+requires-python = ">=3.12.9"
+readme = "README.md"
+dependencies = []
+
+# [dependency-groups]
+# dev = [
+#     "pytest>=8.3.5,<9",
+#     "pytest-cov>=4.0.0,<5",
+#     "deptry>=0.16.2,<0.17",
+#     "mypy>=1.5.1,<2",
+#     "pre-commit>=3.4.0,<4",
+#     "tox>=4.11.1,<5",
+#     "types-requests>=2.32.0.20250602,<3",
+#     "types-pyyaml>=6.0.12.20250516,<7",
+#     "pytest-asyncio>=1.0.0,<2",
+#     "testcontainers[postgres, redis]>=4.10.0,<5",
+#     "types-tqdm>=4.67.0.20250516,<5",
+#     "openapi-python-client>=0.25.2,<0.26",
+#     "types-xmltodict>=0.14.0.20241009",
+#     "debugpy>=1.8.16",
+#     "ipdb>=0.13.13",
+#     "types-aiofiles>=25.1.0.20251011",
+#     "types-python-dateutil>=2.9.0.20251115",
+# ]
+# docs = [
+#     "mkdocs>=1.4.2,<2",
+#     "mkdocs-material>=9.2.7,<10",
+#     "mkdocstrings[python]>=0.26.1,<0.27",
+#     "sphinx>=8.2.3,<9",
+#     "sphinx-autodoc-typehints>=3.2.0,<4",
+#     "sphinx-rtd-theme>=3.0.2,<4",
+# ]
+# tui = [
+#     "transformers>=4.40.0,<5",
+#     "accelerate>=0.30.0,<1",
+#     "torch>=2.2.0,<3",
+#     "textual",
+#     "fastmcp>=2.13.0.2",
+#     "ollama>=0.4.0",
+#     "process-bigraph>=1.0.5",
+# ]
+# agent = [
+#     "smolagents[audio,toolkit,transformers,vision]>=1.24.0",
+# ]
+# uq = [
+#     "pydmd>=2025.8.1",
+#     "salib>=1.5.2",
+#     "setuptools>=82.0.0",
+#     "sobol>=0.9",
+#     "uqpy>=3.1.4",
+# ]
+
+# [tool.uv]
+# default-groups = [
+#     "dev",
+#     "docs"
+# ]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "uq"
+]
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "uq"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,1162 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensitivity Analysis API &mdash; vEcoli UQ Framework 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=74eb3eb4" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Cell Cycle API" href="cell_cycle.html" />
+    <link rel="prev" title="Wrappers API" href="wrappers.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            vEcoli UQ Framework
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#basic-concepts">Basic Concepts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started.html#input-parameters">Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started.html#output-variables">Output Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started.html#aggregation-strategies">Aggregation Strategies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started.html#sensitivity-analysis">Sensitivity Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#your-first-analysis">Your First Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#using-precomputed-results">Using Precomputed Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../aggregation_strategies.html">Aggregation Strategies</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#strategy-1-uniform-aggregation">Strategy 1: Uniform Aggregation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#strategy-2-by-generation">Strategy 2: By Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#strategy-3-by-lineage-seed">Strategy 3: By Lineage Seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#strategy-4-by-cell-cycle">Strategy 4: By Cell Cycle</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../aggregation_strategies.html#cell-cycle-variables">Cell Cycle Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#filtering-data">Filtering Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#choosing-a-strategy">Choosing a Strategy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../aggregation_strategies.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sensitivity_analysis.html">Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#sobol-sensitivity-indices">Sobol Sensitivity Indices</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#first-order-index-s1">First-Order Index (S₁)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#total-order-index-st">Total-Order Index (Sₜ)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#pce-surrogate-method">PCE Surrogate Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#polynomial-order-selection">Polynomial Order Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#sample-size-selection">Sample Size Selection</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#using-uqpy">Using UQPy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#using-pytuq">Using PyTUQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#interpreting-results">Interpreting Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#working-with-sobolindices">Working with SobolIndices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#visualization">Visualization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../sensitivity_analysis.html#multi-output-analysis">Multi-Output Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sensitivity_analysis.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../cell_cycle.html">Cell Cycle Stratification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#cell-cycle-variables">Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#built-in-variables">Built-in Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#using-the-cell-cycle-aggregator">Using the Cell Cycle Aggregator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#computing-cell-cycle-profiles">Computing Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#direct-aggregation">Direct Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#computing-raw-cell-cycle-values">Computing Raw Cell Cycle Values</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#custom-cell-cycle-variables">Custom Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#using-compositecellcyclevariable">Using CompositeCellCycleVariable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#implementing-cellcyclevariablecomputer">Implementing CellCycleVariableComputer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#integration-with-sensitivity-analysis">Integration with Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#plot-cell-cycle-profiles">Plot Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../cell_cycle.html#compare-variables">Compare Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#future-directions">Future Directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../cell_cycle.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../koopman.html">Koopman Spectral Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#what-is-koopman-analysis">What is Koopman Analysis?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#why-use-koopman-for-whole-cell-simulations">Why Use Koopman for Whole-Cell Simulations?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#dynamic-mode-decomposition-dmd">Dynamic Mode Decomposition (DMD)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#extended-dmd-edmd">Extended DMD (EDMD)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#interpreting-the-spectrum">Interpreting the Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#cell-cycle-harmonics">Cell Cycle Harmonics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#spectral-sensitivity">Spectral Sensitivity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#comparison-with-pce-methods">Comparison with PCE Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../koopman.html#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/basic_sensitivity.html">Tutorial: Basic Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#step-1-define-input-parameters">Step 1: Define Input Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#step-2-configure-the-wrapper">Step 2: Configure the Wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#step-3-run-sensitivity-analysis">Step 3: Run Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#step-4-interpret-results">Step 4: Interpret Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#step-5-visualize-results">Step 5: Visualize Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#complete-script">Complete Script</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/basic_sensitivity.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/variance_decomposition.html">Tutorial: Variance Decomposition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#step-1-aggregate-with-different-strategies">Step 1: Aggregate with Different Strategies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#step-2-compute-variance-decomposition">Step 2: Compute Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#step-3-analyze-per-gene-variance">Step 3: Analyze Per-Gene Variance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#step-4-visualize-variance-components">Step 4: Visualize Variance Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#step-5-compare-output-types">Step 5: Compare Output Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#interpretation-guide">Interpretation Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/variance_decomposition.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html">Tutorial: Cell Cycle Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-1-create-cell-cycle-aggregator">Step 1: Create Cell Cycle Aggregator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-2-compute-cell-cycle-variable">Step 2: Compute Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-3-get-cell-cycle-profiles">Step 3: Get Cell Cycle Profiles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-4-analyze-multiple-outputs">Step 4: Analyze Multiple Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-5-compare-cell-cycle-variables">Step 5: Compare Cell Cycle Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-6-transcriptome-cell-cycle-dynamics">Step 6: Transcriptome Cell Cycle Dynamics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#step-7-custom-cell-cycle-variable">Step 7: Custom Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#key-takeaways">Key Takeaways</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/cell_cycle_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/koopman_analysis.html">Koopman Spectral Analysis Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#getting-trajectory-data">Getting Trajectory Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#basic-dmd-analysis">Basic DMD Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#understanding-the-spectrum">Understanding the Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#visualizing-modes">Visualizing Modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#extended-dmd-with-dictionaries">Extended DMD with Dictionaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#finding-cell-cycle-harmonics">Finding Cell Cycle Harmonics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#spectral-sensitivity-analysis">Spectral Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#extracting-features-for-ml">Extracting Features for ML</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#combining-with-pce-analysis">Combining with PCE Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#common-issues">Common Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorials/koopman_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="inputs.html">Input Parameters API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="inputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#mediacondition">MediaCondition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.MediaCondition"><code class="docutils literal notranslate"><span class="pre">MediaCondition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#viopathwayparams">VioPathwayParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.VioPathwayParams"><code class="docutils literal notranslate"><span class="pre">VioPathwayParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#mecillinamparams">MecillinamParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.MecillinamParams"><code class="docutils literal notranslate"><span class="pre">MecillinamParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#geneknockoutparams">GeneKnockoutParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.GeneKnockoutParams"><code class="docutils literal notranslate"><span class="pre">GeneKnockoutParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#uqinputparameters">UQInputParameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.UQInputParameters"><code class="docutils literal notranslate"><span class="pre">UQInputParameters</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#inputparameterspace">InputParameterSpace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="inputs.html#uq.inputs.InputParameterSpace"><code class="docutils literal notranslate"><span class="pre">InputParameterSpace</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="inputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#defining-input-parameters">Defining Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="inputs.html#creating-parameter-spaces">Creating Parameter Spaces</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="outputs.html">Output Variables API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="outputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#outputtype">OutputType</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="outputs.html#uq.outputs.OutputType"><code class="docutils literal notranslate"><span class="pre">OutputType</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#outputvariables">OutputVariables</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="outputs.html#uq.outputs.OutputVariables"><code class="docutils literal notranslate"><span class="pre">OutputVariables</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#outputextractor">OutputExtractor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="outputs.html#uq.outputs.OutputExtractor"><code class="docutils literal notranslate"><span class="pre">OutputExtractor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="outputs.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#get-output-variable-info">get_output_variable_info</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="outputs.html#uq.outputs.get_output_variable_info"><code class="docutils literal notranslate"><span class="pre">get_output_variable_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="outputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#extracting-outputs">Extracting Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="outputs.html#output-column-names">Output Column Names</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="aggregation.html">Aggregation API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="aggregation.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#aggregationstrategy">AggregationStrategy</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="aggregation.html#uq.aggregation.AggregationStrategy"><code class="docutils literal notranslate"><span class="pre">AggregationStrategy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#aggregatedoutput">AggregatedOutput</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="aggregation.html#uq.aggregation.AggregatedOutput"><code class="docutils literal notranslate"><span class="pre">AggregatedOutput</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#aggregator">Aggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="aggregation.html#uq.aggregation.Aggregator"><code class="docutils literal notranslate"><span class="pre">Aggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="aggregation.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#compute-variance-decomposition">compute_variance_decomposition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="aggregation.html#uq.aggregation.compute_variance_decomposition"><code class="docutils literal notranslate"><span class="pre">compute_variance_decomposition()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="aggregation.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#basic-aggregation">Basic Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aggregation.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="wrappers.html">Wrappers API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="wrappers.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#wrapperconfig">WrapperConfig</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="wrappers.html#uq.wrappers.WrapperConfig"><code class="docutils literal notranslate"><span class="pre">WrapperConfig</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#simulationwrapper">SimulationWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="wrappers.html#uq.wrappers.SimulationWrapper"><code class="docutils literal notranslate"><span class="pre">SimulationWrapper</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#precomputedwrapper">PrecomputedWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="wrappers.html#uq.wrappers.PrecomputedWrapper"><code class="docutils literal notranslate"><span class="pre">PrecomputedWrapper</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="wrappers.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#create-uqpy-model">create_uqpy_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="wrappers.html#uq.wrappers.create_uqpy_model"><code class="docutils literal notranslate"><span class="pre">create_uqpy_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#create-pytuq-model">create_pytuq_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="wrappers.html#uq.wrappers.create_pytuq_model"><code class="docutils literal notranslate"><span class="pre">create_pytuq_model()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="wrappers.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#id10">SimulationWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#id11">PrecomputedWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#uqpy-integration">UQPy Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#pytuq-integration">PyTUQ Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="wrappers.html#caching">Caching</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Sensitivity Analysis API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#sensitivitymethod">SensitivityMethod</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.SensitivityMethod"><code class="docutils literal notranslate"><span class="pre">SensitivityMethod</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#sobolindices">SobolIndices</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.SobolIndices"><code class="docutils literal notranslate"><span class="pre">SobolIndices</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pcesurrogate">PCESurrogate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.PCESurrogate"><code class="docutils literal notranslate"><span class="pre">PCESurrogate</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#sensitivityanalyzer">SensitivityAnalyzer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.SensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">SensitivityAnalyzer</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#run-sensitivity-analysis">run_sensitivity_analysis</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.run_sensitivity_analysis"><code class="docutils literal notranslate"><span class="pre">run_sensitivity_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#analyze-precomputed-results">analyze_precomputed_results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#uq.sensitivity.analyze_precomputed_results"><code class="docutils literal notranslate"><span class="pre">analyze_precomputed_results()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pce-based-analysis">PCE-Based Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#precomputed-results">Precomputed Results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cell_cycle.html">Cell Cycle API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#cellcyclephase">CellCyclePhase</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CellCyclePhase"><code class="docutils literal notranslate"><span class="pre">CellCyclePhase</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#cellcyclevariable">CellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#cellcyclevariablecomputer">CellCycleVariableComputer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CellCycleVariableComputer"><code class="docutils literal notranslate"><span class="pre">CellCycleVariableComputer</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#massbasedcellcyclevariable">MassBasedCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.MassBasedCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">MassBasedCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#dnareplicationcellcyclevariable">DNAReplicationCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.DNAReplicationCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">DNAReplicationCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#cellanglecellcyclevariable">CellAngleCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CellAngleCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellAngleCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#compositecellcyclevariable">CompositeCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CompositeCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CompositeCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#cellcycleaggregator">CellCycleAggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.CellCycleAggregator"><code class="docutils literal notranslate"><span class="pre">CellCycleAggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#register-cell-cycle-variable">register_cell_cycle_variable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="cell_cycle.html#uq.cell_cycle.register_cell_cycle_variable"><code class="docutils literal notranslate"><span class="pre">register_cell_cycle_variable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#custom-variables">Custom Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#available-variables">Available Variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="koopman.html">Koopman Spectral Analysis (<code class="docutils literal notranslate"><span class="pre">uq.koopman</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#data-classes">Data Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode"><code class="docutils literal notranslate"><span class="pre">KoopmanMode</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.eigenvalue"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.eigenvalue</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.mode"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.mode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.amplitude"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.amplitude</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.frequency"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.frequency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.growth_rate"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.growth_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.period"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.period</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.damping_time"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.damping_time</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id0"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.eigenvalue</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id1"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.mode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id2"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.amplitude</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id3"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.frequency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id4"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.growth_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id5"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.period</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id6"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.damping_time</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.__post_init__"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.__post_init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.is_oscillatory"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_oscillatory</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.is_stable"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_stable</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.is_growing"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_growing</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanMode.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.eigenvalues"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvalues</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.eigenvectors"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvectors</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.amplitudes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.amplitudes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.reconstruction_error"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruction_error</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.dt"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.dt</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.observable_names"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.observable_names</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id7"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id8"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvalues</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id9"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvectors</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id10"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.amplitudes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id11"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruction_error</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id12"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.dt</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#id13"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.observable_names</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.n_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.n_modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.get_dominant_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_dominant_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.get_oscillatory_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_oscillatory_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.get_stable_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_stable_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.get_modes_in_frequency_range"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_modes_in_frequency_range()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.reconstruct"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruct()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.get_power_spectrum"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_power_spectrum()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSpectrum.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.__init__()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#dictionary-functions">Dictionary Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary.IDENTITY"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.IDENTITY</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary.POLYNOMIAL"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.POLYNOMIAL</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary.FOURIER"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.FOURIER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary.RBF"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.RBF</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanDictionary.CUSTOM"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.CUSTOM</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#dmd-methods">DMD Methods</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#dynamic-mode-decomposition-dmd">Dynamic Mode Decomposition (DMD)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.DynamicModeDecomposition"><code class="docutils literal notranslate"><span class="pre">DynamicModeDecomposition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#extended-dmd-edmd">Extended DMD (EDMD)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.ExtendedDMD"><code class="docutils literal notranslate"><span class="pre">ExtendedDMD</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#sensitivity-analysis">Sensitivity Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.analyze_trajectory"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.analyze_trajectory()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.compare_spectra"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.compare_spectra()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.spectral_sensitivity"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.spectral_sensitivity()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#cell-cycle-analysis">Cell Cycle Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.CellCycleKoopmanAnalyzer"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.__init__"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.identify_cell_cycle_modes"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.identify_cell_cycle_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.analyze_cell_cycle_spectrum"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.analyze_cell_cycle_spectrum()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#utility-functions">Utility Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#uq.koopman.extract_koopman_features"><code class="docutils literal notranslate"><span class="pre">extract_koopman_features()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#mathematical-background">Mathematical Background</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#the-koopman-operator">The Koopman Operator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#dynamic-mode-decomposition">Dynamic Mode Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#extended-dmd">Extended DMD</a></li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#interpretation-for-cell-biology">Interpretation for Cell Biology</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#example-usage">Example Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#basic-dmd-analysis">Basic DMD Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#edmd-with-polynomial-dictionary">EDMD with Polynomial Dictionary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="koopman.html#finding-cell-cycle-modes">Finding Cell Cycle Modes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#see-also">See Also</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../design_document.html">Design Document</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../design_document.html#vision">Vision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design_document.html#implementation-status">Implementation Status</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../design_document.html#phase-1-ms-08-4-2">Phase 1 (MS-08.4.2)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../design_document.html#phase-2-cd2-milestone-10">Phase 2 (CD2/Milestone 10)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../design_document.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design_document.html#libraries">Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design_document.html#future-directions">Future Directions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../changelog.html#id1">[0.1.0] - 2026-03-03</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../changelog.html#added">Added</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../changelog.html#dependencies">Dependencies</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">vEcoli UQ Framework</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Sensitivity Analysis API</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/sensitivity.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-uq.sensitivity">
+<span id="sensitivity-analysis-api"></span><h1>Sensitivity Analysis API<a class="headerlink" href="#module-uq.sensitivity" title="Link to this heading"></a></h1>
+<p>This module implements global sensitivity analysis using PCE (Polynomial Chaos
+Expansion) surrogate methods and Sobol indices.</p>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading"></a></h2>
+<section id="sensitivitymethod">
+<h3>SensitivityMethod<a class="headerlink" href="#sensitivitymethod" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityMethod">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">SensitivityMethod</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SensitivityMethod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SensitivityMethod" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
+<p>Available sensitivity analysis methods.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityMethod.PCE">
+<span class="sig-name descname"><span class="pre">PCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'pce'</span></span><a class="headerlink" href="#uq.sensitivity.SensitivityMethod.PCE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityMethod.SOBOL">
+<span class="sig-name descname"><span class="pre">SOBOL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'sobol'</span></span><a class="headerlink" href="#uq.sensitivity.SensitivityMethod.SOBOL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityMethod.MORRIS">
+<span class="sig-name descname"><span class="pre">MORRIS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'morris'</span></span><a class="headerlink" href="#uq.sensitivity.SensitivityMethod.MORRIS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="sobolindices">
+<h3>SobolIndices<a class="headerlink" href="#sobolindices" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">SobolIndices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameter_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence_intervals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SobolIndices"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SobolIndices" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Container for Sobol sensitivity indices.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.first_order">
+<span class="sig-name descname"><span class="pre">first_order</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.first_order" title="Link to this definition"></a></dt>
+<dd><p>First-order (main effect) indices, shape (n_params,) or (n_outputs, n_params)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.total_order">
+<span class="sig-name descname"><span class="pre">total_order</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.total_order" title="Link to this definition"></a></dt>
+<dd><p>Total-order indices, shape (n_params,) or (n_outputs, n_params)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.second_order">
+<span class="sig-name descname"><span class="pre">second_order</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.second_order" title="Link to this definition"></a></dt>
+<dd><p>Second-order interaction indices, shape (n_params, n_params) or (n_outputs, n_params, n_params)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.parameter_names">
+<span class="sig-name descname"><span class="pre">parameter_names</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.parameter_names" title="Link to this definition"></a></dt>
+<dd><p>Names of the input parameters</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.output_names">
+<span class="sig-name descname"><span class="pre">output_names</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.output_names" title="Link to this definition"></a></dt>
+<dd><p>Names of the outputs (if multiple)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.confidence_intervals">
+<span class="sig-name descname"><span class="pre">confidence_intervals</span></span><a class="headerlink" href="#uq.sensitivity.SobolIndices.confidence_intervals" title="Link to this definition"></a></dt>
+<dd><p>Optional confidence intervals for indices</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a>] | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">first_order</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a></span><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">total_order</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a></span><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">second_order</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">parameter_names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id4">
+<span class="sig-name descname"><span class="pre">output_names</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#id4" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id5">
+<span class="sig-name descname"><span class="pre">confidence_intervals</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#id5" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.get_most_influential">
+<span class="sig-name descname"><span class="pre">get_most_influential</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'total'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SobolIndices.get_most_influential"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SobolIndices.get_most_influential" title="Link to this definition"></a></dt>
+<dd><p>Get the most influential parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of top parameters to return</p></li>
+<li><p><strong>index_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Type of index to use (‘first’ or ‘total’)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of (parameter_name, index_value) tuples</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.SobolIndices.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameter_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence_intervals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#uq.sensitivity.SobolIndices.__init__" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="pcesurrogate">
+<h3>PCESurrogate<a class="headerlink" href="#pcesurrogate" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">PCESurrogate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coefficients</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multi_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">basis_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'legendre'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">polynomial_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_squared</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#PCESurrogate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.PCESurrogate" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Polynomial Chaos Expansion surrogate model.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.coefficients">
+<span class="sig-name descname"><span class="pre">coefficients</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.coefficients" title="Link to this definition"></a></dt>
+<dd><p>PCE coefficients</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.multi_indices">
+<span class="sig-name descname"><span class="pre">multi_indices</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.multi_indices" title="Link to this definition"></a></dt>
+<dd><p>Multi-index matrix for polynomial terms</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)">numpy.ndarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.basis_type">
+<span class="sig-name descname"><span class="pre">basis_type</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.basis_type" title="Link to this definition"></a></dt>
+<dd><p>Type of polynomial basis used</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.polynomial_order">
+<span class="sig-name descname"><span class="pre">polynomial_order</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.polynomial_order" title="Link to this definition"></a></dt>
+<dd><p>Maximum polynomial order</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.input_dim">
+<span class="sig-name descname"><span class="pre">input_dim</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.input_dim" title="Link to this definition"></a></dt>
+<dd><p>Number of input parameters</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.output_dim">
+<span class="sig-name descname"><span class="pre">output_dim</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.output_dim" title="Link to this definition"></a></dt>
+<dd><p>Number of outputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.r_squared">
+<span class="sig-name descname"><span class="pre">r_squared</span></span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.r_squared" title="Link to this definition"></a></dt>
+<dd><p>Coefficient of determination</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id6">
+<span class="sig-name descname"><span class="pre">coefficients</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a></span><a class="headerlink" href="#id6" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id7">
+<span class="sig-name descname"><span class="pre">multi_indices</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">ndarray</span></a></span><a class="headerlink" href="#id7" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id8">
+<span class="sig-name descname"><span class="pre">basis_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'legendre'</span></span><a class="headerlink" href="#id8" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id9">
+<span class="sig-name descname"><span class="pre">polynomial_order</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#id9" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id10">
+<span class="sig-name descname"><span class="pre">input_dim</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#id10" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id11">
+<span class="sig-name descname"><span class="pre">output_dim</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#id11" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id12">
+<span class="sig-name descname"><span class="pre">r_squared</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="headerlink" href="#id12" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#PCESurrogate.predict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.PCESurrogate.predict" title="Link to this definition"></a></dt>
+<dd><p>Predict outputs using the PCE surrogate.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>X</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a>) – Input array of shape (n_samples, n_params)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Predicted outputs of shape (n_samples, n_outputs)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.PCESurrogate.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coefficients</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multi_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">basis_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'legendre'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">polynomial_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_squared</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#uq.sensitivity.PCESurrogate.__init__" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="sensitivityanalyzer">
+<h3>SensitivityAnalyzer<a class="headerlink" href="#sensitivityanalyzer" title="Link to this heading"></a></h3>
+<dl class="py class">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityAnalyzer">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">SensitivityAnalyzer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameter_space</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wrapper</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SensitivityAnalyzer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SensitivityAnalyzer" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Performs global sensitivity analysis on vEcoli simulations.</p>
+<p>This class supports multiple sensitivity analysis methods and can work
+with either a simulation wrapper (for running new simulations) or
+precomputed results.</p>
+<dl class="field-list simple">
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityAnalyzer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameter_space</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wrapper</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SensitivityAnalyzer.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SensitivityAnalyzer.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize the sensitivity analyzer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>parameter_space</strong> (<a class="reference internal" href="inputs.html#uq.inputs.InputParameterSpace" title="uq.inputs.InputParameterSpace"><em>InputParameterSpace</em></a>) – Definition of the input parameter space</p></li>
+<li><p><strong>wrapper</strong> (<a class="reference internal" href="wrappers.html#uq.wrappers.SimulationWrapper" title="uq.wrappers.SimulationWrapper"><em>SimulationWrapper</em></a><em> | </em><a class="reference internal" href="wrappers.html#uq.wrappers.PrecomputedWrapper" title="uq.wrappers.PrecomputedWrapper"><em>PrecomputedWrapper</em></a><em> | </em><em>None</em>) – Optional simulation wrapper for running simulations</p></li>
+<li><p><strong>samples</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>None</em>) – Optional precomputed input samples of shape (n_samples, n_params)</p></li>
+<li><p><strong>outputs</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>ndarray</em></a><em> | </em><em>None</em>) – Optional precomputed outputs of shape (n_samples, n_outputs)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityAnalyzer.analyze_with_pce">
+<span class="sig-name descname"><span class="pre">analyze_with_pce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">polynomial_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_uqpy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SensitivityAnalyzer.analyze_with_pce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SensitivityAnalyzer.analyze_with_pce" title="Link to this definition"></a></dt>
+<dd><p>Perform sensitivity analysis using PCE surrogate.</p>
+<p>This is the recommended method from the UQ framework RFC.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>polynomial_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Maximum polynomial order for PCE</p></li>
+<li><p><strong>n_samples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Number of samples to use (if generating new samples)</p></li>
+<li><p><strong>use_uqpy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If True, use UQPy; otherwise use PyTUQ</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (SobolIndices, PCESurrogate)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference internal" href="#uq.sensitivity.SobolIndices" title="uq.sensitivity.SobolIndices"><em>SobolIndices</em></a>, <a class="reference internal" href="#uq.sensitivity.PCESurrogate" title="uq.sensitivity.PCESurrogate"><em>PCESurrogate</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="uq.sensitivity.SensitivityAnalyzer.analyze_with_sobol">
+<span class="sig-name descname"><span class="pre">analyze_with_sobol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1024</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calc_second_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#SensitivityAnalyzer.analyze_with_sobol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.SensitivityAnalyzer.analyze_with_sobol" title="Link to this definition"></a></dt>
+<dd><p>Perform Sobol sensitivity analysis via Monte Carlo sampling.</p>
+<p>This method uses Saltelli’s sampling scheme for efficient
+computation of Sobol indices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_samples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of base samples (total evaluations will be n_samples * (2 * n_params + 2))</p></li>
+<li><p><strong>calc_second_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether to calculate second-order indices</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>SobolIndices</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#uq.sensitivity.SobolIndices" title="uq.sensitivity.SobolIndices"><em>SobolIndices</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<section id="run-sensitivity-analysis">
+<h3>run_sensitivity_analysis<a class="headerlink" href="#run-sensitivity-analysis" title="Link to this heading"></a></h3>
+<dl class="py function">
+<dt class="sig sig-object py" id="uq.sensitivity.run_sensitivity_analysis">
+<span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">run_sensitivity_analysis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sim_data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregation_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">AggregationStrategy.UNIFORM</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">polynomial_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_samples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_vio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_mecillinam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vio_expression_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0.0,</span> <span class="pre">5.0)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vio_trl_eff_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0.0,</span> <span class="pre">2.0)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mecillinam_conc_bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0.0,</span> <span class="pre">10.0)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_uqpy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#run_sensitivity_analysis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.run_sensitivity_analysis" title="Link to this definition"></a></dt>
+<dd><p>Run a complete sensitivity analysis workflow.</p>
+<p>This is a convenience function that sets up the parameter space,
+wrapper, and analyzer, then runs PCE-based sensitivity analysis.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sim_data_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to sim_data pickle file</p></li>
+<li><p><strong>output_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Directory for outputs and cache</p></li>
+<li><p><strong>aggregation_strategy</strong> (<a class="reference internal" href="aggregation.html#uq.aggregation.AggregationStrategy" title="uq.aggregation.AggregationStrategy"><em>AggregationStrategy</em></a>) – Strategy for aggregating simulation outputs</p></li>
+<li><p><strong>polynomial_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – PCE polynomial order</p></li>
+<li><p><strong>n_samples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>) – Number of samples (None for automatic)</p></li>
+<li><p><strong>include_vio</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Include vio pathway parameters</p></li>
+<li><p><strong>include_mecillinam</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Include mecillinam parameters</p></li>
+<li><p><strong>vio_expression_bounds</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Bounds for vio expression</p></li>
+<li><p><strong>vio_trl_eff_bounds</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Bounds for vio translation efficiency</p></li>
+<li><p><strong>mecillinam_conc_bounds</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>]</em>) – Bounds for mecillinam concentration</p></li>
+<li><p><strong>use_uqpy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Use UQPy (True) or PyTUQ (False)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (SobolIndices, PCESurrogate)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference internal" href="#uq.sensitivity.SobolIndices" title="uq.sensitivity.SobolIndices"><em>SobolIndices</em></a>, <a class="reference internal" href="#uq.sensitivity.PCESurrogate" title="uq.sensitivity.PCESurrogate"><em>PCESurrogate</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="analyze-precomputed-results">
+<h3>analyze_precomputed_results<a class="headerlink" href="#analyze-precomputed-results" title="Link to this heading"></a></h3>
+<dl class="py function">
+<dt class="sig sig-object py" id="uq.sensitivity.analyze_precomputed_results">
+<span class="sig-prename descclassname"><span class="pre">uq.sensitivity.</span></span><span class="sig-name descname"><span class="pre">analyze_precomputed_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aggregation_strategy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">AggregationStrategy.UNIFORM</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">polynomial_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_vio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_mecillinam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_uqpy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/uq/sensitivity.html#analyze_precomputed_results"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#uq.sensitivity.analyze_precomputed_results" title="Link to this definition"></a></dt>
+<dd><p>Run sensitivity analysis on precomputed simulation results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_dir</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Directory containing simulation outputs</p></li>
+<li><p><strong>aggregation_strategy</strong> (<a class="reference internal" href="aggregation.html#uq.aggregation.AggregationStrategy" title="uq.aggregation.AggregationStrategy"><em>AggregationStrategy</em></a>) – Strategy for aggregating outputs</p></li>
+<li><p><strong>polynomial_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – PCE polynomial order</p></li>
+<li><p><strong>include_vio</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Include vio pathway parameters</p></li>
+<li><p><strong>include_mecillinam</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Include mecillinam parameters</p></li>
+<li><p><strong>use_uqpy</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Use UQPy (True) or PyTUQ (False)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (SobolIndices, PCESurrogate)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a>[<a class="reference internal" href="#uq.sensitivity.SobolIndices" title="uq.sensitivity.SobolIndices"><em>SobolIndices</em></a>, <a class="reference internal" href="#uq.sensitivity.PCESurrogate" title="uq.sensitivity.PCESurrogate"><em>PCESurrogate</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+<section id="usage-examples">
+<h2>Usage Examples<a class="headerlink" href="#usage-examples" title="Link to this heading"></a></h2>
+<section id="pce-based-analysis">
+<h3>PCE-Based Analysis<a class="headerlink" href="#pce-based-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">SensitivityAnalyzer</span><span class="p">,</span> <span class="n">InputParameterSpace</span>
+
+<span class="n">param_space</span> <span class="o">=</span> <span class="n">InputParameterSpace</span><span class="p">(</span><span class="n">include_vio</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_mecillinam</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">analyzer</span> <span class="o">=</span> <span class="n">SensitivityAnalyzer</span><span class="p">(</span><span class="n">param_space</span><span class="p">,</span> <span class="n">wrapper</span><span class="p">)</span>
+
+<span class="n">sobol</span><span class="p">,</span> <span class="n">pce</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">analyze_with_pce</span><span class="p">(</span>
+    <span class="n">polynomial_order</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">n_samples</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">use_uqpy</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Get most influential parameters</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">sobol</span><span class="o">.</span><span class="n">get_most_influential</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="direct-sobol-analysis">
+<h3>Direct Sobol Analysis<a class="headerlink" href="#direct-sobol-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sobol</span> <span class="o">=</span> <span class="n">analyzer</span><span class="o">.</span><span class="n">analyze_with_sobol</span><span class="p">(</span>
+    <span class="n">n_samples</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+    <span class="n">calc_second_order</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First-order: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">first_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total-order: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">total_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Second-order: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">second_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="convenience-functions">
+<h3>Convenience Functions<a class="headerlink" href="#convenience-functions" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_sensitivity_analysis</span><span class="p">,</span> <span class="n">AggregationStrategy</span>
+
+<span class="n">sobol</span><span class="p">,</span> <span class="n">pce</span> <span class="o">=</span> <span class="n">run_sensitivity_analysis</span><span class="p">(</span>
+    <span class="n">sim_data_path</span><span class="o">=</span><span class="s2">&quot;./sim_data.cPickle&quot;</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;./uq_analysis&quot;</span><span class="p">,</span>
+    <span class="n">aggregation_strategy</span><span class="o">=</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">,</span>
+    <span class="n">polynomial_order</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">include_vio</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">include_mecillinam</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="precomputed-results">
+<h3>Precomputed Results<a class="headerlink" href="#precomputed-results" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">analyze_precomputed_results</span>
+
+<span class="n">sobol</span><span class="p">,</span> <span class="n">pce</span> <span class="o">=</span> <span class="n">analyze_precomputed_results</span><span class="p">(</span>
+    <span class="n">data_dir</span><span class="o">=</span><span class="s2">&quot;./simulation_outputs&quot;</span><span class="p">,</span>
+    <span class="n">aggregation_strategy</span><span class="o">=</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">,</span>
+    <span class="n">polynomial_order</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="working-with-results">
+<h3>Working with Results<a class="headerlink" href="#working-with-results" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Access indices</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parameters: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">parameter_names</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First-order: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">first_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total-order: </span><span class="si">{</span><span class="n">sobol</span><span class="o">.</span><span class="n">total_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Check for interactions</span>
+<span class="n">interactions</span> <span class="o">=</span> <span class="n">sobol</span><span class="o">.</span><span class="n">total_order</span> <span class="o">-</span> <span class="n">sobol</span><span class="o">.</span><span class="n">first_order</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Interaction effects: </span><span class="si">{</span><span class="n">interactions</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Multi-output case</span>
+<span class="k">if</span> <span class="n">sobol</span><span class="o">.</span><span class="n">first_order</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+    <span class="n">avg_s1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">sobol</span><span class="o">.</span><span class="n">first_order</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average first-order: </span><span class="si">{</span><span class="n">avg_s1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="wrappers.html" class="btn btn-neutral float-left" title="Wrappers API" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cell_cycle.html" class="btn btn-neutral float-right" title="Cell Cycle API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, vEcoli Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

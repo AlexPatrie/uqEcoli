@@ -1,0 +1,873 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>uq.inputs &mdash; vEcoli UQ Framework 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=74eb3eb4" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            vEcoli UQ Framework
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#basic-concepts">Basic Concepts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#input-parameters">Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#output-variables">Output Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#aggregation-strategies">Aggregation Strategies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../getting_started.html#sensitivity-analysis">Sensitivity Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#your-first-analysis">Your First Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#using-precomputed-results">Using Precomputed Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../getting_started.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../aggregation_strategies.html">Aggregation Strategies</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-1-uniform-aggregation">Strategy 1: Uniform Aggregation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-2-by-generation">Strategy 2: By Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-3-by-lineage-seed">Strategy 3: By Lineage Seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#strategy-4-by-cell-cycle">Strategy 4: By Cell Cycle</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../aggregation_strategies.html#cell-cycle-variables">Cell Cycle Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#filtering-data">Filtering Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#choosing-a-strategy">Choosing a Strategy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../aggregation_strategies.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../sensitivity_analysis.html">Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#sobol-sensitivity-indices">Sobol Sensitivity Indices</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#first-order-index-s1">First-Order Index (S₁)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#total-order-index-st">Total-Order Index (Sₜ)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#pce-surrogate-method">PCE Surrogate Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#polynomial-order-selection">Polynomial Order Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#sample-size-selection">Sample Size Selection</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#using-uqpy">Using UQPy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#using-pytuq">Using PyTUQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#interpreting-results">Interpreting Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#working-with-sobolindices">Working with SobolIndices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#visualization">Visualization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../sensitivity_analysis.html#multi-output-analysis">Multi-Output Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sensitivity_analysis.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../cell_cycle.html">Cell Cycle Stratification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#cell-cycle-variables">Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#built-in-variables">Built-in Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#using-the-cell-cycle-aggregator">Using the Cell Cycle Aggregator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#computing-cell-cycle-profiles">Computing Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#direct-aggregation">Direct Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#computing-raw-cell-cycle-values">Computing Raw Cell Cycle Values</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#custom-cell-cycle-variables">Custom Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#using-compositecellcyclevariable">Using CompositeCellCycleVariable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#implementing-cellcyclevariablecomputer">Implementing CellCycleVariableComputer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#integration-with-sensitivity-analysis">Integration with Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#plot-cell-cycle-profiles">Plot Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../cell_cycle.html#compare-variables">Compare Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#future-directions">Future Directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../cell_cycle.html#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/basic_sensitivity.html">Tutorial: Basic Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-1-define-input-parameters">Step 1: Define Input Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-2-configure-the-wrapper">Step 2: Configure the Wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-3-run-sensitivity-analysis">Step 3: Run Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-4-interpret-results">Step 4: Interpret Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#step-5-visualize-results">Step 5: Visualize Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#complete-script">Complete Script</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/basic_sensitivity.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/variance_decomposition.html">Tutorial: Variance Decomposition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-1-aggregate-with-different-strategies">Step 1: Aggregate with Different Strategies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-2-compute-variance-decomposition">Step 2: Compute Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-3-analyze-per-gene-variance">Step 3: Analyze Per-Gene Variance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-4-visualize-variance-components">Step 4: Visualize Variance Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#step-5-compare-output-types">Step 5: Compare Output Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#interpretation-guide">Interpretation Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/variance_decomposition.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html">Tutorial: Cell Cycle Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-1-create-cell-cycle-aggregator">Step 1: Create Cell Cycle Aggregator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-2-compute-cell-cycle-variable">Step 2: Compute Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-3-get-cell-cycle-profiles">Step 3: Get Cell Cycle Profiles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-4-analyze-multiple-outputs">Step 4: Analyze Multiple Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-5-compare-cell-cycle-variables">Step 5: Compare Cell Cycle Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-6-transcriptome-cell-cycle-dynamics">Step 6: Transcriptome Cell Cycle Dynamics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#step-7-custom-cell-cycle-variable">Step 7: Custom Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#key-takeaways">Key Takeaways</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../tutorials/cell_cycle_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/inputs.html">Input Parameters API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/inputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#mediacondition">MediaCondition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.MediaCondition"><code class="docutils literal notranslate"><span class="pre">MediaCondition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#viopathwayparams">VioPathwayParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.VioPathwayParams"><code class="docutils literal notranslate"><span class="pre">VioPathwayParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#mecillinamparams">MecillinamParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.MecillinamParams"><code class="docutils literal notranslate"><span class="pre">MecillinamParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#geneknockoutparams">GeneKnockoutParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.GeneKnockoutParams"><code class="docutils literal notranslate"><span class="pre">GeneKnockoutParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#uqinputparameters">UQInputParameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.UQInputParameters"><code class="docutils literal notranslate"><span class="pre">UQInputParameters</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#inputparameterspace">InputParameterSpace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/inputs.html#uq.inputs.InputParameterSpace"><code class="docutils literal notranslate"><span class="pre">InputParameterSpace</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/inputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#defining-input-parameters">Defining Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/inputs.html#creating-parameter-spaces">Creating Parameter Spaces</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/outputs.html">Output Variables API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputtype">OutputType</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputType"><code class="docutils literal notranslate"><span class="pre">OutputType</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputvariables">OutputVariables</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputVariables"><code class="docutils literal notranslate"><span class="pre">OutputVariables</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#outputextractor">OutputExtractor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.OutputExtractor"><code class="docutils literal notranslate"><span class="pre">OutputExtractor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#get-output-variable-info">get_output_variable_info</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/outputs.html#uq.outputs.get_output_variable_info"><code class="docutils literal notranslate"><span class="pre">get_output_variable_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/outputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#extracting-outputs">Extracting Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/outputs.html#output-column-names">Output Column Names</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/aggregation.html">Aggregation API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregationstrategy">AggregationStrategy</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.AggregationStrategy"><code class="docutils literal notranslate"><span class="pre">AggregationStrategy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregatedoutput">AggregatedOutput</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.AggregatedOutput"><code class="docutils literal notranslate"><span class="pre">AggregatedOutput</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#aggregator">Aggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.Aggregator"><code class="docutils literal notranslate"><span class="pre">Aggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#compute-variance-decomposition">compute_variance_decomposition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/aggregation.html#uq.aggregation.compute_variance_decomposition"><code class="docutils literal notranslate"><span class="pre">compute_variance_decomposition()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/aggregation.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#basic-aggregation">Basic Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/aggregation.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/wrappers.html">Wrappers API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#wrapperconfig">WrapperConfig</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.WrapperConfig"><code class="docutils literal notranslate"><span class="pre">WrapperConfig</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#simulationwrapper">SimulationWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.SimulationWrapper"><code class="docutils literal notranslate"><span class="pre">SimulationWrapper</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#precomputedwrapper">PrecomputedWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.PrecomputedWrapper"><code class="docutils literal notranslate"><span class="pre">PrecomputedWrapper</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#create-uqpy-model">create_uqpy_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.create_uqpy_model"><code class="docutils literal notranslate"><span class="pre">create_uqpy_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#create-pytuq-model">create_pytuq_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/wrappers.html#uq.wrappers.create_pytuq_model"><code class="docutils literal notranslate"><span class="pre">create_pytuq_model()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/wrappers.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#id10">SimulationWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#id11">PrecomputedWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#uqpy-integration">UQPy Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#pytuq-integration">PyTUQ Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/wrappers.html#caching">Caching</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/sensitivity.html">Sensitivity Analysis API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sensitivitymethod">SensitivityMethod</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SensitivityMethod"><code class="docutils literal notranslate"><span class="pre">SensitivityMethod</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sobolindices">SobolIndices</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SobolIndices"><code class="docutils literal notranslate"><span class="pre">SobolIndices</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#pcesurrogate">PCESurrogate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.PCESurrogate"><code class="docutils literal notranslate"><span class="pre">PCESurrogate</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#sensitivityanalyzer">SensitivityAnalyzer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.SensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">SensitivityAnalyzer</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#run-sensitivity-analysis">run_sensitivity_analysis</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.run_sensitivity_analysis"><code class="docutils literal notranslate"><span class="pre">run_sensitivity_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#analyze-precomputed-results">analyze_precomputed_results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/sensitivity.html#uq.sensitivity.analyze_precomputed_results"><code class="docutils literal notranslate"><span class="pre">analyze_precomputed_results()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/sensitivity.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#pce-based-analysis">PCE-Based Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#precomputed-results">Precomputed Results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/sensitivity.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cell_cycle.html">Cell Cycle API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclephase">CellCyclePhase</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCyclePhase"><code class="docutils literal notranslate"><span class="pre">CellCyclePhase</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclevariable">CellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcyclevariablecomputer">CellCycleVariableComputer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleVariableComputer"><code class="docutils literal notranslate"><span class="pre">CellCycleVariableComputer</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#massbasedcellcyclevariable">MassBasedCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.MassBasedCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">MassBasedCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#dnareplicationcellcyclevariable">DNAReplicationCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.DNAReplicationCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">DNAReplicationCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellanglecellcyclevariable">CellAngleCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellAngleCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellAngleCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#compositecellcyclevariable">CompositeCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CompositeCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CompositeCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#cellcycleaggregator">CellCycleAggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.CellCycleAggregator"><code class="docutils literal notranslate"><span class="pre">CellCycleAggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#register-cell-cycle-variable">register_cell_cycle_variable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../api/cell_cycle.html#uq.cell_cycle.register_cell_cycle_variable"><code class="docutils literal notranslate"><span class="pre">register_cell_cycle_variable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/cell_cycle.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#custom-variables">Custom Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../api/cell_cycle.html#available-variables">Available Variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../design_document.html">Design Document</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#vision">Vision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#implementation-status">Implementation Status</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../design_document.html#phase-1-ms-08-4-2">Phase 1 (MS-08.4.2)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../design_document.html#phase-2-cd2-milestone-10">Phase 2 (CD2/Milestone 10)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#libraries">Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design_document.html#future-directions">Future Directions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../changelog.html#id1">[0.1.0] - 2026-03-03</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../changelog.html#added">Added</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../changelog.html#dependencies">Dependencies</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vEcoli UQ Framework</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">uq.inputs</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for uq.inputs</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Input parameter definitions for uncertainty quantification.</span>
+
+<span class="sd">This module defines the scientifically most relevant input variables for UQ:</span>
+<span class="sd">- Violacein (vio) pathway presence</span>
+<span class="sd">- Mecillinam condition</span>
+<span class="sd">- Gene knockouts</span>
+
+<span class="sd">These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libraries.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">reconstruction.ecoli.simulation_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimulationDataEcoli</span>
+
+
+<div class="viewcode-block" id="MediaCondition">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.MediaCondition">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MediaCondition</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Available media conditions for simulations.&quot;&quot;&quot;</span>
+
+    <span class="n">BASAL</span> <span class="o">=</span> <span class="s2">&quot;basal&quot;</span>
+    <span class="n">WITH_AA</span> <span class="o">=</span> <span class="s2">&quot;with_aa&quot;</span>
+    <span class="n">ACETATE</span> <span class="o">=</span> <span class="s2">&quot;acetate&quot;</span>
+    <span class="n">SUCCINATE</span> <span class="o">=</span> <span class="s2">&quot;succinate&quot;</span>
+    <span class="n">NO_OXYGEN</span> <span class="o">=</span> <span class="s2">&quot;no_oxygen&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="VioPathwayParams">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.VioPathwayParams">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">VioPathwayParams</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parameters for violacein (vio) pathway presence.</span>
+
+<span class="sd">    The vio pathway is a new gene that can be induced at specific generations</span>
+<span class="sd">    with controllable expression and translation efficiency.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        enabled: Whether the vio pathway is present</span>
+<span class="sd">        induction_gen: Generation at which to induce new gene expression</span>
+<span class="sd">        knockout_gen: Generation to knock out new gene expression (optional)</span>
+<span class="sd">        expression: Factor by which to multiply new gene expression once induced</span>
+<span class="sd">        translation_efficiency: Translation efficiency for new gene once induced</span>
+<span class="sd">        rel_exp_adj_list: List of relative expression adjustments per gene</span>
+<span class="sd">        rel_trl_eff_adj_list: List of relative translation efficiency adjustments</span>
+<span class="sd">        condition: Environmental condition (basal, with_aa, etc.)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">induction_gen</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">knockout_gen</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">expression</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">translation_efficiency</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">rel_exp_adj_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">])</span>
+    <span class="n">rel_trl_eff_adj_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">])</span>
+    <span class="n">condition</span><span class="p">:</span> <span class="n">MediaCondition</span> <span class="o">=</span> <span class="n">MediaCondition</span><span class="o">.</span><span class="n">BASAL</span>
+
+<div class="viewcode-block" id="VioPathwayParams.to_variant_params">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.VioPathwayParams.to_variant_params">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_variant_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert to variant parameter dictionary for new_gene_internal_shift_variable_strength.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary compatible with apply_variant function</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;condition&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">condition</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="s2">&quot;induction_gen&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">induction_gen</span><span class="p">,</span>
+            <span class="s2">&quot;exp_trl_eff&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;exp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">expression</span><span class="p">,</span>
+                <span class="s2">&quot;trl_eff&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">translation_efficiency</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;rel_adj&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;rel_exp_adj_list&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">rel_exp_adj_list</span><span class="p">,</span>
+                <span class="s2">&quot;rel_trl_eff_adj_list&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">rel_trl_eff_adj_list</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">knockout_gen</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;knockout_gen&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">knockout_gen</span>
+        <span class="k">return</span> <span class="n">params</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="MecillinamParams">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.MecillinamParams">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MecillinamParams</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parameters for mecillinam antibiotic condition.</span>
+
+<span class="sd">    Mecillinam is a beta-lactam antibiotic that inhibits PBP2 (penicillin-binding</span>
+<span class="sd">    protein 2), affecting cell wall synthesis and cell shape.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        times: Times at which to change mecillinam concentration (seconds)</span>
+<span class="sd">        concentrations: Mecillinam concentrations at each time point (mM)</span>
+<span class="sd">        knockouts: Gene IDs for which to knock out translation</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">times</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">])</span>
+    <span class="n">concentrations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">])</span>
+    <span class="n">knockouts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">times</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">concentrations</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;times and concentrations must have the same length&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MecillinamParams.to_variant_params">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.MecillinamParams.to_variant_params">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_variant_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert to variant parameter dictionary for mecillinam_timeline.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary compatible with apply_variant function</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;times&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">times</span><span class="p">,</span>
+            <span class="s2">&quot;concentrations&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">concentrations</span><span class="p">,</span>
+            <span class="s2">&quot;knockouts&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">knockouts</span><span class="p">,</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="GeneKnockoutParams">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.GeneKnockoutParams">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">GeneKnockoutParams</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parameters for gene knockout conditions.</span>
+
+<span class="sd">    Gene knockouts can be applied at the ParCa level (gene_deletions) or</span>
+<span class="sd">    at the translation level (translation efficiency = 0).</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        gene_deletions: List of gene IDs to delete at ParCa level</span>
+<span class="sd">        translation_knockouts: List of gene IDs to knock out at translation level</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">gene_deletions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">translation_knockouts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="UQInputParameters">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.UQInputParameters">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UQInputParameters</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Complete set of input parameters for UQ analysis.</span>
+
+<span class="sd">    This combines all input parameter types into a single container that can</span>
+<span class="sd">    be used to parametrize simulation runs for sensitivity analysis.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        vio: Violacein pathway parameters</span>
+<span class="sd">        mecillinam: Mecillinam antibiotic parameters</span>
+<span class="sd">        knockouts: Gene knockout parameters</span>
+<span class="sd">        seed: Random seed for the simulation</span>
+<span class="sd">        generations: Number of generations to simulate</span>
+<span class="sd">        condition: Base media condition (if not set by vio)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">vio</span><span class="p">:</span> <span class="n">VioPathwayParams</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">VioPathwayParams</span><span class="p">)</span>
+    <span class="n">mecillinam</span><span class="p">:</span> <span class="n">MecillinamParams</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">MecillinamParams</span><span class="p">)</span>
+    <span class="n">knockouts</span><span class="p">:</span> <span class="n">GeneKnockoutParams</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">GeneKnockoutParams</span><span class="p">)</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">generations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+    <span class="n">condition</span><span class="p">:</span> <span class="n">MediaCondition</span> <span class="o">=</span> <span class="n">MediaCondition</span><span class="o">.</span><span class="n">BASAL</span>
+
+<div class="viewcode-block" id="UQInputParameters.to_config_dict">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.UQInputParameters.to_config_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_config_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert to configuration dictionary for EcoliSim.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary that can be used to configure a simulation</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;seed&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span>
+            <span class="s2">&quot;generations&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">generations</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="c1"># Add variants based on which parameters are active</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">enabled</span><span class="p">:</span>
+            <span class="n">variants</span><span class="p">[</span><span class="s2">&quot;new_gene_internal_shift_variable_strength&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">to_variant_params</span><span class="p">()</span>
+            <span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Just set the condition if vio is not enabled</span>
+            <span class="n">variants</span><span class="p">[</span><span class="s2">&quot;condition&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;condition&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">condition</span><span class="o">.</span><span class="n">value</span><span class="p">}]</span>
+
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">concentrations</span><span class="p">):</span>
+            <span class="n">variants</span><span class="p">[</span><span class="s2">&quot;mecillinam_timeline&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">to_variant_params</span><span class="p">()]</span>
+
+        <span class="k">if</span> <span class="n">variants</span><span class="p">:</span>
+            <span class="n">config</span><span class="p">[</span><span class="s2">&quot;variants&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">variants</span>
+
+        <span class="k">return</span> <span class="n">config</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="InputParameterSpace">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">InputParameterSpace</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Defines the parameter space for UQ sensitivity analysis.</span>
+
+<span class="sd">    This class provides methods to sample input parameters and to convert</span>
+<span class="sd">    between the UQ library format (numpy arrays) and UQInputParameters.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        parameter_names: Names of the parameters being varied</span>
+<span class="sd">        parameter_bounds: Lower and upper bounds for each parameter</span>
+<span class="sd">        parameter_types: Type of each parameter (&#39;continuous&#39;, &#39;discrete&#39;, &#39;categorical&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="InputParameterSpace.__init__">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">vio_expression_bounds</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">),</span>
+        <span class="n">vio_trl_eff_bounds</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span>
+        <span class="n">mecillinam_conc_bounds</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+        <span class="n">include_vio</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">include_mecillinam</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">knockout_genes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the input parameter space.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            vio_expression_bounds: (min, max) bounds for vio expression factor</span>
+<span class="sd">            vio_trl_eff_bounds: (min, max) bounds for vio translation efficiency</span>
+<span class="sd">            mecillinam_conc_bounds: (min, max) bounds for mecillinam concentration</span>
+<span class="sd">            include_vio: Whether to include vio parameters in the space</span>
+<span class="sd">            include_mecillinam: Whether to include mecillinam parameters</span>
+<span class="sd">            knockout_genes: List of genes that can be knocked out (discrete parameter)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameter_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameter_bounds</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parameter_types</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;continuous&quot;</span><span class="p">,</span> <span class="s2">&quot;discrete&quot;</span><span class="p">,</span> <span class="s2">&quot;categorical&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">[]</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">include_vio</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_names</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s2">&quot;vio_expression&quot;</span><span class="p">,</span> <span class="s2">&quot;vio_trl_eff&quot;</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_bounds</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">vio_expression_bounds</span><span class="p">,</span> <span class="n">vio_trl_eff_bounds</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_types</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s2">&quot;continuous&quot;</span><span class="p">,</span> <span class="s2">&quot;continuous&quot;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">include_mecillinam</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;mecillinam_concentration&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_bounds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mecillinam_conc_bounds</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameter_types</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;continuous&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">knockout_genes</span> <span class="o">=</span> <span class="n">knockout_genes</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_include_vio</span> <span class="o">=</span> <span class="n">include_vio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_include_mecillinam</span> <span class="o">=</span> <span class="n">include_mecillinam</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">n_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of parameters in the space.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parameter_names</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bounds_array</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameter bounds as numpy array for UQPy.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Array of shape (n_parameters, 2) with [lower, upper] bounds</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parameter_bounds</span><span class="p">)</span>
+
+<div class="viewcode-block" id="InputParameterSpace.sample_to_params">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace.sample_to_params">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sample_to_params</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">sample</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">generations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="n">knockouts</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">UQInputParameters</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert a sample from the parameter space to UQInputParameters.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            sample: Array of parameter values in the same order as parameter_names</span>
+<span class="sd">            seed: Random seed for the simulation</span>
+<span class="sd">            generations: Number of generations to simulate</span>
+<span class="sd">            knockouts: List of genes to knock out (optional)</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            UQInputParameters instance</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">UQInputParameters</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">generations</span><span class="o">=</span><span class="n">generations</span><span class="p">)</span>
+
+        <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_vio</span><span class="p">:</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">expression</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">translation_efficiency</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">idx</span> <span class="o">+=</span> <span class="mi">2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_mecillinam</span><span class="p">:</span>
+            <span class="c1"># Apply concentration at time 0</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">times</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">concentrations</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="n">idx</span><span class="p">])]</span>
+            <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">knockouts</span><span class="p">:</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">knockouts</span><span class="o">.</span><span class="n">translation_knockouts</span> <span class="o">=</span> <span class="n">knockouts</span>
+
+        <span class="k">return</span> <span class="n">params</span></div>
+
+
+<div class="viewcode-block" id="InputParameterSpace.params_to_sample">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace.params_to_sample">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">params_to_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">UQInputParameters</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert UQInputParameters to a sample array.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            params: UQInputParameters instance</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Array of parameter values</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sample</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_vio</span><span class="p">:</span>
+            <span class="n">sample</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">expression</span><span class="p">)</span>
+            <span class="n">sample</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">vio</span><span class="o">.</span><span class="n">translation_efficiency</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_mecillinam</span><span class="p">:</span>
+            <span class="c1"># Use the first concentration value</span>
+            <span class="n">conc</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">concentrations</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">params</span><span class="o">.</span><span class="n">mecillinam</span><span class="o">.</span><span class="n">concentrations</span> <span class="k">else</span> <span class="mf">0.0</span>
+            <span class="n">sample</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conc</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="InputParameterSpace.get_uqpy_distributions">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace.get_uqpy_distributions">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_uqpy_distributions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get UQPy distribution objects for this parameter space.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List of UQPy Distribution objects (Uniform distributions)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">UQpy.distributions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Uniform</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span>
+                <span class="s2">&quot;UQPy is required for sensitivity analysis. &quot;</span>
+                <span class="s2">&quot;Install it with: pip install UQpy&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">distributions</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">lb</span><span class="p">,</span> <span class="n">ub</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameter_bounds</span><span class="p">:</span>
+            <span class="n">distributions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Uniform</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="n">lb</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">ub</span> <span class="o">-</span> <span class="n">lb</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">distributions</span></div>
+
+
+<div class="viewcode-block" id="InputParameterSpace.get_pytuq_bounds">
+<a class="viewcode-back" href="../../api/inputs.html#uq.inputs.InputParameterSpace.get_pytuq_bounds">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_pytuq_bounds</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get PyTUQ-compatible bounds arrays.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (lower_bounds, upper_bounds) arrays</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bounds_array</span>
+        <span class="k">return</span> <span class="n">bounds</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, vEcoli Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

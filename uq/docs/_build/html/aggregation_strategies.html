@@ -1,0 +1,868 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aggregation Strategies &mdash; vEcoli UQ Framework 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=74eb3eb4" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Sensitivity Analysis" href="sensitivity_analysis.html" />
+    <link rel="prev" title="Getting Started" href="getting_started.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            vEcoli UQ Framework
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#basic-concepts">Basic Concepts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="getting_started.html#input-parameters">Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="getting_started.html#output-variables">Output Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="getting_started.html#aggregation-strategies">Aggregation Strategies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="getting_started.html#sensitivity-analysis">Sensitivity Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#your-first-analysis">Your First Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#using-precomputed-results">Using Precomputed Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="getting_started.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Aggregation Strategies</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#strategy-1-uniform-aggregation">Strategy 1: Uniform Aggregation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#strategy-2-by-generation">Strategy 2: By Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#strategy-3-by-lineage-seed">Strategy 3: By Lineage Seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#strategy-4-by-cell-cycle">Strategy 4: By Cell Cycle</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#cell-cycle-variables">Cell Cycle Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filtering-data">Filtering Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#choosing-a-strategy">Choosing a Strategy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sensitivity_analysis.html">Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#sobol-sensitivity-indices">Sobol Sensitivity Indices</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#first-order-index-s1">First-Order Index (S₁)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#total-order-index-st">Total-Order Index (Sₜ)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#pce-surrogate-method">PCE Surrogate Method</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#polynomial-order-selection">Polynomial Order Selection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#sample-size-selection">Sample Size Selection</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#using-uqpy">Using UQPy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#using-pytuq">Using PyTUQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#interpreting-results">Interpreting Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#working-with-sobolindices">Working with SobolIndices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#visualization">Visualization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sensitivity_analysis.html#multi-output-analysis">Multi-Output Analysis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sensitivity_analysis.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cell_cycle.html">Cell Cycle Stratification</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#cell-cycle-variables">Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#built-in-variables">Built-in Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#using-the-cell-cycle-aggregator">Using the Cell Cycle Aggregator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#computing-cell-cycle-profiles">Computing Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#direct-aggregation">Direct Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#computing-raw-cell-cycle-values">Computing Raw Cell Cycle Values</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#custom-cell-cycle-variables">Custom Cell Cycle Variables</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#using-compositecellcyclevariable">Using CompositeCellCycleVariable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#implementing-cellcyclevariablecomputer">Implementing CellCycleVariableComputer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#integration-with-sensitivity-analysis">Integration with Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#plot-cell-cycle-profiles">Plot Cell Cycle Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cell_cycle.html#compare-variables">Compare Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#future-directions">Future Directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cell_cycle.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="koopman.html">Koopman Spectral Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#what-is-koopman-analysis">What is Koopman Analysis?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#why-use-koopman-for-whole-cell-simulations">Why Use Koopman for Whole-Cell Simulations?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#dynamic-mode-decomposition-dmd">Dynamic Mode Decomposition (DMD)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#extended-dmd-edmd">Extended DMD (EDMD)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#interpreting-the-spectrum">Interpreting the Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#cell-cycle-harmonics">Cell Cycle Harmonics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#spectral-sensitivity">Spectral Sensitivity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#comparison-with-pce-methods">Comparison with PCE Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="koopman.html#see-also">See Also</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/basic_sensitivity.html">Tutorial: Basic Sensitivity Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#step-1-define-input-parameters">Step 1: Define Input Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#step-2-configure-the-wrapper">Step 2: Configure the Wrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#step-3-run-sensitivity-analysis">Step 3: Run Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#step-4-interpret-results">Step 4: Interpret Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#step-5-visualize-results">Step 5: Visualize Results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#complete-script">Complete Script</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/basic_sensitivity.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/variance_decomposition.html">Tutorial: Variance Decomposition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#step-1-aggregate-with-different-strategies">Step 1: Aggregate with Different Strategies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#step-2-compute-variance-decomposition">Step 2: Compute Variance Decomposition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#step-3-analyze-per-gene-variance">Step 3: Analyze Per-Gene Variance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#step-4-visualize-variance-components">Step 4: Visualize Variance Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#step-5-compare-output-types">Step 5: Compare Output Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#interpretation-guide">Interpretation Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/variance_decomposition.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/cell_cycle_analysis.html">Tutorial: Cell Cycle Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#setup">Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-1-create-cell-cycle-aggregator">Step 1: Create Cell Cycle Aggregator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-2-compute-cell-cycle-variable">Step 2: Compute Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-3-get-cell-cycle-profiles">Step 3: Get Cell Cycle Profiles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-4-analyze-multiple-outputs">Step 4: Analyze Multiple Outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-5-compare-cell-cycle-variables">Step 5: Compare Cell Cycle Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-6-transcriptome-cell-cycle-dynamics">Step 6: Transcriptome Cell Cycle Dynamics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#step-7-custom-cell-cycle-variable">Step 7: Custom Cell Cycle Variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#key-takeaways">Key Takeaways</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cell_cycle_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/koopman_analysis.html">Koopman Spectral Analysis Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#getting-trajectory-data">Getting Trajectory Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#basic-dmd-analysis">Basic DMD Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#understanding-the-spectrum">Understanding the Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#visualizing-modes">Visualizing Modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#extended-dmd-with-dictionaries">Extended DMD with Dictionaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#finding-cell-cycle-harmonics">Finding Cell Cycle Harmonics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#spectral-sensitivity-analysis">Spectral Sensitivity Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#extracting-features-for-ml">Extracting Features for ML</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#combining-with-pce-analysis">Combining with PCE Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#best-practices">Best Practices</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#common-issues">Common Issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/koopman_analysis.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api/inputs.html">Input Parameters API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/inputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#mediacondition">MediaCondition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.MediaCondition"><code class="docutils literal notranslate"><span class="pre">MediaCondition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#viopathwayparams">VioPathwayParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.VioPathwayParams"><code class="docutils literal notranslate"><span class="pre">VioPathwayParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#mecillinamparams">MecillinamParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.MecillinamParams"><code class="docutils literal notranslate"><span class="pre">MecillinamParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#geneknockoutparams">GeneKnockoutParams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.GeneKnockoutParams"><code class="docutils literal notranslate"><span class="pre">GeneKnockoutParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#uqinputparameters">UQInputParameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.UQInputParameters"><code class="docutils literal notranslate"><span class="pre">UQInputParameters</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#inputparameterspace">InputParameterSpace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/inputs.html#uq.inputs.InputParameterSpace"><code class="docutils literal notranslate"><span class="pre">InputParameterSpace</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/inputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#defining-input-parameters">Defining Input Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/inputs.html#creating-parameter-spaces">Creating Parameter Spaces</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/outputs.html">Output Variables API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/outputs.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#outputtype">OutputType</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/outputs.html#uq.outputs.OutputType"><code class="docutils literal notranslate"><span class="pre">OutputType</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#outputvariables">OutputVariables</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/outputs.html#uq.outputs.OutputVariables"><code class="docutils literal notranslate"><span class="pre">OutputVariables</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#outputextractor">OutputExtractor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/outputs.html#uq.outputs.OutputExtractor"><code class="docutils literal notranslate"><span class="pre">OutputExtractor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/outputs.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#get-output-variable-info">get_output_variable_info</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/outputs.html#uq.outputs.get_output_variable_info"><code class="docutils literal notranslate"><span class="pre">get_output_variable_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/outputs.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#extracting-outputs">Extracting Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/outputs.html#output-column-names">Output Column Names</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/aggregation.html">Aggregation API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/aggregation.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#aggregationstrategy">AggregationStrategy</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/aggregation.html#uq.aggregation.AggregationStrategy"><code class="docutils literal notranslate"><span class="pre">AggregationStrategy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#aggregatedoutput">AggregatedOutput</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/aggregation.html#uq.aggregation.AggregatedOutput"><code class="docutils literal notranslate"><span class="pre">AggregatedOutput</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#aggregator">Aggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/aggregation.html#uq.aggregation.Aggregator"><code class="docutils literal notranslate"><span class="pre">Aggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/aggregation.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#compute-variance-decomposition">compute_variance_decomposition</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/aggregation.html#uq.aggregation.compute_variance_decomposition"><code class="docutils literal notranslate"><span class="pre">compute_variance_decomposition()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/aggregation.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#basic-aggregation">Basic Aggregation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#variance-decomposition">Variance Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/aggregation.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/wrappers.html">Wrappers API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/wrappers.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#wrapperconfig">WrapperConfig</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/wrappers.html#uq.wrappers.WrapperConfig"><code class="docutils literal notranslate"><span class="pre">WrapperConfig</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#simulationwrapper">SimulationWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/wrappers.html#uq.wrappers.SimulationWrapper"><code class="docutils literal notranslate"><span class="pre">SimulationWrapper</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#precomputedwrapper">PrecomputedWrapper</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/wrappers.html#uq.wrappers.PrecomputedWrapper"><code class="docutils literal notranslate"><span class="pre">PrecomputedWrapper</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/wrappers.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#create-uqpy-model">create_uqpy_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/wrappers.html#uq.wrappers.create_uqpy_model"><code class="docutils literal notranslate"><span class="pre">create_uqpy_model()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#create-pytuq-model">create_pytuq_model</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/wrappers.html#uq.wrappers.create_pytuq_model"><code class="docutils literal notranslate"><span class="pre">create_pytuq_model()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/wrappers.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#id10">SimulationWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#id11">PrecomputedWrapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#uqpy-integration">UQPy Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#pytuq-integration">PyTUQ Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/wrappers.html#caching">Caching</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/sensitivity.html">Sensitivity Analysis API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/sensitivity.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#sensitivitymethod">SensitivityMethod</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.SensitivityMethod"><code class="docutils literal notranslate"><span class="pre">SensitivityMethod</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#sobolindices">SobolIndices</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.SobolIndices"><code class="docutils literal notranslate"><span class="pre">SobolIndices</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#pcesurrogate">PCESurrogate</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.PCESurrogate"><code class="docutils literal notranslate"><span class="pre">PCESurrogate</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#sensitivityanalyzer">SensitivityAnalyzer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.SensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">SensitivityAnalyzer</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/sensitivity.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#run-sensitivity-analysis">run_sensitivity_analysis</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.run_sensitivity_analysis"><code class="docutils literal notranslate"><span class="pre">run_sensitivity_analysis()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#analyze-precomputed-results">analyze_precomputed_results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/sensitivity.html#uq.sensitivity.analyze_precomputed_results"><code class="docutils literal notranslate"><span class="pre">analyze_precomputed_results()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/sensitivity.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#pce-based-analysis">PCE-Based Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#direct-sobol-analysis">Direct Sobol Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#convenience-functions">Convenience Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#precomputed-results">Precomputed Results</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/sensitivity.html#working-with-results">Working with Results</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/cell_cycle.html">Cell Cycle API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/cell_cycle.html#classes">Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#cellcyclephase">CellCyclePhase</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CellCyclePhase"><code class="docutils literal notranslate"><span class="pre">CellCyclePhase</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#cellcyclevariable">CellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#cellcyclevariablecomputer">CellCycleVariableComputer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CellCycleVariableComputer"><code class="docutils literal notranslate"><span class="pre">CellCycleVariableComputer</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#massbasedcellcyclevariable">MassBasedCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.MassBasedCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">MassBasedCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#dnareplicationcellcyclevariable">DNAReplicationCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.DNAReplicationCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">DNAReplicationCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#cellanglecellcyclevariable">CellAngleCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CellAngleCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CellAngleCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#compositecellcyclevariable">CompositeCellCycleVariable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CompositeCellCycleVariable"><code class="docutils literal notranslate"><span class="pre">CompositeCellCycleVariable</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#cellcycleaggregator">CellCycleAggregator</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.CellCycleAggregator"><code class="docutils literal notranslate"><span class="pre">CellCycleAggregator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/cell_cycle.html#functions">Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#register-cell-cycle-variable">register_cell_cycle_variable</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/cell_cycle.html#uq.cell_cycle.register_cell_cycle_variable"><code class="docutils literal notranslate"><span class="pre">register_cell_cycle_variable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/cell_cycle.html#usage-examples">Usage Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#custom-variables">Custom Variables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/cell_cycle.html#available-variables">Available Variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/koopman.html">Koopman Spectral Analysis (<code class="docutils literal notranslate"><span class="pre">uq.koopman</span></code>)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#data-classes">Data Classes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode"><code class="docutils literal notranslate"><span class="pre">KoopmanMode</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.eigenvalue"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.eigenvalue</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.mode"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.mode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.amplitude"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.amplitude</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.frequency"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.frequency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.growth_rate"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.growth_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.period"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.period</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.damping_time"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.damping_time</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id0"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.eigenvalue</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id1"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.mode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id2"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.amplitude</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id3"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.frequency</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id4"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.growth_rate</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id5"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.period</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id6"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.damping_time</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.__post_init__"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.__post_init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.is_oscillatory"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_oscillatory</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.is_stable"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_stable</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.is_growing"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.is_growing</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanMode.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanMode.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.eigenvalues"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvalues</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.eigenvectors"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvectors</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.amplitudes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.amplitudes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.reconstruction_error"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruction_error</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.dt"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.dt</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.observable_names"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.observable_names</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id7"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id8"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvalues</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id9"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.eigenvectors</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id10"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.amplitudes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id11"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruction_error</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id12"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.dt</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#id13"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.observable_names</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.n_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.n_modes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.get_dominant_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_dominant_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.get_oscillatory_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_oscillatory_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.get_stable_modes"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_stable_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.get_modes_in_frequency_range"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_modes_in_frequency_range()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.reconstruct"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.reconstruct()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.get_power_spectrum"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.get_power_spectrum()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSpectrum.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanSpectrum.__init__()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#dictionary-functions">Dictionary Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary.IDENTITY"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.IDENTITY</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary.POLYNOMIAL"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.POLYNOMIAL</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary.FOURIER"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.FOURIER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary.RBF"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.RBF</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanDictionary.CUSTOM"><code class="docutils literal notranslate"><span class="pre">KoopmanDictionary.CUSTOM</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#dmd-methods">DMD Methods</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#dynamic-mode-decomposition-dmd">Dynamic Mode Decomposition (DMD)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.DynamicModeDecomposition"><code class="docutils literal notranslate"><span class="pre">DynamicModeDecomposition</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#extended-dmd-edmd">Extended DMD (EDMD)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.ExtendedDMD"><code class="docutils literal notranslate"><span class="pre">ExtendedDMD</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#sensitivity-analysis">Sensitivity Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSensitivityAnalyzer"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.__init__"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.analyze_trajectory"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.analyze_trajectory()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.compare_spectra"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.compare_spectra()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.KoopmanSensitivityAnalyzer.spectral_sensitivity"><code class="docutils literal notranslate"><span class="pre">KoopmanSensitivityAnalyzer.spectral_sensitivity()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#cell-cycle-analysis">Cell Cycle Analysis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.CellCycleKoopmanAnalyzer"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.__init__"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.identify_cell_cycle_modes"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.identify_cell_cycle_modes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/koopman.html#uq.koopman.CellCycleKoopmanAnalyzer.analyze_cell_cycle_spectrum"><code class="docutils literal notranslate"><span class="pre">CellCycleKoopmanAnalyzer.analyze_cell_cycle_spectrum()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#utility-functions">Utility Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#uq.koopman.extract_koopman_features"><code class="docutils literal notranslate"><span class="pre">extract_koopman_features()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#mathematical-background">Mathematical Background</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#the-koopman-operator">The Koopman Operator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#dynamic-mode-decomposition">Dynamic Mode Decomposition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#extended-dmd">Extended DMD</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#interpretation-for-cell-biology">Interpretation for Cell Biology</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#example-usage">Example Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#basic-dmd-analysis">Basic DMD Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#edmd-with-polynomial-dictionary">EDMD with Polynomial Dictionary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/koopman.html#finding-cell-cycle-modes">Finding Cell Cycle Modes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#see-also">See Also</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/koopman.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="design_document.html">Design Document</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="design_document.html#vision">Vision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="design_document.html#implementation-status">Implementation Status</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="design_document.html#phase-1-ms-08-4-2">Phase 1 (MS-08.4.2)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="design_document.html#phase-2-cd2-milestone-10">Phase 2 (CD2/Milestone 10)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="design_document.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="design_document.html#libraries">Libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="design_document.html#future-directions">Future Directions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#id1">[0.1.0] - 2026-03-03</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="changelog.html#added">Added</a></li>
+<li class="toctree-l3"><a class="reference internal" href="changelog.html#dependencies">Dependencies</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">vEcoli UQ Framework</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Aggregation Strategies</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/aggregation_strategies.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="aggregation-strategies">
+<h1>Aggregation Strategies<a class="headerlink" href="#aggregation-strategies" title="Link to this heading"></a></h1>
+<p>The UQ framework implements four aggregation strategies for characterizing different
+types of uncertainty in vEcoli simulations. Each strategy enables analysis of
+variance from different sources.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<table class="docutils align-default" id="id1">
+<caption><span class="caption-text">Aggregation Strategies</span><a class="headerlink" href="#id1" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 20.0%" />
+<col style="width: 30.0%" />
+<col style="width: 50.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Strategy</p></th>
+<th class="head"><p>Groups By</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Uniform</p></td>
+<td><p>None (all data)</p></td>
+<td><p>Baseline “bulk” population average</p></td>
+</tr>
+<tr class="row-odd"><td><p>By Generation</p></td>
+<td><p>Cell generation number</p></td>
+<td><p>Control for convergence towards steady-state</p></td>
+</tr>
+<tr class="row-even"><td><p>By Lineage Seed</p></td>
+<td><p>Stochastic seed value</p></td>
+<td><p>Control for exogenous variance</p></td>
+</tr>
+<tr class="row-odd"><td><p>By Cell Cycle</p></td>
+<td><p>Cell cycle stage</p></td>
+<td><p>Analyze variance across physiological time</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="strategy-1-uniform-aggregation">
+<h2>Strategy 1: Uniform Aggregation<a class="headerlink" href="#strategy-1-uniform-aggregation" title="Link to this heading"></a></h2>
+<p>The <strong>uniform</strong> strategy averages across all cells and all time points, producing
+the baseline “bulk” population average that corresponds to experimental measurements.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">Aggregator</span><span class="p">,</span> <span class="n">AggregationStrategy</span>
+
+<span class="n">aggregator</span> <span class="o">=</span> <span class="n">Aggregator</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">history_sql</span><span class="p">,</span> <span class="n">config_sql</span><span class="p">)</span>
+<span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean shape: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (n_features,)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Std shape: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">std</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>    <span class="c1"># (n_features,)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;N samples: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">n_samples</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>: Comparing simulation predictions to bulk experimental measurements
+(e.g., population-averaged RNA-seq or proteomics data).</p>
+</section>
+<section id="strategy-2-by-generation">
+<h2>Strategy 2: By Generation<a class="headerlink" href="#strategy-2-by-generation" title="Link to this heading"></a></h2>
+<p>The <strong>by generation</strong> strategy stratifies data by cell generation number, enabling
+analysis of how outputs evolve as the simulation converges towards steady-state growth.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean shape: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (n_generations, n_features)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generations: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">groups</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>     <span class="c1"># [0, 1, 2, ...]</span>
+
+<span class="c1"># Analyze convergence</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">gen_variance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Variance across generations: </span><span class="si">{</span><span class="n">gen_variance</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>:</p>
+<ul class="simple">
+<li><p>Verifying simulation has reached steady-state</p></li>
+<li><p>Identifying outputs that vary with cell age</p></li>
+<li><p>Filtering out initial transient behavior</p></li>
+</ul>
+</section>
+<section id="strategy-3-by-lineage-seed">
+<h2>Strategy 3: By Lineage Seed<a class="headerlink" href="#strategy-3-by-lineage-seed" title="Link to this heading"></a></h2>
+<p>The <strong>by lineage seed</strong> strategy stratifies data by the stochastic seed used to
+initialize each lineage, enabling analysis of exogenous variance (variance due
+to random initial conditions).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_LINEAGE_SEED</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean shape: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (n_seeds, n_features)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Seeds: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">groups</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>           <span class="c1"># [0, 1, 2, ...]</span>
+
+<span class="c1"># Analyze seed-to-seed variance</span>
+<span class="n">seed_variance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Variance across seeds: </span><span class="si">{</span><span class="n">seed_variance</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>:</p>
+<ul class="simple">
+<li><p>Quantifying stochastic variability</p></li>
+<li><p>Determining how many lineages are needed for robust statistics</p></li>
+<li><p>Separating intrinsic from extrinsic noise</p></li>
+</ul>
+</section>
+<section id="strategy-4-by-cell-cycle">
+<h2>Strategy 4: By Cell Cycle<a class="headerlink" href="#strategy-4-by-cell-cycle" title="Link to this heading"></a></h2>
+<p>The <strong>by cell cycle</strong> strategy stratifies data by cell cycle stage, enabling
+“phenotypic” sensitivity analysis across the physiological time dimension
+within a cell’s lifespan.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">CellCycleAggregator</span>
+
+<span class="n">cc_agg</span> <span class="o">=</span> <span class="n">CellCycleAggregator</span><span class="p">(</span>
+    <span class="n">conn</span><span class="p">,</span> <span class="n">history_sql</span><span class="p">,</span> <span class="n">config_sql</span><span class="p">,</span>
+    <span class="n">variable_type</span><span class="o">=</span><span class="s2">&quot;mass_based&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;dna_replication&quot;, &quot;cell_angle&quot;</span>
+    <span class="n">n_stages</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">profile</span> <span class="o">=</span> <span class="n">cc_agg</span><span class="o">.</span><span class="n">get_cell_cycle_profile</span><span class="p">(</span>
+    <span class="s2">&quot;listeners__rna_counts__mRNA_cistron_counts&quot;</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Stages: </span><span class="si">{</span><span class="n">profile</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean per stage: </span><span class="si">{</span><span class="n">profile</span><span class="p">[</span><span class="s1">&#39;mean&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># (n_stages, n_features)</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>:</p>
+<ul class="simple">
+<li><p>Analyzing cell cycle-dependent gene expression</p></li>
+<li><p>Understanding temporal dynamics within cell division</p></li>
+<li><p>Preparing for CD2 population aggregation requirements</p></li>
+</ul>
+<section id="cell-cycle-variables">
+<h3>Cell Cycle Variables<a class="headerlink" href="#cell-cycle-variables" title="Link to this heading"></a></h3>
+<p>Three built-in cell cycle variable implementations:</p>
+<ol class="arabic">
+<li><p><strong>Mass-based</strong> (default): Normalized log-mass ratio</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\\phi = \\frac{\\log(M) - \\log(M_{birth})}{\\log(M_{div}) - \\log(M_{birth})}\end{split}\]</div>
+</li>
+<li><p><strong>DNA replication-based</strong>: DNA mass normalized within each cell</p></li>
+<li><p><strong>Cell angle</strong>: 2D angle in (log-mass, growth-rate) space</p></li>
+</ol>
+<p>See <a class="reference internal" href="cell_cycle.html"><span class="doc">Cell Cycle Stratification</span></a> for details on cell cycle variables.</p>
+</section>
+</section>
+<section id="variance-decomposition">
+<h2>Variance Decomposition<a class="headerlink" href="#variance-decomposition" title="Link to this heading"></a></h2>
+<p>The framework can decompose total variance into components attributable to
+different factors:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">uq</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_variance_decomposition</span>
+
+<span class="c1"># Get aggregated results</span>
+<span class="n">agg_uniform</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">)</span>
+<span class="n">agg_by_gen</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">)</span>
+<span class="n">agg_by_seed</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span><span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_LINEAGE_SEED</span><span class="p">)</span>
+
+<span class="c1"># Decompose variance</span>
+<span class="n">decomposition</span> <span class="o">=</span> <span class="n">compute_variance_decomposition</span><span class="p">(</span>
+    <span class="n">agg_by_gen</span><span class="p">,</span>
+    <span class="n">agg_by_seed</span><span class="p">,</span>
+    <span class="n">agg_uniform</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total variance: </span><span class="si">{</span><span class="n">decomposition</span><span class="p">[</span><span class="s1">&#39;total_variance&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generation fraction: </span><span class="si">{</span><span class="n">decomposition</span><span class="p">[</span><span class="s1">&#39;generation_fraction&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Seed fraction: </span><span class="si">{</span><span class="n">decomposition</span><span class="p">[</span><span class="s1">&#39;seed_fraction&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The decomposition returns:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">total_variance</span></code>: Total variance from uniform aggregation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">between_generation_variance</span></code>: Variance of generation means</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">between_seed_variance</span></code>: Variance of seed means</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">generation_fraction</span></code>: Fraction attributable to generation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">seed_fraction</span></code>: Fraction attributable to stochastic seeding</p></li>
+</ul>
+</section>
+<section id="filtering-data">
+<h2>Filtering Data<a class="headerlink" href="#filtering-data" title="Link to this heading"></a></h2>
+<p>All aggregation methods support filtering by generation and time:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Skip initial generations (transient)</span>
+<span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span>
+    <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">UNIFORM</span><span class="p">,</span>
+    <span class="n">generation_lower_bound</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Skip initial time within each cell</span>
+<span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_transcriptome</span><span class="p">(</span>
+    <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_GENERATION</span><span class="p">,</span>
+    <span class="n">time_lower_bound</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>  <span class="c1"># seconds</span>
+<span class="p">)</span>
+
+<span class="c1"># Combine both filters</span>
+<span class="n">result</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">aggregator</span><span class="o">.</span><span class="n">aggregate_fluxes</span><span class="p">(</span>
+    <span class="n">AggregationStrategy</span><span class="o">.</span><span class="n">BY_LINEAGE_SEED</span><span class="p">,</span>
+    <span class="n">generation_lower_bound</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">time_lower_bound</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">exchange_only</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Only exchange fluxes</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="choosing-a-strategy">
+<h2>Choosing a Strategy<a class="headerlink" href="#choosing-a-strategy" title="Link to this heading"></a></h2>
+<table class="docutils align-default" id="id2">
+<caption><span class="caption-text">Strategy Selection Guide</span><a class="headerlink" href="#id2" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>If you want to…</p></th>
+<th class="head"><p>Use this strategy</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Compare with bulk experimental data</p></td>
+<td><p>Uniform</p></td>
+</tr>
+<tr class="row-odd"><td><p>Check simulation convergence</p></td>
+<td><p>By Generation</p></td>
+</tr>
+<tr class="row-even"><td><p>Quantify stochastic variability</p></td>
+<td><p>By Lineage Seed</p></td>
+</tr>
+<tr class="row-odd"><td><p>Analyze cell cycle dynamics</p></td>
+<td><p>By Cell Cycle</p></td>
+</tr>
+<tr class="row-even"><td><p>Decompose variance sources</p></td>
+<td><p>All strategies + <code class="docutils literal notranslate"><span class="pre">compute_variance_decomposition</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="see-also">
+<h2>See Also<a class="headerlink" href="#see-also" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="api/aggregation.html"><span class="doc">Aggregation API</span></a> - Full API reference</p></li>
+<li><p><a class="reference internal" href="tutorials/variance_decomposition.html"><span class="doc">Tutorial: Variance Decomposition</span></a> - Tutorial on variance analysis</p></li>
+<li><p><a class="reference internal" href="cell_cycle.html"><span class="doc">Cell Cycle Stratification</span></a> - Cell cycle stratification details</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="getting_started.html" class="btn btn-neutral float-left" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="sensitivity_analysis.html" class="btn btn-neutral float-right" title="Sensitivity Analysis" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, vEcoli Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
