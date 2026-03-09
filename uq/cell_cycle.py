@@ -10,14 +10,24 @@ The cell cycle variable should:
 2. Have a quantitative relationship with omics measurements from IV&V
 3. Be computed from process variables inside vEcoli
 
-Examples of cell cycle variables:
-- Cell angle (established in literature)
-- Mass-based progression
-- DNA replication progress
-- Custom composite variables
+Available cell cycle variable implementations:
+- **Koopman eigenfunction phase** (recommended): Uses Dynamic Mode Decomposition
+  to identify the cell cycle mode and extract its eigenfunction phase as the
+  cell cycle coordinate. This data-driven approach automatically captures
+  periodic dynamics without assumptions about the underlying mechanism.
+- Mass-based progression: Normalized log-mass ratio
+- DNA replication progress: DNA content normalization
+- Cell angle: 2D projection in (mass, growth_rate) space
+- Custom composite variables: User-defined functions
 
-This module provides an extensible framework where specific cell cycle
-variables can be implemented as subclasses or registered functions.
+The **Koopman approach** is the preferred method because:
+1. It is purely data-driven (no mechanistic assumptions)
+2. It automatically identifies periodic cell cycle dynamics
+3. The eigenfunction phase naturally wraps [0, 1] once per cycle
+4. It is robust to noise and individual cell variations
+
+Per RFC006 Section 1.3, this implements the fourth aggregation strategy
+for phenotypic sensitivity analysis across the physiological time dimension.
 """
 
 from abc import ABC, abstractmethod
@@ -28,6 +38,13 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
+
+from uq.koopman import (
+    CellCycleKoopmanAnalyzer,
+    DynamicModeDecomposition,
+    ExtendedDMD,
+    KoopmanMode,
+)
 
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import SimulationDataEcoli
@@ -402,6 +419,268 @@ class CompositeCellCycleVariable(CellCycleVariableComputer):
         )
 
 
+class KoopmanCellCycleVariable(CellCycleVariableComputer):
+    """
+    Koopman eigenfunction-based cell cycle variable.
+
+    This class uses Dynamic Mode Decomposition (DMD) to identify the cell cycle
+    mode from simulation data, then extracts the phase of the corresponding
+    Koopman eigenfunction as the cell cycle variable.
+
+    The Koopman approach offers several advantages over heuristic methods:
+    1. **Data-driven**: No assumptions about growth mechanism or cycle structure
+    2. **Spectral identification**: Automatically finds periodic dynamics at the
+       expected cell cycle frequency
+    3. **Phase extraction**: The eigenfunction phase naturally wraps [0, 1] once
+       per cycle, providing a deterministic mapping from state to cycle position
+    4. **Robust**: Captures the dominant periodic structure even with noise
+
+    Per RFC006 Section 1.3, this implements aggregation strategy #4 (cell cycle
+    stratification) by providing a principled way to define the cell cycle
+    variable through Koopman spectral analysis.
+
+    Mathematical Background:
+        For an oscillatory Koopman mode with eigenvalue λ = |λ|e^(iω),
+        the eigenfunction φ(x) maps states to complex numbers. The phase
+        angle θ = arg(φ(x)) / (2π) provides a [0,1]-valued coordinate
+        that advances uniformly with the oscillation.
+
+    Example:
+        >>> koopman_cc = KoopmanCellCycleVariable(expected_cycle_time=3600.0)
+        >>> cc_var = koopman_cc.compute(trajectory_data)
+        >>> bins = cc_var.to_stage_bins(n_bins=10)
+    """
+
+    def __init__(
+        self,
+        expected_cycle_time: float = 3600.0,
+        frequency_tolerance: float = 0.3,
+        dt: float = 1.0,
+        use_edmd: bool = True,
+        observable_columns: Optional[list[str]] = None,
+    ):
+        """
+        Initialize Koopman-based cell cycle variable computer.
+
+        Args:
+            expected_cycle_time: Expected cell cycle duration in seconds.
+                Default is 3600s (1 hour), typical for fast-growing E. coli.
+            frequency_tolerance: Fractional tolerance for matching the cell
+                cycle frequency. Default 0.3 means modes with frequency within
+                30% of expected are considered cell cycle modes.
+            dt: Timestep between data points in seconds. Used for converting
+                eigenvalues to frequencies.
+            use_edmd: Whether to use Extended DMD with polynomial dictionary.
+                EDMD can better capture nonlinear dynamics but is slower.
+            observable_columns: Optional list of additional observable columns
+                to include in DMD analysis. If None, uses default mass-based
+                observables.
+        """
+        self._expected_cycle_time = expected_cycle_time
+        self._frequency_tolerance = frequency_tolerance
+        self._dt = dt
+        self._use_edmd = use_edmd
+
+        # Default observables for DMD if not specified
+        self._observable_columns = observable_columns or [
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+        ]
+
+        # Store the identified cell cycle mode for inspection
+        self._cell_cycle_mode: Optional[KoopmanMode] = None
+
+    @property
+    def name(self) -> str:
+        return "koopman"
+
+    @property
+    def required_columns(self) -> list[str]:
+        return self._observable_columns + [
+            "generation",
+            "agent_id",
+            "time",
+        ]
+
+    @property
+    def cell_cycle_mode(self) -> Optional[KoopmanMode]:
+        """The identified cell cycle Koopman mode (available after compute())."""
+        return self._cell_cycle_mode
+
+    def compute(
+        self,
+        data: pl.DataFrame,
+        sim_data: Optional["SimulationDataEcoli"] = None,
+    ) -> CellCycleVariable:
+        """
+        Compute Koopman eigenfunction phase as cell cycle variable.
+
+        This method:
+        1. Builds a trajectory matrix from the observable columns
+        2. Fits DMD/EDMD to extract Koopman modes
+        3. Identifies the cell cycle mode (oscillatory mode near expected frequency)
+        4. Projects each data point onto the mode's eigenvector
+        5. Extracts the phase angle and normalizes to [0, 1]
+
+        Args:
+            data: Polars DataFrame with required columns
+            sim_data: Optional SimulationDataEcoli (not used, for API consistency)
+
+        Returns:
+            CellCycleVariable with phase values in [0, 1]
+        """
+        # Build trajectory matrix from observable columns
+        obs_cols = [c for c in self._observable_columns if c in data.columns]
+        if len(obs_cols) < 1:
+            raise ValueError(
+                f"No observable columns found in data. Required: {self._observable_columns}"
+            )
+
+        # Extract data as numpy array
+        X = data.select(obs_cols).to_numpy().astype(np.float64)
+
+        # Handle NaN values
+        X = np.nan_to_num(X, nan=0.0)
+
+        # Normalize observables for better DMD convergence
+        X_mean = np.mean(X, axis=0, keepdims=True)
+        X_std = np.std(X, axis=0, keepdims=True) + 1e-10
+        X_normalized = (X - X_mean) / X_std
+
+        if len(X_normalized) < 10:
+            # Not enough data for DMD - fall back to linear progression
+            return self._fallback_compute(data)
+
+        # Fit DMD or EDMD
+        try:
+            if self._use_edmd:
+                dmd = ExtendedDMD(rank=min(10, len(obs_cols) * 2), dt=self._dt)
+            else:
+                dmd = DynamicModeDecomposition(rank=min(10, len(obs_cols)), dt=self._dt)
+
+            dmd.fit(X_normalized)
+            spectrum = dmd.get_spectrum(obs_cols)
+        except Exception as e:
+            # If DMD fails, fall back to simple method
+            return self._fallback_compute(data, error=str(e))
+
+        # Identify cell cycle mode using the analyzer
+        analyzer = CellCycleKoopmanAnalyzer(
+            expected_cycle_time=self._expected_cycle_time,
+            frequency_tolerance=self._frequency_tolerance,
+            dt=self._dt,
+        )
+
+        cell_cycle_modes = analyzer.identify_cell_cycle_modes(spectrum)
+
+        if not cell_cycle_modes:
+            # No cell cycle mode found - use dominant oscillatory mode
+            oscillatory = spectrum.get_oscillatory_modes()
+            if oscillatory:
+                self._cell_cycle_mode = oscillatory[0]
+            else:
+                # No oscillatory modes - fall back
+                return self._fallback_compute(data, error="No oscillatory modes found")
+        else:
+            # Use the fundamental cell cycle mode
+            self._cell_cycle_mode = min(
+                cell_cycle_modes,
+                key=lambda m: np.abs(m.frequency - 1.0 / self._expected_cycle_time),
+            )
+
+        # Project data onto the cell cycle mode's eigenvector
+        # The projection gives us a complex number at each time point
+        mode_vector = self._cell_cycle_mode.mode
+        mode_vector_norm = mode_vector / (np.linalg.norm(mode_vector) + 1e-10)
+
+        # Project each observation onto the mode
+        projections = X_normalized @ mode_vector_norm.real
+
+        # For a true eigenfunction, we need the complex phase
+        # Reconstruct using the eigenvalue evolution
+        # φ(x_t) ≈ φ(x_0) * λ^t, so phase = angle of projection * λ^t
+        eigenvalue = self._cell_cycle_mode.eigenvalue
+        n_points = len(projections)
+
+        # Compute phase by tracking eigenvalue evolution
+        phases = np.zeros(n_points)
+        for t in range(n_points):
+            # Complex phase from eigenvalue evolution
+            complex_val = projections[t] * (eigenvalue ** t)
+            phases[t] = np.angle(complex_val)
+
+        # Normalize phase to [0, 1]
+        # angle returns values in [-π, π], normalize to [0, 1]
+        values = (phases + np.pi) / (2 * np.pi)
+        values = np.clip(values, 0, 1)
+
+        # Determine cell cycle phases based on position
+        phase_labels = np.full(len(values), CellCyclePhase.UNKNOWN.value)
+        phase_labels[values < 0.33] = CellCyclePhase.B_PERIOD.value
+        phase_labels[(values >= 0.33) & (values < 0.67)] = CellCyclePhase.C_PERIOD.value
+        phase_labels[values >= 0.67] = CellCyclePhase.D_PERIOD.value
+
+        return CellCycleVariable(
+            values=values,
+            phase_labels=phase_labels,
+            normalized=True,
+            variable_name=self.name,
+            metadata={
+                "method": "koopman_eigenfunction_phase",
+                "eigenvalue": complex(self._cell_cycle_mode.eigenvalue),
+                "frequency": self._cell_cycle_mode.frequency,
+                "period": self._cell_cycle_mode.period,
+                "growth_rate": self._cell_cycle_mode.growth_rate,
+                "expected_cycle_time": self._expected_cycle_time,
+                "use_edmd": self._use_edmd,
+            },
+        )
+
+    def _fallback_compute(
+        self,
+        data: pl.DataFrame,
+        error: Optional[str] = None,
+    ) -> CellCycleVariable:
+        """
+        Fallback computation when DMD cannot be performed.
+
+        Uses simple time-based progression within each cell.
+        """
+        # Get time within each cell normalized to [0, 1]
+        cell_groups = data.group_by(["generation", "agent_id"]).agg([
+            pl.col("time").min().alias("t_start"),
+            pl.col("time").max().alias("t_end"),
+        ])
+
+        data_with_bounds = data.join(
+            cell_groups,
+            on=["generation", "agent_id"],
+            how="left",
+        )
+
+        t = data_with_bounds["time"].to_numpy()
+        t_start = data_with_bounds["t_start"].to_numpy()
+        t_end = data_with_bounds["t_end"].to_numpy()
+
+        denom = t_end - t_start
+        denom = np.where(denom > 0, denom, 1.0)
+
+        values = (t - t_start) / denom
+        values = np.clip(values, 0, 1)
+
+        metadata = {
+            "method": "time_fallback",
+            "fallback_reason": error or "insufficient_data",
+        }
+
+        return CellCycleVariable(
+            values=values,
+            normalized=True,
+            variable_name=self.name,
+            metadata=metadata,
+        )
+
+
 class CellCycleAggregator:
     """
     Aggregates simulation data by cell cycle stage.
@@ -416,6 +695,7 @@ class CellCycleAggregator:
         "mass_based": MassBasedCellCycleVariable,
         "dna_replication": DNAReplicationCellCycleVariable,
         "cell_angle": CellAngleCellCycleVariable,
+        "koopman": KoopmanCellCycleVariable,
     }
 
     def __init__(

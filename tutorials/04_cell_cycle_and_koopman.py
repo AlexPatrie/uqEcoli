@@ -31,20 +31,29 @@ def _(mo):
 
     1. **Cell Cycle Stratification** - Aggregation strategy 4 from RFC006
     2. **Koopman Spectral Analysis** - Understanding system dynamics
+    3. **Koopman Cell Cycle Variable** - The recommended approach
 
     ## What You'll Learn
 
     1. Cell cycle variable implementations (mass-based, DNA, cell angle)
-    2. Aggregating data by cell cycle stage
-    3. Dynamic Mode Decomposition (DMD)
-    4. Identifying cell cycle harmonics
-    5. **Visualizing eigenmodes and spectral structure**
+    2. **Koopman eigenfunction phase as the cell cycle coordinate** (recommended)
+    3. Aggregating data by cell cycle stage
+    4. Dynamic Mode Decomposition (DMD)
+    5. Identifying cell cycle harmonics
+    6. **Visualizing eigenmodes and spectral structure**
 
     ## Prerequisites
 
     - Completed Tutorials 1-3
     - Understanding of aggregation strategies
     - Basic linear algebra concepts
+
+    ## Key Insight
+
+    The **Koopman approach** uses spectral analysis (DMD) to identify the cell cycle
+    mode and extract its eigenfunction phase as the cell cycle coordinate. This is
+    the **recommended approach** because it's purely data-driven and automatically
+    captures periodic dynamics without assumptions about growth mechanisms.
     """)
     return
 
@@ -60,10 +69,11 @@ def _():
         DNAReplicationCellCycleVariable,
         CellAngleCellCycleVariable,
         CompositeCellCycleVariable,
+        KoopmanCellCycleVariable,
         register_cell_cycle_variable,
     )
 
-    return MassBasedCellCycleVariable, np, pl
+    return MassBasedCellCycleVariable, KoopmanCellCycleVariable, np, pl
 
 
 @app.cell
@@ -253,6 +263,150 @@ def _(cc_hist):
 @app.cell
 def _(mo):
     mo.md("""
+    ## Part 1.5: Koopman Cell Cycle Variable (Recommended)
+
+    The **recommended approach** for computing the cell cycle variable uses
+    **Koopman spectral analysis** via Dynamic Mode Decomposition (DMD).
+
+    ### Why Koopman?
+
+    1. **Data-driven**: No assumptions about growth mechanism
+    2. **Spectral identification**: Automatically finds periodic dynamics
+    3. **Phase extraction**: Eigenfunction phase naturally wraps [0, 1] once per cycle
+    4. **Robust**: Captures dominant periodic structure even with noise
+
+    ### How it Works
+
+    1. Fit DMD/EDMD to trajectory data
+    2. Identify the cell cycle mode (oscillatory mode near expected frequency)
+    3. Project data onto the mode's eigenvector
+    4. Extract the phase angle and normalize to [0, 1]
+    """)
+    return
+
+
+@app.cell
+def _(cell_data, mo, np):
+    from uq import KoopmanCellCycleVariable
+
+    # Create Koopman-based cell cycle variable
+    koopman_cc = KoopmanCellCycleVariable(
+        expected_cycle_time=50.0,  # Expected cycle time in our synthetic data
+        frequency_tolerance=0.3,
+        use_edmd=True,
+        observable_columns=[
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+        ],
+    )
+
+    # Compute cell cycle variable
+    koopman_result = koopman_cc.compute(cell_data)
+
+    # Display results
+    mode_info = ""
+    if koopman_cc.cell_cycle_mode is not None:
+        _mode = koopman_cc.cell_cycle_mode
+        mode_info = f"""
+    **Identified Cell Cycle Mode:**
+    - **Frequency:** {_mode.frequency:.4f}
+    - **Period:** {_mode.period:.2f} time units
+    - **Growth rate:** {_mode.growth_rate:.4f}
+    - **Is oscillatory:** {_mode.is_oscillatory}
+    """
+
+    mo.md(f"""
+    ### Koopman Cell Cycle Variable Results
+
+    - **Range:** [{koopman_result.values.min():.3f}, {koopman_result.values.max():.3f}]
+    - **Mean:** {koopman_result.values.mean():.3f}
+    - **Method:** {koopman_result.metadata.get('method', 'unknown')}
+    {mode_info}
+    The Koopman approach automatically detected the periodic cell cycle dynamics
+    and extracted the eigenfunction phase as the cell cycle coordinate.
+    """)
+    return (koopman_cc, koopman_result)
+
+
+@app.cell
+def _(MassBasedCellCycleVariable, alt, cell_data, cell_df, koopman_result, mo):
+    # Compute mass-based CC for comparison
+    _mass_cc = MassBasedCellCycleVariable()
+    _mass_result = _mass_cc.compute(cell_data)
+
+    # Add both CC variables to dataframe
+    cell_df_koopman = cell_df.copy()
+    cell_df_koopman['mass_cc'] = _mass_result.values
+    cell_df_koopman['koopman_cc'] = koopman_result.values
+
+    # Compare mass-based vs Koopman cell cycle variables
+    comparison_base = alt.Chart(cell_df_koopman).transform_fold(
+        ['mass_cc', 'koopman_cc'],
+        as_=['variable_type', 'value']
+    ).mark_circle(opacity=0.5).encode(
+        x=alt.X('tau:Q', title='True Cell Cycle Progress (tau)'),
+        y=alt.Y('value:Q', title='Cell Cycle Variable'),
+        color=alt.Color('variable_type:N',
+                       scale=alt.Scale(domain=['mass_cc', 'koopman_cc'],
+                                      range=['#3498db', '#e74c3c']),
+                       legend=alt.Legend(title='Method',
+                                        labelExpr="datum.value == 'mass_cc' ? 'Mass-based' : 'Koopman'"))
+    ).properties(
+        width=500,
+        height=300,
+        title='Comparison: Mass-based vs Koopman Cell Cycle Variable'
+    )
+
+    mo.md("""
+    ### Mass-based vs Koopman Comparison
+
+    Both approaches should produce cell cycle variables that correlate with
+    the true cell cycle progress (tau). The Koopman approach is **data-driven**
+    and doesn't require knowing the underlying mechanism.
+    """)
+    return (cell_df_koopman, comparison_base)
+
+
+@app.cell
+def _(comparison_base):
+    comparison_base
+    return
+
+
+@app.cell
+def _(alt, cell_df_koopman, mo):
+    # Koopman cell cycle histogram by phase
+    koopman_hist = alt.Chart(cell_df_koopman).mark_bar(opacity=0.7).encode(
+        x=alt.X('koopman_cc:Q', bin=alt.Bin(maxbins=20), title='Koopman Cell Cycle Variable'),
+        y=alt.Y('count():Q', title='Count'),
+        color=alt.Color('phase:N',
+                       scale=alt.Scale(domain=['B_period', 'C_period', 'D_period'],
+                                      range=['#3498db', '#e74c3c', '#2ecc71']))
+    ).properties(
+        width=500,
+        height=300,
+        title='Distribution of Koopman Cell Cycle Variable by Phase'
+    )
+
+    mo.md("""
+    ### Koopman Cell Cycle Variable Distribution
+
+    The histogram shows how the Koopman-derived cell cycle variable distributes
+    across the biological phases (B, C, D periods). This validates that the
+    spectral approach captures meaningful cell cycle structure.
+    """)
+    return (koopman_hist,)
+
+
+@app.cell
+def _(koopman_hist):
+    koopman_hist
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md("""
     ## Part 2: Koopman Spectral Analysis
 
     Koopman analysis extracts the **fundamental dynamical modes** of a system.
@@ -372,8 +526,7 @@ def _(DynamicModeDecomposition, X_traj, np, observable_names):
 
     # Normalize mode shapes (avoid division by zero)
     mode_shapes = mode_shapes / (mode_shapes.max(axis=0, keepdims=True) + 1e-10)
-
-    return dmd, eigenvalues, mode_shapes, n_modes, spectrum
+    return eigenvalues, mode_shapes, n_modes, spectrum
 
 
 @app.cell
@@ -509,16 +662,22 @@ def _(mode_shape_chart):
 
 
 @app.cell
-def _(alt, mo, pd, spectrum):
+def _(alt, mo, np, observable_names, pd, spectrum):
     # Mode energy and frequency visualization
     mode_props = []
     for _idx, _mode in enumerate(spectrum.modes[:6]):
+        # Energy is amplitude squared
+        _energy = float(np.abs(_mode.amplitude) ** 2)
+        # Find dominant observable from mode shape
+        _mode_abs = np.abs(_mode.mode)
+        _dominant_idx = int(np.argmax(_mode_abs))
+        _dominant = observable_names[_dominant_idx] if _dominant_idx < len(observable_names) else 'N/A'
         mode_props.append({
             'mode': f'Mode {_idx+1}',
             'frequency': abs(_mode.frequency),
-            'energy': _mode.energy,
-            'decay_rate': _mode.decay_rate,
-            'dominant': _mode.dominant_observables[0] if _mode.dominant_observables else 'N/A'
+            'energy': _energy,
+            'growth_rate': _mode.growth_rate,
+            'dominant': _dominant
         })
 
     mode_props_df = pd.DataFrame(mode_props)
@@ -535,17 +694,17 @@ def _(alt, mo, pd, spectrum):
         title='Mode Energy Distribution'
     )
 
-    # Frequency vs decay scatter
+    # Frequency vs growth rate scatter
     freq_decay = alt.Chart(mode_props_df).mark_circle(size=200).encode(
         x=alt.X('frequency:Q', title='Frequency'),
-        y=alt.Y('decay_rate:Q', title='Decay Rate'),
+        y=alt.Y('growth_rate:Q', title='Growth Rate (negative = decay)'),
         color=alt.Color('energy:Q', scale=alt.Scale(scheme='viridis')),
         size=alt.Size('energy:Q', scale=alt.Scale(range=[50, 400])),
-        tooltip=['mode', 'frequency', 'decay_rate', 'energy']
+        tooltip=['mode', 'frequency', 'growth_rate', 'energy']
     ).properties(
         width=300,
         height=250,
-        title='Frequency vs Decay Rate'
+        title='Frequency vs Growth Rate'
     )
 
     mo.md("""
@@ -581,7 +740,7 @@ def _(mo):
 
 
 @app.cell
-def _(alt, mo, pd, spectrum):
+def _(alt, mo, np, pd, spectrum):
     from uq import CellCycleKoopmanAnalyzer
 
     T_cycle = 60.0  # Our synthetic cycle period
@@ -590,7 +749,7 @@ def _(alt, mo, pd, spectrum):
     cc_analyzer = CellCycleKoopmanAnalyzer(
         expected_cycle_time=T_cycle,
         dt=dt,
-        harmonic_tolerance=0.2,
+        frequency_tolerance=0.2,
     )
 
     cc_modes = cc_analyzer.identify_cell_cycle_modes(spectrum)
@@ -599,11 +758,11 @@ def _(alt, mo, pd, spectrum):
     fundamental_freq = 1 / T_cycle
     harmonic_freqs = [fundamental_freq * (i+1) for i in range(5)]
 
-    # All modes with their frequencies
+    # All modes with their frequencies (energy = amplitude^2)
     all_modes_df = pd.DataFrame({
         'mode': [f'Mode {i+1}' for i in range(len(spectrum.modes))],
         'frequency': [abs(m.frequency) for m in spectrum.modes],
-        'energy': [m.energy for m in spectrum.modes],
+        'energy': [float(np.abs(m.amplitude)**2) for m in spectrum.modes],
         'is_cc_harmonic': [m in cc_modes for m in spectrum.modes]
     })
 
@@ -754,7 +913,7 @@ def _(sensitivity_chart):
 
 
 @app.cell
-def _(alt, base_eigenvalues, pert_eigenvalues, mo, np, pd):
+def _(alt, base_eigenvalues, mo, np, pd, pert_eigenvalues):
     # Compare eigenvalue spectra
     comparison_data = []
     for _idx, (_base, _pert) in enumerate(zip(base_eigenvalues, pert_eigenvalues)):
@@ -845,10 +1004,17 @@ def _(mo):
 
     In this tutorial, you learned to **visualize** key aspects of UQ analysis:
 
+    ### Cell Cycle Variable Approaches
+    1. **Mass-based** - Traditional log-mass ratio approach
+    2. **DNA replication** - Based on DNA content
+    3. **Cell angle** - 2D projection in phase space
+    4. **Koopman eigenfunction phase** (RECOMMENDED) - Data-driven spectral approach
+
     ### Cell Cycle Visualizations
     1. **Phase space trajectories** - Mass vs DNA colored by phase
     2. **Phase distribution** - Donut chart of B/C/D periods
     3. **Cell cycle variable histogram** - Distribution across phases
+    4. **Method comparison** - Mass-based vs Koopman approaches
 
     ### Koopman Spectral Visualizations
     1. **Eigenvalue spectrum** - Complex plane with unit circle
@@ -859,10 +1025,26 @@ def _(mo):
 
     ### Key Insights
 
+    - **Koopman cell cycle variable** is the **recommended approach** because it's
+      purely data-driven and automatically captures periodic dynamics
     - **Eigenvalues on unit circle** = persistent oscillations (cell cycle)
     - **Mode shapes** reveal which observables oscillate together
     - **Harmonic analysis** identifies cell cycle-related modes
     - **Spectral sensitivity** measures dynamical robustness
+
+    ### Recommended Usage
+
+    ```python
+    from uq import KoopmanCellCycleVariable, CellCycleAggregator
+
+    # Option 1: Use directly
+    koopman_cc = KoopmanCellCycleVariable(expected_cycle_time=3600.0)
+    cc_var = koopman_cc.compute(data)
+
+    # Option 2: Use via CellCycleAggregator
+    aggregator = CellCycleAggregator(..., variable_type="koopman")
+    profile = aggregator.get_cell_cycle_profile(output_column)
+    ```
 
     This completes the tutorial series on vEcoli Uncertainty Quantification!
     """)

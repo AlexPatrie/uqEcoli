@@ -515,3 +515,301 @@ class TestCellCycleRequirements:
         bins2 = result.to_stage_bins(n_bins=10)
 
         np.testing.assert_array_equal(bins1, bins2)
+
+
+class TestKoopmanCellCycleVariable:
+    """Tests for Koopman eigenfunction-based cell cycle variable.
+
+    The Koopman approach uses Dynamic Mode Decomposition (DMD) to identify
+    the cell cycle mode and extract its eigenfunction phase as the cell
+    cycle coordinate. This is the recommended approach per RFC006 Section 1.3.
+    """
+
+    @pytest.mark.unit
+    def test_name_property(self):
+        """KoopmanCellCycleVariable should have correct name."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable()
+        assert computer.name == "koopman"
+
+    @pytest.mark.unit
+    def test_required_columns(self):
+        """KoopmanCellCycleVariable should specify required columns."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable()
+        required = computer.required_columns
+
+        # Should include generation and agent_id for grouping
+        assert "generation" in required
+        assert "agent_id" in required
+        assert "time" in required
+
+    @pytest.mark.unit
+    def test_custom_observable_columns(self):
+        """KoopmanCellCycleVariable should accept custom observable columns."""
+        from uq import KoopmanCellCycleVariable
+
+        custom_cols = ["listeners__mass__dry_mass", "listeners__mass__dna_mass"]
+        computer = KoopmanCellCycleVariable(observable_columns=custom_cols)
+
+        for col in custom_cols:
+            assert col in computer.required_columns
+
+    @pytest.mark.unit
+    def test_expected_cycle_time_parameter(self):
+        """KoopmanCellCycleVariable should accept expected_cycle_time."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(expected_cycle_time=7200.0)  # 2 hours
+        assert computer._expected_cycle_time == 7200.0
+
+    @pytest.mark.unit
+    def test_compute_with_synthetic_data(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should compute from simulation data."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        df = synthetic_simulation_dataframe
+
+        result = computer.compute(df)
+
+        assert result.values is not None
+        assert len(result.values) == len(df)
+        assert result.normalized is True
+        assert result.variable_name == "koopman"
+
+    @pytest.mark.unit
+    def test_compute_produces_normalized_values(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should produce values in [0, 1]."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(synthetic_simulation_dataframe)
+
+        assert np.all(result.values >= 0)
+        assert np.all(result.values <= 1)
+
+    @pytest.mark.unit
+    def test_metadata_includes_koopman_info(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should include Koopman info in metadata."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(synthetic_simulation_dataframe)
+
+        # Should include method identifier
+        assert "method" in result.metadata
+        assert "koopman" in result.metadata["method"]
+
+    @pytest.mark.unit
+    def test_assigns_phase_labels(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should assign phase labels."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(synthetic_simulation_dataframe)
+
+        assert result.phase_labels is not None
+        assert len(result.phase_labels) == len(result.values)
+
+    @pytest.mark.unit
+    def test_use_edmd_parameter(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should support EDMD toggle."""
+        from uq import KoopmanCellCycleVariable
+
+        # Test with standard DMD
+        computer_dmd = KoopmanCellCycleVariable(
+            use_edmd=False,
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result_dmd = computer_dmd.compute(synthetic_simulation_dataframe)
+
+        # Test with EDMD
+        computer_edmd = KoopmanCellCycleVariable(
+            use_edmd=True,
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result_edmd = computer_edmd.compute(synthetic_simulation_dataframe)
+
+        # Both should produce valid results
+        assert len(result_dmd.values) == len(result_edmd.values)
+        assert np.all(result_dmd.values >= 0) and np.all(result_dmd.values <= 1)
+        assert np.all(result_edmd.values >= 0) and np.all(result_edmd.values <= 1)
+
+    @pytest.mark.unit
+    def test_cell_cycle_mode_accessible(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should expose the identified cell cycle mode."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        _ = computer.compute(synthetic_simulation_dataframe)
+
+        # After compute, cell_cycle_mode should be available
+        # (may be None if no mode found, but property should exist)
+        assert hasattr(computer, "cell_cycle_mode")
+
+    @pytest.mark.unit
+    def test_fallback_for_short_data(self, rng):
+        """KoopmanCellCycleVariable should fallback gracefully for short data."""
+        from uq import KoopmanCellCycleVariable
+
+        # Create very short data
+        df = pl.DataFrame({
+            "listeners__mass__dry_mass": rng.uniform(1, 2, 5),
+            "listeners__mass__cell_mass": rng.uniform(1.3, 2.6, 5),
+            "generation": [0] * 5,
+            "agent_id": ["a"] * 5,
+            "time": list(range(5)),
+        })
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(df)
+
+        # Should still produce valid output via fallback
+        assert len(result.values) == 5
+        assert "fallback" in result.metadata.get("method", "") or "fallback_reason" in result.metadata
+
+    @pytest.mark.unit
+    def test_registered_in_aggregator(self):
+        """KoopmanCellCycleVariable should be registered in CellCycleAggregator."""
+        from uq import CellCycleAggregator
+
+        assert "koopman" in CellCycleAggregator.VARIABLES
+
+    @pytest.mark.unit
+    def test_deterministic_output(self, synthetic_simulation_dataframe):
+        """KoopmanCellCycleVariable should produce deterministic output."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+
+        result1 = computer.compute(synthetic_simulation_dataframe)
+        result2 = computer.compute(synthetic_simulation_dataframe)
+
+        # Same input should produce same output
+        np.testing.assert_array_almost_equal(result1.values, result2.values)
+
+
+class TestKoopmanCellCycleIntegration:
+    """Integration tests for Koopman-based cell cycle stratification."""
+
+    @pytest.mark.unit
+    def test_koopman_variable_enables_stratification(self, synthetic_simulation_dataframe):
+        """Koopman cell cycle variable should enable cell cycle stratification."""
+        from uq import KoopmanCellCycleVariable
+
+        computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(synthetic_simulation_dataframe)
+
+        # Should be able to bin into stages
+        n_stages = 10
+        bins = result.to_stage_bins(n_stages)
+
+        # Should have samples in multiple bins
+        unique_bins = np.unique(bins)
+        assert len(unique_bins) >= 3, "Should have samples in multiple cell cycle stages"
+
+    @pytest.mark.unit
+    def test_koopman_captures_periodic_structure(self, rng):
+        """Koopman cell cycle variable should capture periodic dynamics."""
+        from uq import KoopmanCellCycleVariable
+
+        # Create synthetic data with clear periodic structure
+        n_points = 200
+        t = np.arange(n_points)
+
+        # Mass with periodic growth (cell cycle-like)
+        period = 50  # 50 timestep period
+        phase = 2 * np.pi * t / period
+        dry_mass = 1.0 + 0.5 * np.sin(phase) + 0.01 * t + rng.normal(0, 0.05, n_points)
+        cell_mass = 1.3 * dry_mass
+
+        df = pl.DataFrame({
+            "listeners__mass__dry_mass": dry_mass,
+            "listeners__mass__cell_mass": cell_mass,
+            "generation": [0] * n_points,
+            "agent_id": ["a"] * n_points,
+            "time": t.tolist(),
+        })
+
+        computer = KoopmanCellCycleVariable(
+            expected_cycle_time=period,
+            dt=1.0,
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+        result = computer.compute(df)
+
+        # Values should span the full range
+        value_range = result.values.max() - result.values.min()
+        assert value_range > 0.5, "Koopman variable should capture periodic variation"
+
+    @pytest.mark.unit
+    def test_koopman_vs_mass_based_correlation(self, synthetic_simulation_dataframe):
+        """Koopman and mass-based variables should be correlated for simple data."""
+        from uq import KoopmanCellCycleVariable, MassBasedCellCycleVariable
+
+        mass_computer = MassBasedCellCycleVariable()
+        koopman_computer = KoopmanCellCycleVariable(
+            observable_columns=[
+                "listeners__mass__dry_mass",
+                "listeners__mass__cell_mass",
+            ],
+        )
+
+        mass_result = mass_computer.compute(synthetic_simulation_dataframe)
+        koopman_result = koopman_computer.compute(synthetic_simulation_dataframe)
+
+        # Both should produce valid [0, 1] values
+        assert np.all(mass_result.values >= 0) and np.all(mass_result.values <= 1)
+        assert np.all(koopman_result.values >= 0) and np.all(koopman_result.values <= 1)

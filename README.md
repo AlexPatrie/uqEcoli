@@ -40,7 +40,7 @@ marimo run tutorials/01_introduction.py
 | **01_introduction.py** | Getting started with UQ | Input parameters, parameter spaces, basic concepts |
 | **02_aggregation_strategies.py** | Aggregation and variance | Four strategies, variance decomposition, data visualization |
 | **03_sensitivity_analysis.py** | PCE and Sobol indices | Surrogate models, sensitivity ranking, multi-output analysis |
-| **04_cell_cycle_and_koopman.py** | Advanced analysis | Cell cycle variables, DMD, spectral sensitivity |
+| **04_cell_cycle_and_koopman.py** | Advanced analysis | **Koopman cell cycle variable**, DMD, spectral mode visualization |
 
 ## Project Structure
 
@@ -367,9 +367,147 @@ sobol = analyzer.analyze_with_sobol(
 
 ## Cell Cycle Variables
 
-Three built-in cell cycle variable implementations:
+Cell cycle variables implement aggregation strategy #4 from RFC006, enabling "phenotypic" sensitivity analysis across the physiological time dimension within a cell's lifespan.
 
-### Mass-Based (Default)
+### Koopman Eigenfunction Phase (Recommended)
+
+The **recommended approach** uses Koopman spectral analysis via Dynamic Mode Decomposition (DMD) to identify the cell cycle mode and extract its eigenfunction phase as the cell cycle coordinate:
+
+```python
+from uq import KoopmanCellCycleVariable, CellCycleAggregator
+
+# Use Koopman-based cell cycle variable
+cc_agg = CellCycleAggregator(
+    conn, history_sql, config_sql,
+    variable_type="koopman",  # Uses KoopmanCellCycleVariable
+    n_stages=10,
+)
+
+profile = cc_agg.get_cell_cycle_profile("listeners__rna_counts__mRNA_cistron_counts")
+
+# Or use directly for more control
+koopman_cc = KoopmanCellCycleVariable(
+    expected_cycle_time=3600.0,  # Expected cell cycle in seconds
+    frequency_tolerance=0.3,      # Tolerance for matching cell cycle frequency
+    use_edmd=True,                # Use Extended DMD for nonlinear dynamics
+)
+
+result = koopman_cc.compute(data)
+print(f"Cell cycle mode frequency: {koopman_cc.cell_cycle_mode.frequency}")
+print(f"Estimated period: {koopman_cc.cell_cycle_mode.period}")
+```
+
+### Why Koopman is Ideal for Cell Cycle Variables
+
+The Koopman eigenfunction phase is the **ideal approach** for defining the cell cycle variable required by RFC006 aggregation strategy #4. Here's why:
+
+#### 1. Theoretical Foundation
+
+The cell cycle is fundamentally a **periodic dynamical process**. Koopman operator theory provides the natural mathematical framework for analyzing such systems:
+
+- **Koopman eigenfunctions** are the intrinsic coordinates of dynamical systems
+- For periodic dynamics, the eigenfunction associated with the fundamental frequency has a phase that advances uniformly through the cycle
+- This phase is **invariant to coordinate choice**—it captures the true "progress" through the cycle regardless of which observables we measure
+
+In contrast, heuristic approaches (mass-based, DNA-based) are coordinate-dependent and may not capture the true cyclic structure.
+
+#### 2. Data-Driven Discovery
+
+The Koopman approach **discovers** the cell cycle from data rather than assuming it:
+
+| Aspect | Heuristic Methods | Koopman Approach |
+|--------|-------------------|------------------|
+| Mechanism | Assumes specific growth law (exponential mass, DNA replication timing) | No mechanistic assumptions |
+| Periodicity | Assumes cycle exists | Verifies and identifies periodic modes |
+| Frequency | Must be specified or inferred | Automatically extracted from spectrum |
+| Validation | Requires external validation | Self-validating (mode must be oscillatory) |
+
+This is critical for vEcoli simulations where the emergent cell cycle may deviate from idealized models.
+
+#### 3. Natural Phase Wrapping
+
+RFC006 requires the cell cycle variable to map each cell state to a value in [0, 1] that wraps once per cycle. The Koopman eigenfunction phase **naturally satisfies this requirement**:
+
+```
+φ(x) = arg(ψ(x)) / 2π  ∈ [0, 1]
+```
+
+where `ψ(x)` is the Koopman eigenfunction. This phase:
+- Advances monotonically through the cycle
+- Wraps from 1 back to 0 at cell division
+- Is **deterministic** (same state → same phase)
+- Is **continuous** (nearby states → nearby phases)
+
+Heuristic methods can fail these properties at cycle boundaries or during non-exponential growth phases.
+
+#### 4. Robustness to Noise and Perturbations
+
+DMD extracts the **dominant coherent structures** from noisy data:
+
+- High-energy modes (including the cell cycle) are reliably identified
+- Noise distributes across many low-energy modes that are filtered out
+- The cell cycle mode is identified by its characteristic frequency, providing a consistency check
+
+This is especially important for stochastic whole-cell simulations where individual trajectories are noisy.
+
+#### 5. Multi-Observable Integration
+
+The Koopman approach naturally integrates information from **multiple observables**:
+
+```python
+koopman_cc = KoopmanCellCycleVariable(
+    observable_columns=[
+        "listeners__mass__dry_mass",
+        "listeners__mass__cell_mass",
+        "listeners__mass__dna_mass",
+        "listeners__fba_results__growth",
+    ],
+)
+```
+
+The DMD finds the cell cycle mode that **best explains the joint dynamics** of all observables, rather than relying on a single proxy variable.
+
+#### 6. Interpretable Diagnostics
+
+The Koopman approach provides rich diagnostic information:
+
+```python
+result = koopman_cc.compute(data)
+mode = koopman_cc.cell_cycle_mode
+
+print(f"Detected frequency: {mode.frequency:.4f} Hz")
+print(f"Estimated cycle time: {mode.period:.1f} seconds")
+print(f"Mode stability: {mode.growth_rate:.4f}")  # Should be ~0 for limit cycle
+print(f"Is oscillatory: {mode.is_oscillatory}")   # Should be True
+```
+
+If the cell cycle mode has unexpected properties (wrong frequency, decaying, not oscillatory), this indicates a problem with the simulation or data—providing built-in validation.
+
+#### 7. Consistency with UQ Framework Goals
+
+RFC006 aims to characterize uncertainty across different aggregation strategies. The Koopman cell cycle variable aligns with this goal:
+
+- **Variance decomposition**: The mode energy tells us how much variance is explained by cell cycle dynamics vs. other modes
+- **Sensitivity analysis**: We can measure how input parameters affect the cell cycle frequency and mode shape
+- **Phenotypic analysis**: The phase provides a principled stratification for "phenotypic" sensitivity analysis
+
+#### Summary: When to Use Each Approach
+
+| Use Case | Recommended Method |
+|----------|-------------------|
+| **General analysis** | `KoopmanCellCycleVariable` |
+| **Quick prototyping** | `MassBasedCellCycleVariable` |
+| **DNA replication focus** | `DNAReplicationCellCycleVariable` |
+| **Literature comparison** | `CellAngleCellCycleVariable` |
+| **Custom requirements** | `CompositeCellCycleVariable` |
+
+For production UQ analysis per RFC006, **always use the Koopman approach** unless you have a specific reason to use a heuristic method.
+
+### Alternative Implementations
+
+For comparison or specialized use cases, three heuristic implementations are also available:
+
+#### Mass-Based
 
 Tracks progression using normalized log-mass ratio:
 
@@ -380,7 +518,7 @@ cc_var = MassBasedCellCycleVariable()
 # Computes: (log(M) - log(M_birth)) / (log(M_div) - log(M_birth))
 ```
 
-### DNA Replication-Based
+#### DNA Replication-Based
 
 Tracks DNA mass as a proxy for replication progress:
 
@@ -391,7 +529,7 @@ cc_var = DNAReplicationCellCycleVariable()
 # Labels phases: B_period, C_period, D_period
 ```
 
-### Cell Angle
+#### Cell Angle
 
 2D projection in (mass, growth_rate) space:
 
@@ -653,6 +791,7 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 | `OutputExtractor` | `uq.outputs` | Extracts outputs from Parquet data |
 | `Aggregator` | `uq.aggregation` | Implements aggregation strategies 1-3 |
 | `CellCycleAggregator` | `uq.cell_cycle` | Implements aggregation strategy 4 |
+| `KoopmanCellCycleVariable` | `uq.cell_cycle` | **Recommended** Koopman eigenfunction-based cell cycle variable |
 | `SimulationWrapper` | `uq.wrappers` | Runs simulations for sensitivity analysis |
 | `PrecomputedWrapper` | `uq.wrappers` | Uses existing simulation results |
 | `SensitivityAnalyzer` | `uq.sensitivity` | PCE and Sobol sensitivity analysis |

@@ -26,9 +26,11 @@ wrappers
 sensitivity
     Global sensitivity analysis using PCE surrogate methods
 cell_cycle
-    Cell cycle stratification for Phase 2 analysis
+    Cell cycle stratification for Phase 2 analysis, including Koopman eigenfunction-
+    based cell cycle variable (recommended approach per RFC006 Section 1.3)
 koopman
-    Koopman spectral analysis for dynamic sensitivity and cell cycle harmonics
+    Koopman spectral analysis via DMD for dynamic sensitivity and cell cycle mode
+    identification. Provides the foundation for the Koopman cell cycle variable.
 
 Usage
 -----
@@ -95,6 +97,8 @@ from uq.aggregation import (
 )
 
 # Cell cycle stratification (Phase 2)
+# The Koopman-based cell cycle variable uses spectral analysis to identify
+# the cell cycle mode and extract its eigenfunction phase as the cycle coordinate.
 from uq.cell_cycle import (
     CellAngleCellCycleVariable,
     CellCycleAggregator,
@@ -103,6 +107,7 @@ from uq.cell_cycle import (
     CellCycleVariableComputer,
     CompositeCellCycleVariable,
     DNAReplicationCellCycleVariable,
+    KoopmanCellCycleVariable,
     MassBasedCellCycleVariable,
     register_cell_cycle_variable,
 )
@@ -189,7 +194,7 @@ __all__ = [
     "SobolIndices",
     "analyze_precomputed_results",
     "run_sensitivity_analysis",
-    # Cell cycle
+    # Cell cycle (Koopman-based variable is the recommended approach)
     "CellAngleCellCycleVariable",
     "CellCycleAggregator",
     "CellCyclePhase",
@@ -197,6 +202,7 @@ __all__ = [
     "CellCycleVariableComputer",
     "CompositeCellCycleVariable",
     "DNAReplicationCellCycleVariable",
+    "KoopmanCellCycleVariable",
     "MassBasedCellCycleVariable",
     "register_cell_cycle_variable",
     # Koopman spectral analysis

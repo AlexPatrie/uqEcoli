@@ -10,7 +10,7 @@ test:
 
 .PHONY: tutorial4
 tutorial4:
-	@uv run marimo run tutorials/04_cell_cycle_and_koopman.py
+	@uv run marimo edit tutorials/04_cell_cycle_and_koopman.py
 
 .PHONY: check
 check: ## Run code quality tools.
