@@ -63,12 +63,14 @@ dependencies = []
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "uq"
+    "uq",
+    "tests"
 ]
 
 [tool.hatch.build.targets.wheel]
 include = [
-    "uq"
+    "uq",
+    "tests"
 ]
 
 [build-system]
