@@ -13,22 +13,19 @@ The wrappers handle:
 
 import hashlib
 import json
-import os
 import pickle
 import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
-from uq.aggregation import AggregatedOutput, Aggregator, AggregationStrategy
+from uq.aggregation import AggregatedOutput, AggregationStrategy, Aggregator
 from uq.inputs import InputParameterSpace, UQInputParameters
-from uq.outputs import OutputExtractor, OutputType, OutputVariables
+from uq.outputs import OutputType
 
 if TYPE_CHECKING:
-    from duckdb import DuckDBPyConnection
     from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 
@@ -102,7 +99,7 @@ class SimulationWrapper:
             Path(config.cache_dir).mkdir(parents=True, exist_ok=True)
 
         # Load sim_data for metadata
-        self._sim_data: Optional["SimulationDataEcoli"] = None
+        self._sim_data: Optional[SimulationDataEcoli] = None
 
     @property
     def sim_data(self) -> "SimulationDataEcoli":
@@ -125,9 +122,7 @@ class SimulationWrapper:
             Output array of shape (n_outputs,)
         """
         # Convert sample to parameters
-        params = self.parameter_space.sample_to_params(
-            x, generations=self.config.generations
-        )
+        params = self.parameter_space.sample_to_params(x, generations=self.config.generations)
 
         # Check cache
         cache_key = self._get_cache_key(params)
@@ -229,9 +224,7 @@ class SimulationWrapper:
         )
 
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Simulation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-            )
+            raise RuntimeError(f"Simulation failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
 
         return str(output_path)
 
@@ -342,14 +335,10 @@ class SimulationWrapper:
         n_outputs = 0
 
         if OutputType.TRANSCRIPTOME in self.config.output_types:
-            n_outputs += len(
-                self.sim_data.process.transcription.cistron_data.struct_array
-            )
+            n_outputs += len(self.sim_data.process.transcription.cistron_data.struct_array)
 
         if OutputType.PROTEOME in self.config.output_types:
-            n_outputs += len(
-                self.sim_data.process.translation.monomer_data.struct_array
-            )
+            n_outputs += len(self.sim_data.process.translation.monomer_data.struct_array)
 
         if OutputType.EXCHANGE_FLUXES in self.config.output_types:
             rxn_ids = list(self.sim_data.process.metabolism.reaction_stoich().keys())
@@ -465,7 +454,6 @@ class PrecomputedWrapper:
     def _config_to_params(self, config: dict[str, Any]) -> UQInputParameters:
         """Convert a config dictionary back to UQInputParameters."""
         from uq.inputs import (
-            GeneKnockoutParams,
             MecillinamParams,
             MediaCondition,
             VioPathwayParams,
@@ -484,9 +472,7 @@ class PrecomputedWrapper:
                     induction_gen=vio_config.get("induction_gen", 1),
                     knockout_gen=vio_config.get("knockout_gen"),
                     expression=vio_config.get("exp_trl_eff", {}).get("exp", 1.0),
-                    translation_efficiency=vio_config.get("exp_trl_eff", {}).get(
-                        "trl_eff", 1.0
-                    ),
+                    translation_efficiency=vio_config.get("exp_trl_eff", {}).get("trl_eff", 1.0),
                     condition=MediaCondition(vio_config.get("condition", "basal")),
                 )
             else:
@@ -574,12 +560,10 @@ def create_uqpy_model(
         UQPy RunModel object
     """
     try:
-        from UQpy.run_model.RunModel import RunModel
         from UQpy.run_model.model_execution.PythonModel import PythonModel
+        from UQpy.run_model.RunModel import RunModel
     except ImportError:
-        raise ImportError(
-            "UQPy is required for this function. Install it with: pip install UQpy"
-        )
+        raise ImportError("UQPy is required for this function. Install it with: pip install UQpy")
 
     wrapper = SimulationWrapper(config, parameter_space)
 

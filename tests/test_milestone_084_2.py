@@ -26,7 +26,6 @@ Each test is named and documented to make requirement satisfaction CLEAR AS DAY.
 import numpy as np
 import pytest
 
-
 # =============================================================================
 # REQUIREMENT 1: Characterize Uncertainty by Cell (Uniform Aggregation)
 # CONTEXT.md: "Uniformly across all simulated cells and times (baseline)"
@@ -66,15 +65,9 @@ class TestRequirement1_UniformAggregation:
         The framework must track prediction confidence by computing
         mean and standard deviation across all samples.
         """
-        assert aggregated_uniform.mean is not None, (
-            "MILESTONE 08.4.2 FAILED: Uniform aggregation must compute mean"
-        )
-        assert aggregated_uniform.std is not None, (
-            "MILESTONE 08.4.2 FAILED: Uniform aggregation must compute std"
-        )
-        assert aggregated_uniform.n_samples > 0, (
-            "MILESTONE 08.4.2 FAILED: Must track number of samples"
-        )
+        assert aggregated_uniform.mean is not None, "MILESTONE 08.4.2 FAILED: Uniform aggregation must compute mean"
+        assert aggregated_uniform.std is not None, "MILESTONE 08.4.2 FAILED: Uniform aggregation must compute std"
+        assert aggregated_uniform.n_samples > 0, "MILESTONE 08.4.2 FAILED: Must track number of samples"
 
     @pytest.mark.milestone
     def test_uniform_aggregation_returns_single_values(self, aggregated_uniform):
@@ -85,12 +78,8 @@ class TestRequirement1_UniformAggregation:
         value per output feature (not per-group values).
         """
         # Mean should be 1D (one value per feature)
-        assert aggregated_uniform.mean.ndim == 1, (
-            "MILESTONE 08.4.2 FAILED: Uniform mean should be 1D array"
-        )
-        assert aggregated_uniform.groups is None, (
-            "MILESTONE 08.4.2 FAILED: Uniform aggregation should have no groups"
-        )
+        assert aggregated_uniform.mean.ndim == 1, "MILESTONE 08.4.2 FAILED: Uniform mean should be 1D array"
+        assert aggregated_uniform.groups is None, "MILESTONE 08.4.2 FAILED: Uniform aggregation should have no groups"
 
 
 # =============================================================================
@@ -134,17 +123,13 @@ class TestRequirement2_LineageSeedStratification:
         assert aggregated_by_seed.groups is not None, (
             "MILESTONE 08.4.2 FAILED: BY_LINEAGE_SEED must return group labels"
         )
-        assert len(aggregated_by_seed.groups) > 1, (
-            "MILESTONE 08.4.2 FAILED: Must have multiple lineage seeds"
-        )
+        assert len(aggregated_by_seed.groups) > 1, "MILESTONE 08.4.2 FAILED: Must have multiple lineage seeds"
         assert aggregated_by_seed.mean.shape[0] == len(aggregated_by_seed.groups), (
             "MILESTONE 08.4.2 FAILED: Mean must have one row per seed"
         )
 
     @pytest.mark.milestone
-    def test_by_lineage_seed_enables_exogenous_variance_analysis(
-        self, aggregated_by_seed
-    ):
+    def test_by_lineage_seed_enables_exogenous_variance_analysis(self, aggregated_by_seed):
         """
         REQUIREMENT 2.3: Strategy enables exogenous variance quantification.
 
@@ -194,9 +179,7 @@ class TestRequirement3_GenerationStratification:
         assert AggregationStrategy.BY_GENERATION.value == "by_generation"
 
     @pytest.mark.milestone
-    def test_by_generation_returns_per_generation_statistics(
-        self, aggregated_by_generation
-    ):
+    def test_by_generation_returns_per_generation_statistics(self, aggregated_by_generation):
         """
         REQUIREMENT 3.2: BY_GENERATION must return statistics per generation.
 
@@ -206,13 +189,9 @@ class TestRequirement3_GenerationStratification:
         assert aggregated_by_generation.groups is not None, (
             "MILESTONE 08.4.2 FAILED: BY_GENERATION must return generation labels"
         )
-        assert len(aggregated_by_generation.groups) > 1, (
-            "MILESTONE 08.4.2 FAILED: Must have multiple generations"
-        )
+        assert len(aggregated_by_generation.groups) > 1, "MILESTONE 08.4.2 FAILED: Must have multiple generations"
         # Groups should be generation numbers (0, 1, 2, ...)
-        assert 0 in aggregated_by_generation.groups, (
-            "MILESTONE 08.4.2 FAILED: Generation numbering should start at 0"
-        )
+        assert 0 in aggregated_by_generation.groups, "MILESTONE 08.4.2 FAILED: Generation numbering should start at 0"
 
     @pytest.mark.milestone
     def test_by_generation_enables_convergence_analysis(self, aggregated_by_generation):
@@ -226,9 +205,7 @@ class TestRequirement3_GenerationStratification:
         means = aggregated_by_generation.mean
 
         # Should be able to track how mean changes across generations
-        assert len(generations) == means.shape[0], (
-            "MILESTONE 08.4.2 FAILED: Mismatch between generations and means"
-        )
+        assert len(generations) == means.shape[0], "MILESTONE 08.4.2 FAILED: Mismatch between generations and means"
 
         # Later generations can be compared to earlier ones for convergence
         early_gen_mean = means[0]
@@ -279,9 +256,7 @@ class TestRequirement4_CellCycleStratification:
         """
         from uq import CellCycleAggregator
 
-        assert CellCycleAggregator is not None, (
-            "MILESTONE 08.4.2 FAILED: CellCycleAggregator class not found"
-        )
+        assert CellCycleAggregator is not None, "MILESTONE 08.4.2 FAILED: CellCycleAggregator class not found"
 
     @pytest.mark.milestone
     def test_mass_based_cell_cycle_variable_exists(self):
@@ -293,9 +268,7 @@ class TestRequirement4_CellCycleStratification:
         from uq import MassBasedCellCycleVariable
 
         var = MassBasedCellCycleVariable()
-        assert var is not None, (
-            "MILESTONE 08.4.2 FAILED: MassBasedCellCycleVariable not found"
-        )
+        assert var is not None, "MILESTONE 08.4.2 FAILED: MassBasedCellCycleVariable not found"
         assert hasattr(var, "required_columns"), (
             "MILESTONE 08.4.2 FAILED: Cell cycle variable must specify required columns"
         )
@@ -310,9 +283,7 @@ class TestRequirement4_CellCycleStratification:
         from uq import DNAReplicationCellCycleVariable
 
         var = DNAReplicationCellCycleVariable()
-        assert var is not None, (
-            "MILESTONE 08.4.2 FAILED: DNAReplicationCellCycleVariable not found"
-        )
+        assert var is not None, "MILESTONE 08.4.2 FAILED: DNAReplicationCellCycleVariable not found"
 
     @pytest.mark.milestone
     def test_cell_angle_variable_exists(self):
@@ -336,7 +307,7 @@ class TestRequirement4_CellCycleStratification:
 
         Framework must be extensible for different cell cycle definitions.
         """
-        from uq import register_cell_cycle_variable, CompositeCellCycleVariable
+        from uq import CompositeCellCycleVariable, register_cell_cycle_variable
 
         def dummy_compute(data):
             return np.zeros(len(data))
@@ -375,9 +346,7 @@ class TestRequirement5_SingleCellToBulkMapping:
         """
         from uq import Aggregator
 
-        assert Aggregator is not None, (
-            "MILESTONE 08.4.2 FAILED: Aggregator class not found"
-        )
+        assert Aggregator is not None, "MILESTONE 08.4.2 FAILED: Aggregator class not found"
 
     @pytest.mark.milestone
     def test_aggregator_handles_transcriptome(self):
@@ -480,15 +449,11 @@ class TestRequirement6_PopulationLevelAnalysis:
             aggregated_uniform,
         )
 
-        assert "total_variance" in decomp, (
-            "MILESTONE 08.4.2 FAILED: Variance decomposition must include total_variance"
-        )
+        assert "total_variance" in decomp, "MILESTONE 08.4.2 FAILED: Variance decomposition must include total_variance"
         assert "generation_fraction" in decomp, (
             "MILESTONE 08.4.2 FAILED: Variance decomposition must include generation_fraction"
         )
-        assert "seed_fraction" in decomp, (
-            "MILESTONE 08.4.2 FAILED: Variance decomposition must include seed_fraction"
-        )
+        assert "seed_fraction" in decomp, "MILESTONE 08.4.2 FAILED: Variance decomposition must include seed_fraction"
 
     @pytest.mark.milestone
     def test_variance_fractions_sum_to_valid_range(
@@ -542,9 +507,7 @@ class TestRequirement7_PCESurrogateMethod:
         """
         from uq import SensitivityAnalyzer
 
-        assert SensitivityAnalyzer is not None, (
-            "MILESTONE 08.4.2 FAILED: SensitivityAnalyzer class not found"
-        )
+        assert SensitivityAnalyzer is not None, "MILESTONE 08.4.2 FAILED: SensitivityAnalyzer class not found"
 
     @pytest.mark.milestone
     def test_pce_method_available(self):
@@ -569,9 +532,7 @@ class TestRequirement7_PCESurrogateMethod:
         """
         from uq import PCESurrogate
 
-        assert PCESurrogate is not None, (
-            "MILESTONE 08.4.2 FAILED: PCESurrogate class not found"
-        )
+        assert PCESurrogate is not None, "MILESTONE 08.4.2 FAILED: PCESurrogate class not found"
 
     @pytest.mark.milestone
     def test_pce_surrogate_has_coefficients(self):
@@ -587,9 +548,7 @@ class TestRequirement7_PCESurrogateMethod:
             multi_indices=np.array([[0, 0], [1, 0], [0, 1]]),
             polynomial_order=2,
         )
-        assert surrogate.coefficients is not None, (
-            "MILESTONE 08.4.2 FAILED: PCESurrogate must have coefficients"
-        )
+        assert surrogate.coefficients is not None, "MILESTONE 08.4.2 FAILED: PCESurrogate must have coefficients"
 
 
 # =============================================================================
@@ -613,9 +572,7 @@ class TestRequirement8_SobolIndices:
         """
         from uq import SobolIndices
 
-        assert SobolIndices is not None, (
-            "MILESTONE 08.4.2 FAILED: SobolIndices class not found"
-        )
+        assert SobolIndices is not None, "MILESTONE 08.4.2 FAILED: SobolIndices class not found"
 
     @pytest.mark.milestone
     def test_sobol_indices_has_first_order(self, sample_sobol_indices):
@@ -627,9 +584,7 @@ class TestRequirement8_SobolIndices:
         assert sample_sobol_indices.first_order is not None, (
             "MILESTONE 08.4.2 FAILED: SobolIndices must have first_order indices"
         )
-        assert len(sample_sobol_indices.first_order) > 0, (
-            "MILESTONE 08.4.2 FAILED: first_order must have values"
-        )
+        assert len(sample_sobol_indices.first_order) > 0, "MILESTONE 08.4.2 FAILED: first_order must have values"
 
     @pytest.mark.milestone
     def test_sobol_indices_has_total_order(self, sample_sobol_indices):
@@ -651,9 +606,7 @@ class TestRequirement8_SobolIndices:
         """
         top_params = sample_sobol_indices.get_most_influential(n=3)
 
-        assert len(top_params) == 3, (
-            "MILESTONE 08.4.2 FAILED: get_most_influential must return requested number"
-        )
+        assert len(top_params) == 3, "MILESTONE 08.4.2 FAILED: get_most_influential must return requested number"
         assert all(isinstance(p, tuple) and len(p) == 2 for p in top_params), (
             "MILESTONE 08.4.2 FAILED: get_most_influential must return (name, value) tuples"
         )
@@ -668,9 +621,7 @@ class TestRequirement8_SobolIndices:
         assert sample_sobol_indices.parameter_names is not None, (
             "MILESTONE 08.4.2 FAILED: SobolIndices must have parameter_names"
         )
-        assert len(sample_sobol_indices.parameter_names) == len(
-            sample_sobol_indices.first_order
-        ), (
+        assert len(sample_sobol_indices.parameter_names) == len(sample_sobol_indices.first_order), (
             "MILESTONE 08.4.2 FAILED: parameter_names must match indices length"
         )
 
@@ -694,9 +645,7 @@ class TestRequirement9_LibrarySupport:
         """
         from uq import create_uqpy_model
 
-        assert create_uqpy_model is not None, (
-            "MILESTONE 08.4.2 FAILED: create_uqpy_model function not found"
-        )
+        assert create_uqpy_model is not None, "MILESTONE 08.4.2 FAILED: create_uqpy_model function not found"
 
     @pytest.mark.milestone
     def test_pytuq_model_creation_function_exists(self):
@@ -705,9 +654,7 @@ class TestRequirement9_LibrarySupport:
         """
         from uq import create_pytuq_model
 
-        assert create_pytuq_model is not None, (
-            "MILESTONE 08.4.2 FAILED: create_pytuq_model function not found"
-        )
+        assert create_pytuq_model is not None, "MILESTONE 08.4.2 FAILED: create_pytuq_model function not found"
 
     @pytest.mark.milestone
     def test_uqpy_distributions_available(self, input_parameter_space):
@@ -727,9 +674,7 @@ class TestRequirement9_LibrarySupport:
         """
         lb, ub = input_parameter_space.get_pytuq_bounds()
 
-        assert lb is not None and ub is not None, (
-            "MILESTONE 08.4.2 FAILED: get_pytuq_bounds must return bounds"
-        )
+        assert lb is not None and ub is not None, "MILESTONE 08.4.2 FAILED: get_pytuq_bounds must return bounds"
         assert len(lb) == len(ub) == input_parameter_space.n_parameters, (
             "MILESTONE 08.4.2 FAILED: Bounds must match number of parameters"
         )
@@ -739,8 +684,9 @@ class TestRequirement9_LibrarySupport:
         """
         REQUIREMENT 9.5: analyze_with_pce must support both libraries via use_uqpy flag.
         """
-        from uq import SensitivityAnalyzer
         import inspect
+
+        from uq import SensitivityAnalyzer
 
         sig = inspect.signature(SensitivityAnalyzer.analyze_with_pce)
         assert "use_uqpy" in sig.parameters, (
@@ -770,9 +716,7 @@ class TestRequirement10_ScientificInputs:
 
         Controls violacein pathway expression.
         """
-        assert vio_params is not None, (
-            "MILESTONE 08.4.2 FAILED: VioPathwayParams not found"
-        )
+        assert vio_params is not None, "MILESTONE 08.4.2 FAILED: VioPathwayParams not found"
         assert hasattr(vio_params, "expression"), (
             "MILESTONE 08.4.2 FAILED: VioPathwayParams must have expression attribute"
         )
@@ -787,9 +731,7 @@ class TestRequirement10_ScientificInputs:
 
         Controls mecillinam antibiotic conditions.
         """
-        assert mecillinam_params is not None, (
-            "MILESTONE 08.4.2 FAILED: MecillinamParams not found"
-        )
+        assert mecillinam_params is not None, "MILESTONE 08.4.2 FAILED: MecillinamParams not found"
         assert hasattr(mecillinam_params, "concentrations"), (
             "MILESTONE 08.4.2 FAILED: MecillinamParams must have concentrations"
         )
@@ -801,9 +743,7 @@ class TestRequirement10_ScientificInputs:
 
         Controls gene deletion experiments.
         """
-        assert knockout_params is not None, (
-            "MILESTONE 08.4.2 FAILED: GeneKnockoutParams not found"
-        )
+        assert knockout_params is not None, "MILESTONE 08.4.2 FAILED: GeneKnockoutParams not found"
         assert hasattr(knockout_params, "gene_deletions"), (
             "MILESTONE 08.4.2 FAILED: GeneKnockoutParams must have gene_deletions"
         )
@@ -819,9 +759,7 @@ class TestRequirement10_ScientificInputs:
             "MILESTONE 08.4.2 FAILED: InputParameterSpace must include multiple parameters"
         )
         param_names = input_parameter_space.parameter_names
-        assert any("vio" in name for name in param_names), (
-            "MILESTONE 08.4.2 FAILED: Must include vio parameters"
-        )
+        assert any("vio" in name for name in param_names), "MILESTONE 08.4.2 FAILED: Must include vio parameters"
 
 
 # =============================================================================
@@ -850,8 +788,7 @@ class TestMilestone084_2_Summary:
 
         for strategy_name, purpose in strategies:
             assert hasattr(AggregationStrategy, strategy_name), (
-                f"MILESTONE 08.4.2 FAILED: {strategy_name} strategy missing. "
-                f"Required for: {purpose}"
+                f"MILESTONE 08.4.2 FAILED: {strategy_name} strategy missing. Required for: {purpose}"
             )
 
     @pytest.mark.milestone
@@ -859,28 +796,6 @@ class TestMilestone084_2_Summary:
         """
         SUMMARY: All workflow components must be importable.
         """
-        from uq import (
-            # Input parameters
-            InputParameterSpace,
-            VioPathwayParams,
-            MecillinamParams,
-            GeneKnockoutParams,
-            # Aggregation
-            Aggregator,
-            AggregationStrategy,
-            AggregatedOutput,
-            compute_variance_decomposition,
-            # Sensitivity
-            SensitivityAnalyzer,
-            SobolIndices,
-            PCESurrogate,
-            # Cell cycle
-            CellCycleAggregator,
-            MassBasedCellCycleVariable,
-            # Wrappers
-            create_uqpy_model,
-            create_pytuq_model,
-        )
 
         # All imports succeeded
         assert True, "MILESTONE 08.4.2 SATISFIED: All components importable"

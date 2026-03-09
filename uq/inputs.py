@@ -12,13 +12,13 @@ These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libra
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 import polars
 
 if TYPE_CHECKING:
-    from reconstruction.ecoli.simulation_data import SimulationDataEcoli
+    pass
 
 
 class MediaCondition(str, Enum):
@@ -176,9 +176,7 @@ class UQInputParameters:
         variants: dict[str, list[dict[str, Any]]] = {}
 
         if self.vio.enabled:
-            variants["new_gene_internal_shift_variable_strength"] = [
-                self.vio.to_variant_params()
-            ]
+            variants["new_gene_internal_shift_variable_strength"] = [self.vio.to_variant_params()]
         else:
             # Just set the condition if vio is not enabled
             variants["condition"] = [{"condition": self.condition.value}]
@@ -227,9 +225,7 @@ class InputParameterSpace:
         """
         self.parameter_names: list[str] = []
         self.parameter_bounds: list[tuple[float, float]] = []
-        self.parameter_types: list[Literal["continuous", "discrete", "categorical"]] = (
-            []
-        )
+        self.parameter_types: list[Literal["continuous", "discrete", "categorical"]] = []
 
         if include_vio:
             self.parameter_names.extend(["vio_expression", "vio_trl_eff"])
@@ -334,10 +330,7 @@ class InputParameterSpace:
         try:
             from UQpy.distributions import Uniform
         except ImportError:
-            raise ImportError(
-                "UQPy is required for sensitivity analysis. "
-                "Install it with: pip install UQpy"
-            )
+            raise ImportError("UQPy is required for sensitivity analysis. Install it with: pip install UQpy")
 
         distributions = []
         for lb, ub in self.parameter_bounds:

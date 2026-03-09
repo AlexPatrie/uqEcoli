@@ -12,7 +12,7 @@ The implementation supports both UQPy and PyTUQ libraries for:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 
@@ -182,19 +182,16 @@ class SensitivityAnalyzer:
             Tuple of (SobolIndices, PCESurrogate)
         """
         try:
-            from UQpy.distributions import Uniform, JointIndependent
+            from UQpy.distributions import JointIndependent, Uniform
+            from UQpy.sampling import LatinHypercubeSampling
+            from UQpy.sensitivity import PceSensitivity
             from UQpy.surrogates.polynomial_chaos import (
                 PolynomialChaosExpansion,
                 Polynomials,
                 TotalDegreeBasis,
             )
-            from UQpy.sensitivity import PceSensitivity
-            from UQpy.sampling import LatinHypercubeSampling
         except ImportError:
-            raise ImportError(
-                "UQPy is required for PCE sensitivity analysis. "
-                "Install it with: pip install UQpy"
-            )
+            raise ImportError("UQPy is required for PCE sensitivity analysis. Install it with: pip install UQpy")
 
         # Get or generate samples and outputs
         X, Y = self._get_samples_and_outputs(n_samples)
@@ -267,10 +264,7 @@ class SensitivityAnalyzer:
             from pytuq.gsa import PCESobol
             from pytuq.surrogates import PCE
         except ImportError:
-            raise ImportError(
-                "PyTUQ is required for PCE sensitivity analysis. "
-                "Install it with: pip install pytuq"
-            )
+            raise ImportError("PyTUQ is required for PCE sensitivity analysis. Install it with: pip install pytuq")
 
         # Get or generate samples and outputs
         X, Y = self._get_samples_and_outputs(n_samples)
@@ -326,13 +320,10 @@ class SensitivityAnalyzer:
             SobolIndices
         """
         try:
+            from UQpy.distributions import JointIndependent, Uniform
             from UQpy.sensitivity import SobolSensitivity
-            from UQpy.distributions import Uniform, JointIndependent
         except ImportError:
-            raise ImportError(
-                "UQPy is required for Sobol sensitivity analysis. "
-                "Install it with: pip install UQpy"
-            )
+            raise ImportError("UQPy is required for Sobol sensitivity analysis. Install it with: pip install UQpy")
 
         # Create distributions
         distributions = []
@@ -385,9 +376,7 @@ class SensitivityAnalyzer:
             return self.wrapper.get_samples_and_outputs()
 
         if self.wrapper is None:
-            raise ValueError(
-                "Either provide samples/outputs or a wrapper for generating them"
-            )
+            raise ValueError("Either provide samples/outputs or a wrapper for generating them")
 
         if n_samples is None:
             # Use rule of thumb for PCE: (p + d)! / (p! * d!)
@@ -396,8 +385,8 @@ class SensitivityAnalyzer:
 
         # Generate Latin Hypercube samples
         try:
+            from UQpy.distributions import JointIndependent, Uniform
             from UQpy.sampling import LatinHypercubeSampling
-            from UQpy.distributions import Uniform, JointIndependent
         except ImportError:
             # Fallback to simple random sampling
             bounds = self.parameter_space.bounds_array

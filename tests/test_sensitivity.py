@@ -283,14 +283,13 @@ class TestSensitivityAnalysisIntegration:
     def test_total_order_geq_first_order(self, sample_sobol_indices):
         """Total-order indices should be >= first-order indices."""
         for i in range(len(sample_sobol_indices.first_order)):
-            assert (
-                sample_sobol_indices.total_order[i] >= sample_sobol_indices.first_order[i]
-            ), f"Total order should be >= first order for parameter {i}"
+            assert sample_sobol_indices.total_order[i] >= sample_sobol_indices.first_order[i], (
+                f"Total order should be >= first order for parameter {i}"
+            )
 
     @pytest.mark.unit
     def test_sensitivity_with_known_function(self, rng):
         """Sensitivity analysis should recover known importance from analytic function."""
-        from uq import InputParameterSpace, SobolIndices
 
         # Create simple linear function: Y = 2*x1 + 0.5*x2
         # So x1 should be more important
@@ -374,6 +373,7 @@ class TestLibrarySupport:
 
         # Method should accept use_uqpy parameter
         import inspect
+
         sig = inspect.signature(analyzer.analyze_with_pce)
         assert "use_uqpy" in sig.parameters
 
@@ -416,8 +416,9 @@ class TestConvenienceFunctions:
     @pytest.mark.unit
     def test_run_sensitivity_analysis_parameters(self):
         """run_sensitivity_analysis should have required parameters."""
-        from uq import run_sensitivity_analysis
         import inspect
+
+        from uq import run_sensitivity_analysis
 
         sig = inspect.signature(run_sensitivity_analysis)
         params = list(sig.parameters.keys())

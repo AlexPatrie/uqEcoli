@@ -28,14 +28,12 @@ Methods implemented:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 from scipy import linalg
-from scipy.signal import find_peaks
 
 if TYPE_CHECKING:
-    import polars as pl
     from duckdb import DuckDBPyConnection
 
 
@@ -143,9 +141,7 @@ class KoopmanSpectrum:
         """Get modes that decay over time."""
         return [m for m in self.modes if m.is_stable]
 
-    def get_modes_in_frequency_range(
-        self, f_min: float, f_max: float
-    ) -> list[KoopmanMode]:
+    def get_modes_in_frequency_range(self, f_min: float, f_max: float) -> list[KoopmanMode]:
         """Get modes with frequency in the specified range."""
         return [m for m in self.modes if f_min <= m.frequency <= f_max]
 
@@ -250,7 +246,7 @@ class DynamicModeDecomposition:
 
         # Determine rank
         if self.rank is None:
-            rank = np.sum(S > self.svd_threshold * S[0])
+            rank = np.sum(self.svd_threshold * S[0] < S)
         else:
             rank = min(self.rank, len(S))
 
@@ -285,9 +281,7 @@ class DynamicModeDecomposition:
 
         return self
 
-    def get_spectrum(
-        self, observable_names: Optional[list[str]] = None
-    ) -> KoopmanSpectrum:
+    def get_spectrum(self, observable_names: Optional[list[str]] = None) -> KoopmanSpectrum:
         """
         Get the Koopman spectrum from fitted DMD.
 
@@ -384,7 +378,7 @@ class ExtendedDMD:
             for order in range(2, self.dictionary_order + 1):
                 # Add all monomials of this order
                 for i in range(X.shape[1]):
-                    lifted.append(X[:, i:i+1] ** order)
+                    lifted.append(X[:, i : i + 1] ** order)
             return np.hstack(lifted)
 
         elif self.dictionary == KoopmanDictionary.FOURIER:
@@ -392,8 +386,8 @@ class ExtendedDMD:
             lifted = [X]
             for k in range(1, self.dictionary_order + 1):
                 for i in range(X.shape[1]):
-                    lifted.append(np.sin(k * X[:, i:i+1]))
-                    lifted.append(np.cos(k * X[:, i:i+1]))
+                    lifted.append(np.sin(k * X[:, i : i + 1]))
+                    lifted.append(np.cos(k * X[:, i : i + 1]))
             return np.hstack(lifted)
 
         elif self.dictionary == KoopmanDictionary.RBF:
@@ -408,7 +402,7 @@ class ExtendedDMD:
             sigma = np.std(X) + 1e-6
             for center in centers:
                 dist_sq = np.sum((X - center) ** 2, axis=1, keepdims=True)
-                lifted.append(np.exp(-dist_sq / (2 * sigma ** 2)))
+                lifted.append(np.exp(-dist_sq / (2 * sigma**2)))
             return np.hstack(lifted)
 
         elif self.dictionary == KoopmanDictionary.CUSTOM:
@@ -437,17 +431,15 @@ class ExtendedDMD:
 
         return self
 
-    def get_spectrum(
-        self, observable_names: Optional[list[str]] = None
-    ) -> KoopmanSpectrum:
+    def get_spectrum(self, observable_names: Optional[list[str]] = None) -> KoopmanSpectrum:
         """Get the Koopman spectrum from fitted EDMD."""
         spectrum = self._dmd.get_spectrum(observable_names)
 
         # Project modes back to original observable space
         for mode in spectrum.modes:
-            mode.mode = mode.mode[:self._n_original_obs]
+            mode.mode = mode.mode[: self._n_original_obs]
 
-        spectrum.eigenvectors = spectrum.eigenvectors[:self._n_original_obs, :]
+        spectrum.eigenvectors = spectrum.eigenvectors[: self._n_original_obs, :]
 
         return spectrum
 
@@ -671,9 +663,7 @@ class CellCycleKoopmanAnalyzer:
 
         self._analyzer = KoopmanSensitivityAnalyzer(dt=dt, use_edmd=True)
 
-    def identify_cell_cycle_modes(
-        self, spectrum: KoopmanSpectrum
-    ) -> list[KoopmanMode]:
+    def identify_cell_cycle_modes(self, spectrum: KoopmanSpectrum) -> list[KoopmanMode]:
         """
         Identify Koopman modes that correspond to cell cycle dynamics.
 
@@ -726,10 +716,7 @@ class CellCycleKoopmanAnalyzer:
         fundamental_mode = None
         if cc_modes:
             # Mode with frequency closest to expected
-            fundamental_mode = min(
-                cc_modes,
-                key=lambda m: np.abs(m.frequency - self.expected_frequency)
-            )
+            fundamental_mode = min(cc_modes, key=lambda m: np.abs(m.frequency - self.expected_frequency))
 
         return {
             "spectrum": spectrum,

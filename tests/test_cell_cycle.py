@@ -49,7 +49,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_creation_with_phase_labels(self):
         """CellCycleVariable should support phase labels."""
-        from uq import CellCycleVariable, CellCyclePhase
+        from uq import CellCyclePhase, CellCycleVariable
 
         values = np.linspace(0, 1, 100)
         phases = np.array([CellCyclePhase.B_PERIOD.value] * 100)
@@ -224,7 +224,7 @@ class TestDNAReplicationCellCycleVariable:
     @pytest.mark.unit
     def test_phase_labels_are_valid(self, synthetic_simulation_dataframe):
         """Phase labels should be valid CellCyclePhase values."""
-        from uq import DNAReplicationCellCycleVariable, CellCyclePhase
+        from uq import CellCyclePhase, DNAReplicationCellCycleVariable
 
         computer = DNAReplicationCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -294,8 +294,9 @@ class TestCompositeCellCycleVariable:
     @pytest.mark.unit
     def test_custom_compute_function(self):
         """CompositeCellCycleVariable should use custom compute function."""
-        from uq import CompositeCellCycleVariable
         import polars as pl
+
+        from uq import CompositeCellCycleVariable
 
         def custom_compute(data: pl.DataFrame) -> np.ndarray:
             mass = data["listeners__mass__dry_mass"].to_numpy()
@@ -347,8 +348,9 @@ class TestCellCycleAggregator:
     @pytest.mark.unit
     def test_invalid_variable_type_raises(self):
         """CellCycleAggregator should raise for invalid variable type."""
-        from uq import CellCycleAggregator
         import duckdb
+
+        from uq import CellCycleAggregator
 
         conn = duckdb.connect()
 
@@ -363,8 +365,9 @@ class TestCellCycleAggregator:
     @pytest.mark.unit
     def test_n_stages_parameter(self):
         """CellCycleAggregator should respect n_stages parameter."""
-        from uq import CellCycleAggregator
         import duckdb
+
+        from uq import CellCycleAggregator
 
         conn = duckdb.connect()
 
@@ -387,8 +390,8 @@ class TestRegisterCellCycleVariable:
         """register_cell_cycle_variable should add custom variables."""
         from uq import (
             CellCycleAggregator,
-            CellCycleVariableComputer,
             CellCycleVariable,
+            CellCycleVariableComputer,
             register_cell_cycle_variable,
         )
 

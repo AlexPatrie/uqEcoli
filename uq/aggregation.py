@@ -12,9 +12,9 @@ These strategies enable deconvolution of different types of uncertainty and
 accurate modeling of the relationship between "bulk" and "single-cell" attributes.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 import polars as pl
@@ -111,9 +111,7 @@ class Aggregator:
             AggregationStrategy.BY_CELL_CYCLE,
         ):
             if group_labels is None:
-                raise ValueError(
-                    f"group_labels required for {strategy.value} aggregation"
-                )
+                raise ValueError(f"group_labels required for {strategy.value} aggregation")
             return self._aggregate_stratified(data, group_labels)
         else:
             raise ValueError(f"Unknown aggregation strategy: {strategy}")
@@ -198,7 +196,7 @@ class Aggregator:
         Returns:
             Tuple of (AggregatedOutput, cistron_ids)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         mrna_col = "listeners__rna_counts__mRNA_cistron_counts"
         mrna_ids = field_metadata(
@@ -213,9 +211,7 @@ class Aggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         group_col = self._get_group_column(strategy)
 
@@ -339,7 +335,7 @@ class Aggregator:
         Returns:
             Tuple of (AggregatedOutput, monomer_ids)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         monomer_col = "listeners__monomer_counts"
         monomer_ids = field_metadata(
@@ -354,9 +350,7 @@ class Aggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         group_col = self._get_group_column(strategy)
 
@@ -481,7 +475,7 @@ class Aggregator:
         Returns:
             Tuple of (AggregatedOutput, reaction_ids)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         flux_col = "listeners__fba_results__base_reaction_fluxes"
         mass_col = "listeners__mass__cell_mass"
@@ -511,9 +505,7 @@ class Aggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         group_col = self._get_group_column(strategy)
 
@@ -667,9 +659,7 @@ class Aggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         group_col = self._get_group_column(strategy)
 
@@ -796,15 +786,15 @@ def compute_variance_decomposition(
         - 'generation_fraction': Fraction of variance from generation
         - 'seed_fraction': Fraction of variance from lineage seed
     """
-    total_var = aggregated_uniform.std ** 2
+    total_var = aggregated_uniform.std**2
 
     # Between-group variance is variance of group means
     gen_between_var = np.var(aggregated_by_gen.mean, axis=0)
     seed_between_var = np.var(aggregated_by_seed.mean, axis=0)
 
     # Within-group variance is mean of group variances
-    gen_within_var = np.mean(aggregated_by_gen.std ** 2, axis=0)
-    seed_within_var = np.mean(aggregated_by_seed.std ** 2, axis=0)
+    gen_within_var = np.mean(aggregated_by_gen.std**2, axis=0)
+    seed_within_var = np.mean(aggregated_by_seed.std**2, axis=0)
 
     # Avoid division by zero
     total_var_safe = np.where(total_var > 0, total_var, 1.0)

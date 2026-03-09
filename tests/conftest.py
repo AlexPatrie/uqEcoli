@@ -8,12 +8,10 @@ Real data is loaded from api_simulation_default experiment using uq.inputs.load_
 import glob
 import json
 from pathlib import Path
-from typing import Generator
 
 import numpy as np
 import polars as pl
 import pytest
-
 
 # =============================================================================
 # Real Data Loading
@@ -117,7 +115,7 @@ def _load_real_dataset_safe(
             ])
 
             dfs.append(df)
-        except Exception as e:
+        except Exception:
             # Skip files with schema issues
             continue
 
@@ -228,7 +226,7 @@ def synthetic_simulation_dataframe(rng: np.random.Generator) -> pl.DataFrame:
                     time_in_gen = t_idx / n_timepoints_per_gen
 
                     # Mass grows exponentially within generation
-                    base_mass = 1.0 * (2.0 ** time_in_gen)
+                    base_mass = 1.0 * (2.0**time_in_gen)
                     mass_noise = rng.normal(0, 0.05)
                     dry_mass = base_mass * (1 + mass_noise)
 
@@ -242,9 +240,7 @@ def synthetic_simulation_dataframe(rng: np.random.Generator) -> pl.DataFrame:
                     growth_rate = 0.01 * (1 + 0.2 * np.sin(2 * np.pi * time_in_gen))
 
                     # Transcriptome influenced by vio_expression
-                    transcriptome = rng.poisson(
-                        100 * (1 + 0.1 * vio_expression), size=10
-                    ).astype(float).tolist()
+                    transcriptome = rng.poisson(100 * (1 + 0.1 * vio_expression), size=10).astype(float).tolist()
 
                     # Fluxes influenced by mecillinam
                     base_flux = max(1.0, 10.0 * (1 - 0.03 * mec_concentration))
@@ -374,15 +370,25 @@ def aggregated_uniform(synthetic_simulation_dataframe: pl.DataFrame):
     from uq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
-    mean = df.select([
-        "listeners__mass__dry_mass",
-        "listeners__fba_results__growth",
-    ]).mean().to_numpy().flatten()
+    mean = (
+        df.select([
+            "listeners__mass__dry_mass",
+            "listeners__fba_results__growth",
+        ])
+        .mean()
+        .to_numpy()
+        .flatten()
+    )
 
-    std = df.select([
-        "listeners__mass__dry_mass",
-        "listeners__fba_results__growth",
-    ]).std().to_numpy().flatten()
+    std = (
+        df.select([
+            "listeners__mass__dry_mass",
+            "listeners__fba_results__growth",
+        ])
+        .std()
+        .to_numpy()
+        .flatten()
+    )
 
     return AggregatedOutput(
         mean=mean,
@@ -398,13 +404,17 @@ def aggregated_by_generation(synthetic_simulation_dataframe: pl.DataFrame):
     from uq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
-    by_gen = df.group_by("generation").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-        pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-        pl.len().alias("n"),
-    ]).sort("generation")
+    by_gen = (
+        df.group_by("generation")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
+            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
+            pl.len().alias("n"),
+        ])
+        .sort("generation")
+    )
 
     return AggregatedOutput(
         mean=np.column_stack([
@@ -426,13 +436,17 @@ def aggregated_by_seed(synthetic_simulation_dataframe: pl.DataFrame):
     from uq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
-    by_seed = df.group_by("lineage_seed").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-        pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-        pl.len().alias("n"),
-    ]).sort("lineage_seed")
+    by_seed = (
+        df.group_by("lineage_seed")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
+            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
+            pl.len().alias("n"),
+        ])
+        .sort("lineage_seed")
+    )
 
     return AggregatedOutput(
         mean=np.column_stack([
@@ -502,13 +516,17 @@ def real_aggregated_by_generation(real_simulation_dataframe):
         pytest.skip("Real simulation data not available")
 
     df = real_simulation_dataframe
-    by_gen = df.group_by("generation").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__mass__growth").mean().alias("growth_mean"),
-        pl.col("listeners__mass__growth").std().alias("growth_std"),
-        pl.len().alias("n"),
-    ]).sort("generation")
+    by_gen = (
+        df.group_by("generation")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__mass__growth").mean().alias("growth_mean"),
+            pl.col("listeners__mass__growth").std().alias("growth_std"),
+            pl.len().alias("n"),
+        ])
+        .sort("generation")
+    )
 
     return AggregatedOutput(
         mean=np.column_stack([
@@ -533,13 +551,17 @@ def real_aggregated_by_seed(real_simulation_dataframe):
         pytest.skip("Real simulation data not available")
 
     df = real_simulation_dataframe
-    by_seed = df.group_by("lineage_seed").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__mass__growth").mean().alias("growth_mean"),
-        pl.col("listeners__mass__growth").std().alias("growth_std"),
-        pl.len().alias("n"),
-    ]).sort("lineage_seed")
+    by_seed = (
+        df.group_by("lineage_seed")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__mass__growth").mean().alias("growth_mean"),
+            pl.col("listeners__mass__growth").std().alias("growth_std"),
+            pl.len().alias("n"),
+        ])
+        .sort("lineage_seed")
+    )
 
     return AggregatedOutput(
         mean=np.column_stack([
@@ -569,10 +591,7 @@ def real_trajectory(real_simulation_dataframe) -> np.ndarray:
     df = real_simulation_dataframe
 
     # Get a single cell's trajectory (first lineage_seed, generation 1, first agent)
-    cell = df.filter(
-        (pl.col("lineage_seed") == df["lineage_seed"].min()) &
-        (pl.col("generation") == 1)
-    ).sort("time")
+    cell = df.filter((pl.col("lineage_seed") == df["lineage_seed"].min()) & (pl.col("generation") == 1)).sort("time")
 
     if len(cell) < 10:
         pytest.skip("Not enough data points for trajectory")
@@ -594,18 +613,8 @@ def real_trajectory(real_simulation_dataframe) -> np.ndarray:
 
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "milestone: marks tests that verify specific milestone requirements"
-    )
-    config.addinivalue_line(
-        "markers", "e2e: marks end-to-end integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "unit: marks unit tests"
-    )
-    config.addinivalue_line(
-        "markers", "slow: marks tests that take a long time to run"
-    )
-    config.addinivalue_line(
-        "markers", "real_data: marks tests that use real simulation data"
-    )
+    config.addinivalue_line("markers", "milestone: marks tests that verify specific milestone requirements")
+    config.addinivalue_line("markers", "e2e: marks end-to-end integration tests")
+    config.addinivalue_line("markers", "unit: marks unit tests")
+    config.addinivalue_line("markers", "slow: marks tests that take a long time to run")
+    config.addinivalue_line("markers", "real_data: marks tests that use real simulation data")

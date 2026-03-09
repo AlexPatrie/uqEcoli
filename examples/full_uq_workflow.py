@@ -26,8 +26,6 @@ Author: Alex Patrie
 
 import argparse
 import json
-import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
@@ -37,49 +35,31 @@ import polars as pl
 # =============================================================================
 # UQ Package Imports
 # =============================================================================
-
 from uq import (
-    # Input parameters
-    InputParameterSpace,
-    VioPathwayParams,
-    MecillinamParams,
-    GeneKnockoutParams,
-    UQInputParameters,
-    # Output extraction
-    OutputExtractor,
-    OutputType,
-    OutputVariables,
-    # Aggregation
-    Aggregator,
-    AggregationStrategy,
     AggregatedOutput,
-    compute_variance_decomposition,
-    # Wrappers
-    WrapperConfig,
-    SimulationWrapper,
-    PrecomputedWrapper,
-    # Sensitivity analysis
-    SensitivityAnalyzer,
-    SensitivityMethod,
-    SobolIndices,
-    PCESurrogate,
-    # Cell cycle
-    CellCycleAggregator,
-    CellCyclePhase,
-    MassBasedCellCycleVariable,
-    DNAReplicationCellCycleVariable,
     CellAngleCellCycleVariable,
+    # Cell cycle
+    CellCycleKoopmanAnalyzer,
+    DNAReplicationCellCycleVariable,
     # Koopman (bonus)
     DynamicModeDecomposition,
-    KoopmanSensitivityAnalyzer,
-    CellCycleKoopmanAnalyzer,
-    extract_koopman_features,
+    GeneKnockoutParams,
+    # Input parameters
+    InputParameterSpace,
+    MassBasedCellCycleVariable,
+    MecillinamParams,
+    # Output extraction
+    SobolIndices,
+    UQInputParameters,
+    VioPathwayParams,
+    # Wrappers
+    compute_variance_decomposition,
 )
-
 
 # =============================================================================
 # Synthetic Data Generation (for demonstration without real simulations)
 # =============================================================================
+
 
 def generate_synthetic_simulation_data(
     n_experiments: int = 3,
@@ -104,7 +84,7 @@ def generate_synthetic_simulation_data(
     for exp_id in range(n_experiments):
         # Each experiment has different parameter values
         vio_expression = 0.5 + exp_id * 2.0  # 0.5, 2.5, 4.5
-        mec_concentration = exp_id * 3.0     # 0, 3, 6
+        mec_concentration = exp_id * 3.0  # 0, 3, 6
 
         for seed in range(n_seeds):
             seed_value = seed * 1000
@@ -115,7 +95,7 @@ def generate_synthetic_simulation_data(
                     time_in_gen = t_idx / n_timepoints_per_gen
 
                     # Mass grows exponentially within generation
-                    base_mass = 1.0 * (2.0 ** time_in_gen)
+                    base_mass = 1.0 * (2.0**time_in_gen)
 
                     # Add stochastic variation
                     mass_noise = np.random.normal(0, 0.05)
@@ -131,20 +111,14 @@ def generate_synthetic_simulation_data(
                     growth_rate = 0.01 * (1 + 0.2 * np.sin(2 * np.pi * time_in_gen))
 
                     # Transcriptome: influenced by vio_expression
-                    transcriptome = np.random.poisson(
-                        100 * (1 + 0.1 * vio_expression),
-                        size=n_cistrons
-                    ).astype(float)
+                    transcriptome = np.random.poisson(100 * (1 + 0.1 * vio_expression), size=n_cistrons).astype(float)
 
                     # Add cell cycle variation to some genes
                     cell_cycle_genes = np.sin(2 * np.pi * time_in_gen + np.random.rand(10) * np.pi)
-                    transcriptome[:10] *= (1 + 0.3 * cell_cycle_genes)
+                    transcriptome[:10] *= 1 + 0.3 * cell_cycle_genes
 
                     # Proteome: correlated with transcriptome but delayed
-                    proteome = np.random.poisson(
-                        500 * (1 + 0.05 * vio_expression),
-                        size=n_proteins
-                    ).astype(float)
+                    proteome = np.random.poisson(500 * (1 + 0.05 * vio_expression), size=n_proteins).astype(float)
 
                     # Fluxes: influenced by mecillinam
                     base_flux = max(1.0, 10.0 * (1 - 0.05 * mec_concentration))
@@ -186,15 +160,25 @@ def create_synthetic_aggregated_outputs(
     """Create aggregated outputs from synthetic data."""
 
     # Strategy 1: Uniform aggregation
-    uniform_mean = data.select([
-        "listeners__mass__dry_mass",
-        "listeners__fba_results__growth",
-    ]).mean().to_numpy().flatten()
+    uniform_mean = (
+        data.select([
+            "listeners__mass__dry_mass",
+            "listeners__fba_results__growth",
+        ])
+        .mean()
+        .to_numpy()
+        .flatten()
+    )
 
-    uniform_std = data.select([
-        "listeners__mass__dry_mass",
-        "listeners__fba_results__growth",
-    ]).std().to_numpy().flatten()
+    uniform_std = (
+        data.select([
+            "listeners__mass__dry_mass",
+            "listeners__fba_results__growth",
+        ])
+        .std()
+        .to_numpy()
+        .flatten()
+    )
 
     agg_uniform = AggregatedOutput(
         mean=uniform_mean,
@@ -204,13 +188,17 @@ def create_synthetic_aggregated_outputs(
     )
 
     # Strategy 2: By generation
-    by_gen = data.group_by("generation").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-        pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-        pl.count().alias("n"),
-    ]).sort("generation")
+    by_gen = (
+        data.group_by("generation")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
+            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
+            pl.count().alias("n"),
+        ])
+        .sort("generation")
+    )
 
     agg_by_gen = AggregatedOutput(
         mean=np.column_stack([
@@ -226,13 +214,17 @@ def create_synthetic_aggregated_outputs(
     )
 
     # Strategy 3: By lineage seed
-    by_seed = data.group_by("lineage_seed").agg([
-        pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-        pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-        pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-        pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-        pl.count().alias("n"),
-    ]).sort("lineage_seed")
+    by_seed = (
+        data.group_by("lineage_seed")
+        .agg([
+            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
+            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
+            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
+            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
+            pl.count().alias("n"),
+        ])
+        .sort("lineage_seed")
+    )
 
     agg_by_seed = AggregatedOutput(
         mean=np.column_stack([
@@ -257,6 +249,7 @@ def create_synthetic_aggregated_outputs(
 # =============================================================================
 # Main Workflow
 # =============================================================================
+
 
 def run_full_uq_workflow(
     data_dir: Optional[str] = None,
@@ -396,7 +389,7 @@ def run_full_uq_workflow(
     print('    "Stratified by generation (control of convergence towards steady-state growth)"')
     agg_by_gen = aggregated["by_generation"]
     print(f"    Generations: {agg_by_gen.groups}")
-    print(f"    Mean per generation (mass, growth):")
+    print("    Mean per generation (mass, growth):")
     for i, gen in enumerate(agg_by_gen.groups):
         print(f"        Gen {gen}: mass={agg_by_gen.mean[i, 0]:.4f}, growth={agg_by_gen.mean[i, 1]:.6f}")
 
@@ -405,7 +398,7 @@ def run_full_uq_workflow(
     print('    "Stratified by lineage seed (control of exogenous variance)"')
     agg_by_seed = aggregated["by_lineage_seed"]
     print(f"    Seeds: {agg_by_seed.groups}")
-    print(f"    Mean per seed (mass, growth):")
+    print("    Mean per seed (mass, growth):")
     for i, seed in enumerate(agg_by_seed.groups):
         print(f"        Seed {seed}: mass={agg_by_seed.mean[i, 0]:.4f}, growth={agg_by_seed.mean[i, 1]:.6f}")
 
@@ -441,16 +434,20 @@ def run_full_uq_workflow(
         (pl.col("cell_cycle_variable") * n_stages).cast(pl.Int32).clip(0, n_stages - 1).alias("stage")
     ])
 
-    by_stage = cc_df.group_by("stage").agg([
-        pl.col("mass").mean().alias("mass_mean"),
-        pl.col("mass").std().alias("mass_std"),
-        pl.col("growth").mean().alias("growth_mean"),
-        pl.col("growth").std().alias("growth_std"),
-        pl.count().alias("n"),
-    ]).sort("stage")
+    by_stage = (
+        cc_df.group_by("stage")
+        .agg([
+            pl.col("mass").mean().alias("mass_mean"),
+            pl.col("mass").std().alias("mass_std"),
+            pl.col("growth").mean().alias("growth_mean"),
+            pl.col("growth").std().alias("growth_std"),
+            pl.count().alias("n"),
+        ])
+        .sort("stage")
+    )
 
     print(f"    Cell cycle stages: {by_stage['stage'].to_list()}")
-    print(f"    Mean per stage:")
+    print("    Mean per stage:")
     for row in by_stage.iter_rows(named=True):
         print(f"        Stage {row['stage']}: mass={row['mass_mean']:.4f}, growth={row['growth_mean']:.6f}")
 
@@ -473,18 +470,18 @@ def run_full_uq_workflow(
     print(f"\n    Total Variance: {decomposition['total_variance']}")
     print(f"\n    Between-Generation Variance: {decomposition['between_generation_variance']}")
     print(f"    Generation Fraction: {decomposition['generation_fraction']}")
-    print(f"    (Variance attributable to convergence towards steady-state)")
+    print("    (Variance attributable to convergence towards steady-state)")
 
     print(f"\n    Between-Seed Variance: {decomposition['between_seed_variance']}")
     print(f"    Seed Fraction: {decomposition['seed_fraction']}")
-    print(f"    (Variance attributable to stochastic seeding - exogenous variance)")
+    print("    (Variance attributable to stochastic seeding - exogenous variance)")
 
     # Interpretation
-    gen_pct = np.mean(decomposition['generation_fraction']) * 100
-    seed_pct = np.mean(decomposition['seed_fraction']) * 100
+    gen_pct = np.mean(decomposition["generation_fraction"]) * 100
+    seed_pct = np.mean(decomposition["seed_fraction"]) * 100
     residual_pct = 100 - gen_pct - seed_pct
 
-    print(f"\n    INTERPRETATION:")
+    print("\n    INTERPRETATION:")
     print(f"    - Generation effects explain {gen_pct:.1f}% of variance")
     print(f"    - Stochastic seeding explains {seed_pct:.1f}% of variance")
     print(f"    - Residual (within-group) variance: {residual_pct:.1f}%")
@@ -565,7 +562,7 @@ def run_full_uq_workflow(
 
     print("\n    Most Influential Parameters:")
     for i, (name, value) in enumerate(sobol_indices.get_most_influential(n=3)):
-        print(f"        {i+1}. {name}: {value:.4f}")
+        print(f"        {i + 1}. {name}: {value:.4f}")
 
     # =========================================================================
     # STEP 6: Cell Cycle Stratification Analysis
@@ -580,20 +577,20 @@ def run_full_uq_workflow(
 
     # Mass-based
     mass_var = MassBasedCellCycleVariable()
-    print(f"    1. MassBasedCellCycleVariable")
-    print(f"       Formula: (log(M) - log(M_birth)) / (log(M_div) - log(M_birth))")
+    print("    1. MassBasedCellCycleVariable")
+    print("       Formula: (log(M) - log(M_birth)) / (log(M_div) - log(M_birth))")
     print(f"       Required columns: {mass_var.required_columns}")
 
     # DNA replication-based
     dna_var = DNAReplicationCellCycleVariable()
-    print(f"\n    2. DNAReplicationCellCycleVariable")
-    print(f"       Phases: B_period → C_period → D_period")
+    print("\n    2. DNAReplicationCellCycleVariable")
+    print("       Phases: B_period → C_period → D_period")
     print(f"       Required columns: {dna_var.required_columns}")
 
     # Cell angle
     angle_var = CellAngleCellCycleVariable()
-    print(f"\n    3. CellAngleCellCycleVariable")
-    print(f"       2D projection in (mass, growth_rate) space")
+    print("\n    3. CellAngleCellCycleVariable")
+    print("       2D projection in (mass, growth_rate) space")
     print(f"       Required columns: {angle_var.required_columns}")
 
     print("\n6b. Cell Cycle Profile (from Step 3d):")
@@ -603,19 +600,19 @@ def run_full_uq_workflow(
     print("\n    Cell Cycle Profile of Mass:")
     print("    " + "-" * 60)
     for row in by_stage.iter_rows(named=True):
-        stage = row['stage']
-        mean = row['mass_mean']
-        std = row['mass_std']
-        n = row['n']
+        stage = row["stage"]
+        mean = row["mass_mean"]
+        std = row["mass_std"]
+        n = row["n"]
         bar = "█" * int(mean * 10)
         print(f"    Stage {stage:2d} | {bar:20s} | mean={mean:.3f} ± {std:.3f} (n={n})")
 
     print("\n    Cell Cycle Profile of Growth Rate:")
     print("    " + "-" * 60)
     for row in by_stage.iter_rows(named=True):
-        stage = row['stage']
-        mean = row['growth_mean']
-        std = row['growth_std']
+        stage = row["stage"]
+        mean = row["growth_mean"]
+        std = row["growth_std"]
         bar = "█" * int(mean * 1000)
         print(f"    Stage {stage:2d} | {bar:20s} | mean={mean:.6f} ± {std:.6f}")
 
@@ -630,12 +627,15 @@ def run_full_uq_workflow(
     print("\nExtracting dynamical modes from simulation trajectory...")
 
     # Create trajectory from first experiment's first seed
-    trajectory_data = sim_data.filter(
-        (pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0)
-    ).sort("time").select([
-        "listeners__mass__dry_mass",
-        "listeners__fba_results__growth",
-    ]).to_numpy()
+    trajectory_data = (
+        sim_data.filter((pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0))
+        .sort("time")
+        .select([
+            "listeners__mass__dry_mass",
+            "listeners__fba_results__growth",
+        ])
+        .to_numpy()
+    )
 
     print(f"    Trajectory shape: {trajectory_data.shape}")
 
@@ -647,11 +647,11 @@ def run_full_uq_workflow(
     print(f"\n    Extracted {len(spectrum.modes)} Koopman modes:")
     print("    " + "-" * 70)
     for i, mode in enumerate(spectrum.modes):
-        print(f"    Mode {i+1}:")
+        print(f"    Mode {i + 1}:")
         print(f"        Eigenvalue: {mode.eigenvalue:.4f}")
         print(f"        Frequency: {mode.frequency:.6f} Hz")
         if mode.frequency != 0:
-            print(f"        Period: {abs(1/mode.frequency):.1f} time steps")
+            print(f"        Period: {abs(1 / mode.frequency):.1f} time steps")
         print(f"        Growth rate: {mode.growth_rate:.6f}")
         print(f"        Amplitude: {abs(mode.amplitude):.4f}")
 
@@ -747,10 +747,9 @@ def run_full_uq_workflow(
 # Entry Point
 # =============================================================================
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run full UQ workflow for vEcoli simulations"
-    )
+    parser = argparse.ArgumentParser(description="Run full UQ workflow for vEcoli simulations")
     parser.add_argument(
         "--data-dir",
         type=str,

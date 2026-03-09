@@ -8,32 +8,32 @@ Tests are skipped if real data is not available.
 """
 
 import numpy as np
-import polars as pl
 import pytest
-
 
 # =============================================================================
 # Colorful logging helpers
 # =============================================================================
 
+
 class Colors:
     """ANSI color codes for terminal output."""
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    END = '\033[0m'
+
+    HEADER = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+    END = "\033[0m"
 
 
 def log_header(msg: str) -> None:
     """Print a bold header."""
-    print(f"\n{Colors.BOLD}{Colors.HEADER}{'='*70}")
+    print(f"\n{Colors.BOLD}{Colors.HEADER}{'=' * 70}")
     print(f"  {msg}")
-    print(f"{'='*70}{Colors.END}")
+    print(f"{'=' * 70}{Colors.END}")
 
 
 def log_success(msg: str) -> None:
@@ -227,8 +227,11 @@ class TestRealDataAggregation:
         assert np.all(decomp["total_variance"] >= 0)
 
         log_data("Total variance", f"{decomp['total_variance'][0]:.6f}")
-        log_data("Generation fraction", f"{decomp['generation_fraction'][0]:.4f} ({decomp['generation_fraction'][0]*100:.1f}%)")
-        log_data("Seed fraction", f"{decomp['seed_fraction'][0]:.4f} ({decomp['seed_fraction'][0]*100:.1f}%)")
+        log_data(
+            "Generation fraction",
+            f"{decomp['generation_fraction'][0]:.4f} ({decomp['generation_fraction'][0] * 100:.1f}%)",
+        )
+        log_data("Seed fraction", f"{decomp['seed_fraction'][0]:.4f} ({decomp['seed_fraction'][0] * 100:.1f}%)")
         log_success("Variance decomposition completed successfully")
 
 
@@ -322,7 +325,7 @@ class TestRealDataKoopman:
         log_data("Eigenvalues computed", len(spectrum.eigenvalues))
         dominant = spectrum.get_dominant_modes(3)
         for i, mode in enumerate(dominant):
-            log_info(f"Mode {i+1}: freq={mode.frequency:.6f}, stable={mode.is_stable}")
+            log_info(f"Mode {i + 1}: freq={mode.frequency:.6f}, stable={mode.is_stable}")
         log_success("DMD analysis completed")
 
     @pytest.mark.real_data
@@ -358,8 +361,8 @@ class TestRealDataKoopman:
             dt=1.0,
         )
 
-        log_info(f"Expected cycle time: 3600.0 seconds")
-        log_info(f"Frequency tolerance: 0.5")
+        log_info("Expected cycle time: 3600.0 seconds")
+        log_info("Frequency tolerance: 0.5")
 
         result = analyzer.analyze_cell_cycle_spectrum(real_trajectory)
 
@@ -449,7 +452,6 @@ class TestRealDataE2E:
         from uq import (
             InputParameterSpace,
             compute_variance_decomposition,
-            SobolIndices,
         )
 
         log_header("COMPLETE UQ WORKFLOW - REAL vEcoli DATA")
@@ -515,7 +517,7 @@ class TestRealDataE2E:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import MassBasedCellCycleVariable, AggregatedOutput
+        from uq import MassBasedCellCycleVariable
 
         log_header("CELL CYCLE STRATIFICATION - REAL vEcoli DATA")
 
@@ -565,7 +567,7 @@ class TestRealDataE2E:
     @pytest.mark.e2e
     def test_koopman_spectral_decomposition_real_data(self, real_trajectory):
         """Koopman spectral decomposition should reveal dynamics in real data."""
-        from uq import DynamicModeDecomposition, CellCycleKoopmanAnalyzer
+        from uq import DynamicModeDecomposition
 
         log_header("KOOPMAN SPECTRAL ANALYSIS - REAL vEcoli DATA")
 
@@ -591,7 +593,7 @@ class TestRealDataE2E:
         print("  │  Top 3 Dominant Modes:                                     │")
         for i, mode in enumerate(dominant[:3]):
             stable_str = "stable" if mode.is_stable else "unstable"
-            print(f"  │    Mode {i+1}: freq={mode.frequency:>8.4f}, {stable_str:<10}        │")
+            print(f"  │    Mode {i + 1}: freq={mode.frequency:>8.4f}, {stable_str:<10}        │")
         print("  └────────────────────────────────────────────────────────────┘")
         print(f"{Colors.END}")
 

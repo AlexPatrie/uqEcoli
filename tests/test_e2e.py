@@ -45,7 +45,6 @@ class TestE2EInputToOutput:
             InputParameterSpace,
             UQInputParameters,
             VioPathwayParams,
-            MecillinamParams,
         )
 
         # 1. Define parameter space
@@ -198,7 +197,7 @@ class TestE2ESensitivityWorkflow:
     @pytest.mark.e2e
     def test_sensitivity_with_precomputed_data(self, parameter_output_samples, input_parameter_space):
         """Sensitivity workflow with precomputed simulation data."""
-        from uq import SensitivityAnalyzer, SobolIndices
+        from uq import SensitivityAnalyzer
 
         X, Y = parameter_output_samples
 
@@ -243,7 +242,7 @@ class TestE2ECellCycleWorkflow:
     @pytest.mark.e2e
     def test_cell_cycle_stratified_aggregation(self, synthetic_simulation_dataframe):
         """Complete cell cycle stratified aggregation workflow."""
-        from uq import MassBasedCellCycleVariable, AggregatedOutput
+        from uq import AggregatedOutput, MassBasedCellCycleVariable
 
         df = synthetic_simulation_dataframe
 
@@ -403,8 +402,8 @@ class TestE2ECompleteWorkflow:
         This test demonstrates the complete workflow as specified in Milestone 08.4.2.
         """
         from uq import (
-            InputParameterSpace,
             AggregatedOutput,
+            InputParameterSpace,
             SobolIndices,
             compute_variance_decomposition,
         )

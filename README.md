@@ -23,6 +23,25 @@ This package implements the UQ framework specified in **RFC006** (`readmes/RFC00
 
 Run `pytest tests/test_milestone_084_2.py -v` to verify compliance.
 
+## Tutorials
+
+Interactive marimo notebooks are available in the `tutorials/` directory:
+
+```bash
+# Install marimo if needed
+pip install marimo
+
+# Run a tutorial
+marimo run tutorials/01_introduction.py
+```
+
+| Tutorial | Description | Topics |
+|----------|-------------|--------|
+| **01_introduction.py** | Getting started with UQ | Input parameters, parameter spaces, basic concepts |
+| **02_aggregation_strategies.py** | Aggregation and variance | Four strategies, variance decomposition, data visualization |
+| **03_sensitivity_analysis.py** | PCE and Sobol indices | Surrogate models, sensitivity ranking, multi-output analysis |
+| **04_cell_cycle_and_koopman.py** | Advanced analysis | Cell cycle variables, DMD, spectral sensitivity |
+
 ## Project Structure
 
 ```
@@ -36,6 +55,11 @@ uqEcoli/
 │   ├── cell_cycle.py           # Cell cycle stratification (Phase 2)
 │   ├── wrappers.py             # UQPy/PyTUQ wrapper functions
 │   └── koopman.py              # Koopman spectral analysis
+├── tutorials/                  # Interactive marimo notebooks
+│   ├── 01_introduction.py      # Getting started
+│   ├── 02_aggregation_strategies.py  # Aggregation and variance
+│   ├── 03_sensitivity_analysis.py    # PCE and Sobol
+│   └── 04_cell_cycle_and_koopman.py  # Advanced analysis
 ├── tests/                      # Test suite
 │   ├── conftest.py             # Fixtures (synthetic + real data)
 │   ├── test_milestone_084_2.py # Explicit RFC006 compliance tests

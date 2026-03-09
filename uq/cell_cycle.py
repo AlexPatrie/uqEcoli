@@ -23,7 +23,7 @@ variables can be implemented as subclasses or registered functions.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 import polars as pl
@@ -446,8 +446,7 @@ class CellCycleAggregator:
 
         if variable_type not in self.VARIABLES:
             raise ValueError(
-                f"Unknown cell cycle variable type: {variable_type}. "
-                f"Available: {list(self.VARIABLES.keys())}"
+                f"Unknown cell cycle variable type: {variable_type}. Available: {list(self.VARIABLES.keys())}"
             )
         self.variable_computer = self.VARIABLES[variable_type]()
 
@@ -476,9 +475,7 @@ class CellCycleAggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         query = f"""
             WITH history AS ({history_subquery}),
@@ -531,9 +528,7 @@ class CellCycleAggregator:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         query = f"""
             WITH history AS ({history_subquery}),

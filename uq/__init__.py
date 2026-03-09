@@ -86,50 +86,12 @@ References
 """
 
 # Input parameter definitions
-from uq.inputs import (
-    GeneKnockoutParams,
-    InputParameterSpace,
-    MecillinamParams,
-    MediaCondition,
-    UQInputParameters,
-    VioPathwayParams,
-    get_available_columns,
-    load_dataset,
-)
-
-# Output variable extraction
-from uq.outputs import (
-    OutputExtractor,
-    OutputType,
-    OutputVariables,
-    get_output_variable_info,
-)
-
 # Aggregation strategies
 from uq.aggregation import (
     AggregatedOutput,
-    Aggregator,
     AggregationStrategy,
+    Aggregator,
     compute_variance_decomposition,
-)
-
-# Wrappers for UQPy/PyTUQ
-from uq.wrappers import (
-    PrecomputedWrapper,
-    SimulationWrapper,
-    WrapperConfig,
-    create_pytuq_model,
-    create_uqpy_model,
-)
-
-# Sensitivity analysis
-from uq.sensitivity import (
-    PCESurrogate,
-    SensitivityAnalyzer,
-    SensitivityMethod,
-    SobolIndices,
-    analyze_precomputed_results,
-    run_sensitivity_analysis,
 )
 
 # Cell cycle stratification (Phase 2)
@@ -144,6 +106,16 @@ from uq.cell_cycle import (
     MassBasedCellCycleVariable,
     register_cell_cycle_variable,
 )
+from uq.inputs import (
+    GeneKnockoutParams,
+    InputParameterSpace,
+    MecillinamParams,
+    MediaCondition,
+    UQInputParameters,
+    VioPathwayParams,
+    get_available_columns,
+    load_dataset,
+)
 
 # Koopman spectral analysis
 from uq.koopman import (
@@ -155,6 +127,33 @@ from uq.koopman import (
     KoopmanSensitivityAnalyzer,
     KoopmanSpectrum,
     extract_koopman_features,
+)
+
+# Output variable extraction
+from uq.outputs import (
+    OutputExtractor,
+    OutputType,
+    OutputVariables,
+    get_output_variable_info,
+)
+
+# Sensitivity analysis
+from uq.sensitivity import (
+    PCESurrogate,
+    SensitivityAnalyzer,
+    SensitivityMethod,
+    SobolIndices,
+    analyze_precomputed_results,
+    run_sensitivity_analysis,
+)
+
+# Wrappers for UQPy/PyTUQ
+from uq.wrappers import (
+    PrecomputedWrapper,
+    SimulationWrapper,
+    WrapperConfig,
+    create_pytuq_model,
+    create_uqpy_model,
 )
 
 __all__ = [

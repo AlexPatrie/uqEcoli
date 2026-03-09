@@ -187,7 +187,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_spectrum_creation(self):
         """KoopmanSpectrum should store modes and metadata."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=1.0),
@@ -206,7 +206,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_dominant_modes(self):
         """get_dominant_modes should return modes by amplitude."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=0.5),
@@ -223,7 +223,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_oscillatory_modes(self):
         """get_oscillatory_modes should filter oscillatory modes."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9 + 0.1j, mode=np.array([1.0]), amplitude=1.0),
@@ -239,7 +239,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_stable_modes(self):
         """get_stable_modes should filter stable modes."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=1.0),
@@ -255,7 +255,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_modes_in_frequency_range(self):
         """get_modes_in_frequency_range should filter by frequency."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         # Create modes with different frequencies
         modes = [
@@ -273,7 +273,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_power_spectrum(self):
         """get_power_spectrum should return frequency and power arrays."""
-        from uq import KoopmanSpectrum, KoopmanMode
+        from uq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=np.exp(1j * 0.5), mode=np.array([1.0]), amplitude=2.0),
@@ -286,8 +286,10 @@ class TestKoopmanSpectrum:
         assert len(freqs) == len(modes)
         assert len(powers) == len(modes)
         # Power should be amplitude squared
-        assert np.abs(powers[0] - np.abs(modes[0].amplitude) ** 2) < 0.1 or \
-               np.abs(powers[1] - np.abs(modes[0].amplitude) ** 2) < 0.1
+        assert (
+            np.abs(powers[0] - np.abs(modes[0].amplitude) ** 2) < 0.1
+            or np.abs(powers[1] - np.abs(modes[0].amplitude) ** 2) < 0.1
+        )
 
 
 class TestDynamicModeDecomposition:
@@ -440,7 +442,7 @@ class TestExtendedDMD:
         from uq import ExtendedDMD, KoopmanDictionary
 
         def custom_func(X):
-            return np.hstack([X, X ** 2, np.sin(X)])
+            return np.hstack([X, X**2, np.sin(X)])
 
         X = rng.uniform(size=(100, 2))
 
@@ -541,7 +543,7 @@ class TestCellCycleKoopmanAnalyzer:
     @pytest.mark.unit
     def test_identify_cell_cycle_modes(self):
         """identify_cell_cycle_modes should find modes at cell cycle frequency."""
-        from uq import CellCycleKoopmanAnalyzer, KoopmanSpectrum, KoopmanMode
+        from uq import CellCycleKoopmanAnalyzer, KoopmanMode, KoopmanSpectrum
 
         analyzer = CellCycleKoopmanAnalyzer(expected_cycle_time=100.0)
 

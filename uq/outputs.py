@@ -13,10 +13,9 @@ These outputs are extracted from Parquet-emitted simulation data using DuckDB.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import polars as pl
 from duckdb import DuckDBPyConnection
 
 if TYPE_CHECKING:
@@ -136,7 +135,7 @@ class OutputExtractor:
         Returns:
             Tuple of (counts array, cistron IDs)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         mrna_ids = field_metadata(
             conn=self.conn,
@@ -150,9 +149,7 @@ class OutputExtractor:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         query = f"""
             WITH history AS ({history_subquery}),
@@ -193,7 +190,7 @@ class OutputExtractor:
         Returns:
             Tuple of (counts array, monomer IDs)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         monomer_ids = field_metadata(
             conn=self.conn,
@@ -207,9 +204,7 @@ class OutputExtractor:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         query = f"""
             WITH history AS ({history_subquery}),
@@ -251,7 +246,7 @@ class OutputExtractor:
         Returns:
             Tuple of (flux array, reaction IDs)
         """
-        from ecoli.library.parquet_emitter import read_stacked_columns, field_metadata
+        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
 
         rxn_ids = field_metadata(
             conn=self.conn,
@@ -261,12 +256,10 @@ class OutputExtractor:
 
         columns = [f"{self.FLUX_COL} AS fluxes"]
         if normalize_by_mass:
-            columns.extend(
-                [
-                    f"{self.CELL_MASS_COL} AS cell_mass",
-                    f"{self.DRY_MASS_COL} AS dry_mass",
-                ]
-            )
+            columns.extend([
+                f"{self.CELL_MASS_COL} AS cell_mass",
+                f"{self.DRY_MASS_COL} AS dry_mass",
+            ])
 
         history_subquery = read_stacked_columns(
             self.history_sql,
@@ -274,9 +267,7 @@ class OutputExtractor:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         if normalize_by_mass:
             # Get cell density from sim_data if available
@@ -344,9 +335,7 @@ class OutputExtractor:
         Returns:
             Tuple of (flux array for exchange reactions, exchange reaction IDs)
         """
-        fluxes, rxn_ids = self.extract_metabolic_fluxes(
-            generation_lower_bound, time_lower_bound
-        )
+        fluxes, rxn_ids = self.extract_metabolic_fluxes(generation_lower_bound, time_lower_bound)
 
         if fluxes.size == 0:
             return np.array([]), []
@@ -386,9 +375,7 @@ class OutputExtractor:
             order_results=False,
         )
 
-        filter_clause = self._build_filter_clause(
-            generation_lower_bound, time_lower_bound
-        )
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         # Calculate growth rate from dry mass
         query = f"""
@@ -453,30 +440,22 @@ class OutputExtractor:
         outputs = OutputVariables()
 
         if OutputType.TRANSCRIPTOME in output_types:
-            counts, ids = self.extract_transcriptome(
-                generation_lower_bound, time_lower_bound
-            )
+            counts, ids = self.extract_transcriptome(generation_lower_bound, time_lower_bound)
             outputs.transcriptome = counts
             outputs.metadata["cistron_ids"] = ids
 
         if OutputType.PROTEOME in output_types:
-            counts, ids = self.extract_proteome(
-                generation_lower_bound, time_lower_bound
-            )
+            counts, ids = self.extract_proteome(generation_lower_bound, time_lower_bound)
             outputs.proteome = counts
             outputs.metadata["monomer_ids"] = ids
 
         if OutputType.METABOLIC_FLUXES in output_types:
-            fluxes, ids = self.extract_metabolic_fluxes(
-                generation_lower_bound, time_lower_bound
-            )
+            fluxes, ids = self.extract_metabolic_fluxes(generation_lower_bound, time_lower_bound)
             outputs.metabolic_fluxes = fluxes
             outputs.metadata["reaction_ids"] = ids
 
         if OutputType.EXCHANGE_FLUXES in output_types:
-            fluxes, ids = self.extract_exchange_fluxes(
-                generation_lower_bound, time_lower_bound
-            )
+            fluxes, ids = self.extract_exchange_fluxes(generation_lower_bound, time_lower_bound)
             outputs.exchange_fluxes = fluxes
             outputs.metadata["exchange_reaction_ids"] = ids
 

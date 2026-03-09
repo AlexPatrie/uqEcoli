@@ -215,9 +215,9 @@ class TestCellCycleStratification:
     def test_cell_cycle_variables_available(self):
         """Cell cycle variables should be defined."""
         from uq import (
-            MassBasedCellCycleVariable,
-            DNAReplicationCellCycleVariable,
             CellAngleCellCycleVariable,
+            DNAReplicationCellCycleVariable,
+            MassBasedCellCycleVariable,
         )
 
         # All three types specified in requirements
@@ -230,9 +230,7 @@ class TestVarianceDecomposition:
     """Tests for compute_variance_decomposition function."""
 
     @pytest.mark.unit
-    def test_decomposition_returns_dict(
-        self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed
-    ):
+    def test_decomposition_returns_dict(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance decomposition should return dictionary."""
         from uq import compute_variance_decomposition
 
@@ -245,9 +243,7 @@ class TestVarianceDecomposition:
         assert isinstance(result, dict)
 
     @pytest.mark.unit
-    def test_decomposition_keys(
-        self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed
-    ):
+    def test_decomposition_keys(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance decomposition should have expected keys."""
         from uq import compute_variance_decomposition
 
@@ -269,9 +265,7 @@ class TestVarianceDecomposition:
             assert key in result, f"Missing key: {key}"
 
     @pytest.mark.unit
-    def test_decomposition_total_variance(
-        self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed
-    ):
+    def test_decomposition_total_variance(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Total variance should equal uniform std squared."""
         from uq import compute_variance_decomposition
 
@@ -281,13 +275,11 @@ class TestVarianceDecomposition:
             aggregated_uniform,
         )
 
-        expected = aggregated_uniform.std ** 2
+        expected = aggregated_uniform.std**2
         np.testing.assert_allclose(result["total_variance"], expected)
 
     @pytest.mark.unit
-    def test_decomposition_fractions_bounded(
-        self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed
-    ):
+    def test_decomposition_fractions_bounded(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance fractions should be between 0 and 1."""
         from uq import compute_variance_decomposition
 
@@ -329,12 +321,8 @@ class TestVarianceDecomposition:
             n_samples=n_samples,
         )
 
-        gen_means = np.array([
-            np.mean(data[gen_labels == g], axis=0) for g in range(n_generations)
-        ])
-        gen_stds = np.array([
-            np.std(data[gen_labels == g], axis=0) for g in range(n_generations)
-        ])
+        gen_means = np.array([np.mean(data[gen_labels == g], axis=0) for g in range(n_generations)])
+        gen_stds = np.array([np.std(data[gen_labels == g], axis=0) for g in range(n_generations)])
         by_gen = AggregatedOutput(
             mean=gen_means,
             std=gen_stds,
@@ -342,12 +330,8 @@ class TestVarianceDecomposition:
             groups=np.arange(n_generations),
         )
 
-        seed_means = np.array([
-            np.mean(data[seed_labels == s], axis=0) for s in range(n_seeds)
-        ])
-        seed_stds = np.array([
-            np.std(data[seed_labels == s], axis=0) for s in range(n_seeds)
-        ])
+        seed_means = np.array([np.mean(data[seed_labels == s], axis=0) for s in range(n_seeds)])
+        seed_stds = np.array([np.std(data[seed_labels == s], axis=0) for s in range(n_seeds)])
         by_seed = AggregatedOutput(
             mean=seed_means,
             std=seed_stds,
@@ -407,7 +391,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_requires_labels_for_stratified(self, rng):
         """Aggregator.aggregate should require labels for stratified strategies."""
-        from uq.aggregation import Aggregator, AggregationStrategy
+        from uq.aggregation import AggregationStrategy, Aggregator
 
         class MockAggregator(Aggregator):
             def __init__(self):
@@ -422,7 +406,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_uniform_no_labels_needed(self, rng):
         """Aggregator.aggregate should not require labels for uniform strategy."""
-        from uq.aggregation import Aggregator, AggregationStrategy
+        from uq.aggregation import AggregationStrategy, Aggregator
 
         class MockAggregator(Aggregator):
             def __init__(self):
@@ -440,11 +424,9 @@ class TestAggregationIntegration:
     """Integration tests for aggregation with synthetic data."""
 
     @pytest.mark.unit
-    def test_all_strategies_produce_valid_output(
-        self, synthetic_simulation_dataframe, rng
-    ):
+    def test_all_strategies_produce_valid_output(self, synthetic_simulation_dataframe, rng):
         """All aggregation strategies should produce valid AggregatedOutput."""
-        from uq import AggregatedOutput, AggregationStrategy
+        from uq import AggregatedOutput
 
         df = synthetic_simulation_dataframe
         data = df.select([
@@ -527,9 +509,7 @@ class TestBulkSingleCellMapping:
         assert len(aggregated_uniform.mean) > 0
 
     @pytest.mark.unit
-    def test_stratified_preserves_single_cell_info(
-        self, aggregated_by_generation, aggregated_by_seed
-    ):
+    def test_stratified_preserves_single_cell_info(self, aggregated_by_generation, aggregated_by_seed):
         """Stratified aggregation preserves single-cell heterogeneity info."""
         # Variance between groups captures population heterogeneity
         gen_var = np.var(aggregated_by_generation.mean, axis=0)
