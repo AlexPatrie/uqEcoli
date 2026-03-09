@@ -2,6 +2,56 @@
 
 A comprehensive framework for tracking prediction confidence in vEcoli whole-cell simulations, implementing **Milestone 08.4.2** (extensibility) and laying groundwork for **Milestone 10.2.3** (population-level perturbation analysis).
 
+## RFC006 Compliance
+
+This package implements the UQ framework specified in **RFC006** (`readmes/RFC006.md`). The test suite provides explicit verification that all milestone requirements are satisfied.
+
+### Verified Requirements
+
+| Requirement | Description | Test Coverage |
+|-------------|-------------|---------------|
+| **R1** | Uniform aggregation (baseline) | `test_milestone_084_2.py::TestRequirement1_UniformAggregation` |
+| **R2** | Stratified by lineage seed (exogenous variance) | `test_milestone_084_2.py::TestRequirement2_LineageSeedStratification` |
+| **R3** | Stratified by generation (convergence) | `test_milestone_084_2.py::TestRequirement3_GenerationStratification` |
+| **R4** | Stratified by cell cycle (phenotypic) | `test_milestone_084_2.py::TestRequirement4_CellCycleStratification` |
+| **R5** | Single-cell to bulk mapping | `test_milestone_084_2.py::TestRequirement5_SingleCellToBulkMapping` |
+| **R6** | Population-level analysis foundation | `test_milestone_084_2.py::TestRequirement6_PopulationLevelAnalysis` |
+| **R7** | PCE surrogate method | `test_milestone_084_2.py::TestRequirement7_PCESurrogateMethod` |
+| **R8** | Sobol sensitivity indices | `test_milestone_084_2.py::TestRequirement8_SobolIndices` |
+| **R9** | UQPy/PyTUQ library support | `test_milestone_084_2.py::TestRequirement9_LibrarySupport` |
+| **R10** | Scientific input parameters | `test_milestone_084_2.py::TestRequirement10_ScientificInputs` |
+
+Run `pytest tests/test_milestone_084_2.py -v` to verify compliance.
+
+## Project Structure
+
+```
+uqEcoli/
+├── uq/                         # Main package
+│   ├── __init__.py             # Public API exports
+│   ├── inputs.py               # Input parameters (VioPathway, Mecillinam, Knockouts)
+│   ├── outputs.py              # Output extraction (Transcriptome, Proteome, Fluxes)
+│   ├── aggregation.py          # Four aggregation strategies
+│   ├── sensitivity.py          # PCE-based global sensitivity analysis
+│   ├── cell_cycle.py           # Cell cycle stratification (Phase 2)
+│   ├── wrappers.py             # UQPy/PyTUQ wrapper functions
+│   └── koopman.py              # Koopman spectral analysis
+├── tests/                      # Test suite
+│   ├── conftest.py             # Fixtures (synthetic + real data)
+│   ├── test_milestone_084_2.py # Explicit RFC006 compliance tests
+│   ├── test_inputs.py          # Input parameter tests
+│   ├── test_aggregation.py     # Aggregation strategy tests
+│   ├── test_sensitivity.py     # Sensitivity analysis tests
+│   ├── test_cell_cycle.py      # Cell cycle variable tests
+│   ├── test_e2e.py             # End-to-end workflow tests
+│   └── test_koopman.py         # Koopman analysis tests
+├── readmes/                    # Documentation
+│   ├── RFC006.md               # Authoritative specification
+│   └── CONTEXT.md              # Claude context document
+├── pyproject.toml              # Package configuration
+└── README.md                   # This file
+```
+
 ## Overview
 
 This package enables uncertainty quantification by characterizing different types of uncertainty across vEcoli simulations:
@@ -599,9 +649,106 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 | `register_cell_cycle_variable` | `uq.cell_cycle` | Register custom cell cycle variable |
 | `extract_koopman_features` | `uq.koopman` | Extract spectral features from trajectories |
 
+## Testing
+
+### Running the Full Test Suite
+
+```bash
+# Install test dependencies
+pip install pytest polars numpy
+
+# Run all tests
+pytest tests/ -v
+
+# Run with markers
+pytest tests/ -v -m unit          # Unit tests only
+pytest tests/ -v -m e2e           # End-to-end tests only
+pytest tests/ -v -m milestone     # RFC006 compliance tests
+```
+
+### Verifying RFC006 Compliance
+
+```bash
+# Run the explicit milestone verification tests
+pytest tests/test_milestone_084_2.py -v
+
+# Expected output includes:
+# MILESTONE 08.4.2 VERIFICATION COMPLETE
+# ✓ Uncertainty characterized by cell (UNIFORM)
+# ✓ Uncertainty characterized by lineage (BY_LINEAGE_SEED)
+# ✓ Uncertainty characterized by generation (BY_GENERATION)
+# ✓ Uncertainty characterized by cell cycle (BY_CELL_CYCLE)
+# ...
+```
+
+### Test Categories
+
+| Marker | Description |
+|--------|-------------|
+| `@pytest.mark.unit` | Unit tests for individual components |
+| `@pytest.mark.e2e` | End-to-end workflow tests |
+| `@pytest.mark.milestone` | Explicit RFC006 requirement verification |
+| `@pytest.mark.real_data` | Tests using actual simulation data |
+| `@pytest.mark.slow` | Long-running tests |
+
+### Test Data
+
+Tests use both synthetic and real data:
+
+- **Synthetic data**: Generated in `conftest.py` fixtures with realistic structure
+- **Real data**: Loaded from `api_integration/sims/api_simulation_default/` when available
+
+## Development
+
+### Dependencies
+
+Core dependencies:
+- `numpy` - Numerical operations
+- `polars` - DataFrame operations
+- `duckdb` - SQL queries on Parquet data
+
+Optional dependencies for sensitivity analysis:
+- `UQPy` - Primary PCE/Sobol library
+- `PyTUQ` - Alternative PCE library
+
+### Adding Custom Cell Cycle Variables
+
+```python
+from uq import CellCycleVariableComputer, CellCycleVariable, register_cell_cycle_variable
+import numpy as np
+import polars as pl
+
+class MyCustomVariable(CellCycleVariableComputer):
+    @property
+    def name(self) -> str:
+        return "my_custom"
+
+    @property
+    def required_columns(self) -> list[str]:
+        return ["listeners__mass__dry_mass", "time"]
+
+    def compute(self, data: pl.DataFrame, sim_data=None) -> CellCycleVariable:
+        mass = data["listeners__mass__dry_mass"].to_numpy()
+        normalized = (mass - mass.min()) / (mass.max() - mass.min())
+        return CellCycleVariable(values=normalized, variable_name=self.name)
+
+register_cell_cycle_variable("my_custom", MyCustomVariable())
+```
+
+### Contributing
+
+1. Ensure all tests pass: `pytest tests/ -v`
+2. Run milestone compliance: `pytest tests/test_milestone_084_2.py -v`
+3. Add tests for new functionality
+4. Update documentation as needed
+
 ## References
 
 1. UQPy Documentation: https://uqpyproject.readthedocs.io/
 2. PyTUQ Documentation: https://sandialabs.github.io/pytuq/
 3. Sobol Sensitivity Analysis: Sobol, I.M. (2001). "Global sensitivity indices for nonlinear mathematical models and their Monte Carlo estimates"
 4. Polynomial Chaos Expansion: Xiu, D. & Karniadakis, G.E. (2002). "The Wiener-Askey polynomial chaos for stochastic differential equations"
+
+## License
+
+This project is part of the vEcoli whole-cell modeling framework.

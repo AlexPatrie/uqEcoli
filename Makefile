@@ -1,4 +1,4 @@
-PACKAGE_LOCATION=/Users/alexanderpatrie/sms/vEcoli-private/uq
+PACKAGE_LOCATION=/Users/alexanderpatrie/sms/uqEcoli/uq
 
 .PHONY: documentation
 documentation:
@@ -6,4 +6,4 @@ documentation:
 
 .PHONY: test
 test:
-	@uv run pytest tests/ -v -s
+	@uv run pytest uq/tests/ -v -s
