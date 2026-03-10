@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.20.4"
-app = marimo.App(width="full")
+app = marimo.App(width="full", layout_file="layouts/biocompose.grid.json")
 
 
 @app.cell
@@ -373,13 +373,20 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
 
     # Display sliders above the plot - use list() to convert array elements for hstack
     mo.vstack([
-        mo.md("### Continuous Spectrum EQ - Drag sliders to shape the frequency response"),
         obs_dropdown,
         mo.hstack(list(gain_sliders)[:6], justify="space-between"),
         mo.hstack(list(gain_sliders)[6:], justify="space-between"),
         spectrum_fig,
         mo.md(f"**Current gains:** {[f'{g:.2f}' for g in current_gains]}")
     ])
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(f"""
+    ### Continuous Spectrum EQ - Drag sliders to shape the frequency response
+    """)
     return
 
 
