@@ -215,12 +215,10 @@ def _(mo):
     return
 
 
-app._unparsable_cell(
-    r"""
-    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass", full)
-    """,
-    name="_"
-)
+@app.cell
+def _(mo, observable_names):
+    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass")
+    return (obs_dropdown,)
 
 
 @app.cell
