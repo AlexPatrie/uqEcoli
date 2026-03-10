@@ -3,7 +3,7 @@
   "data": {
     "columns": 24,
     "rowHeight": 20,
-    "maxWidth": 1600,
+    "maxWidth": 2000,
     "bordered": true,
     "cells": [
       {
@@ -35,7 +35,7 @@
           0,
           8,
           24,
-          34
+          51
         ]
       },
       {
@@ -45,6 +45,9 @@
           13,
           7
         ]
+      },
+      {
+        "position": null
       },
       {
         "position": null

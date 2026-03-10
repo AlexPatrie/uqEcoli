@@ -254,7 +254,7 @@ def _(mo, np):
     from scipy.interpolate import interp1d
 
     # Create 12 gain sliders for control points across the frequency spectrum
-    N_CONTROL_POINTS = 12
+    N_CONTROL_POINTS = 22
     control_freqs = np.logspace(np.log10(20), np.log10(20000), N_CONTROL_POINTS)
 
     # Create labels for each frequency band
@@ -448,6 +448,11 @@ def _(mo):
 
     **Try it:** Boost low frequencies to see smoother trends, or cut high frequencies to remove noise.
     """)
+    return
+
+
+@app.cell
+def _():
     return
 
 
