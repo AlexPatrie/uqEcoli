@@ -266,6 +266,7 @@ def _(mo, np):
     # Use mo.ui.array for proper reactivity - this makes the whole array reactive
     gain_sliders = mo.ui.array([
         mo.ui.slider(
+            orientation="vertical",
             start=0.1, stop=4.0, step=0.05,
             value=1.0,
             label=_get_freq_label(freq),
@@ -424,7 +425,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         mo.md("### EQ Controls"),
         obs_dropdown,
         mo.md("**Frequency Gains:**"),
-        *list(gain_sliders),  # All sliders stacked vertically
+        # *list(gain_sliders),  # All sliders stacked vertically
         mo.md(f"**Gains:** {[f'{g:.2f}' for g in current_gains]}"),
     ])
 
@@ -452,7 +453,8 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(gain_sliders, mo):
+    mo.hstack(list(gain_sliders))
     return
 
 
