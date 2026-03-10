@@ -9,7 +9,10 @@ Run with: marimo run 03b_reactive_sensitivity.py
 import marimo
 
 __generated_with = "0.20.4"
-app = marimo.App(width="medium")
+app = marimo.App(
+    width="full",
+    layout_file="layouts/03b_reactive_sensitivity.grid.json",
+)
 
 
 @app.cell
@@ -24,20 +27,23 @@ def _(mo):
     mo.md("""
     # Reactive Parameter Exploration with PCE Surrogates
 
-    This notebook demonstrates **real-time parameter sensitivity exploration**.
+    This notebook demonstrates **real-time parameter → output visualization**.
 
-    ## The Key Insight
+    ## How It Works
 
-    Once we have a trained **PCE (Polynomial Chaos Expansion) surrogate**, we can:
-    1. Evaluate it **instantly** (it's just polynomial math)
-    2. Use **Marimo's reactivity** to update outputs as sliders change
-    3. **Explore parameter space interactively** without running simulations
+    1. A **PCE surrogate** predicts output values from input parameters (instantly!)
+    2. We generate a **synthetic timeseries** whose dynamics depend on the parameters
+    3. **Drag any slider** → the output timeseries updates immediately
 
-    ## What You'll See
+    ## Parameter Effects
 
-    - Sliders for each input parameter
-    - Real-time output prediction as you adjust parameters
-    - Visualization of parameter effects on model outputs
+    | Parameter | Effect on Timeseries |
+    |-----------|---------------------|
+    | `vio_expression` | Increases baseline level and growth rate |
+    | `vio_trl_eff` | Changes oscillation frequency (metabolic cycles) |
+    | `mecillinam_conc` | Dampens growth (antibiotic effect) |
+
+    **Try it:** Drag the sliders and watch the output timeseries change!
     """)
     return
 
@@ -47,7 +53,7 @@ def _():
     import numpy as np
     from dataclasses import dataclass
 
-    return dataclass, np
+    return (np,)
 
 
 @app.cell
@@ -120,8 +126,7 @@ def _(np):
     print(f"  - Polynomial order: {pce_surrogate.polynomial_order}")
     print(f"  - Number of terms: {len(coefficients)}")
     print(f"  - R-squared: {pce_surrogate.r_squared}")
-
-    return PARAM_BOUNDS, PARAM_NAMES, PCESurrogate, coefficients, multi_indices, pce_surrogate
+    return PARAM_BOUNDS, PARAM_NAMES, pce_surrogate
 
 
 @app.cell
@@ -161,15 +166,23 @@ def _(PARAM_BOUNDS, PARAM_NAMES, mo):
         label=f"{PARAM_NAMES[2]}",
         show_value=True,
     )
-
     return mecillinam_slider, vio_expr_slider, vio_trl_slider
 
 
 @app.cell
-def _(PARAM_BOUNDS, PARAM_NAMES, go, make_subplots, mecillinam_slider, mo, np, pce_surrogate, vio_expr_slider, vio_trl_slider):
+def _(
+    go,
+    make_subplots,
+    mecillinam_slider,
+    mo,
+    np,
+    pce_surrogate,
+    vio_expr_slider,
+    vio_trl_slider,
+):
     # =====================================================================
-    # UNIFIED REACTIVE VISUALIZATION
-    # All plots update instantly when sliders change
+    # REACTIVE OUTPUT TIMESERIES
+    # The timeseries updates instantly when you adjust parameter sliders
     # =====================================================================
 
     # Get current parameter values from sliders
@@ -186,107 +199,119 @@ def _(PARAM_BOUNDS, PARAM_NAMES, go, make_subplots, mecillinam_slider, mo, np, p
     _std_val = float(_pred_std.flat[0])
 
     # =====================================================================
-    # 1. SENSITIVITY CURVES (1D parameter sweeps)
+    # GENERATE OUTPUT TIMESERIES based on current parameters
+    # This simulates what a vEcoli simulation might produce
     # =====================================================================
-    _n_points = 50
-    sensitivity_fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=[f"Effect of {n}" for n in PARAM_NAMES],
-        horizontal_spacing=0.08,
-    )
-
-    for _idx, (_param_name, _bounds) in enumerate(zip(PARAM_NAMES, PARAM_BOUNDS)):
-        _sweep_values = np.linspace(_bounds[0], _bounds[1], _n_points)
-        _predictions = [pce_surrogate.predict(
-            np.array([_sweep_values[_k] if _idx == 0 else current_params[0],
-                      _sweep_values[_k] if _idx == 1 else current_params[1],
-                      _sweep_values[_k] if _idx == 2 else current_params[2]])
-        ).flat[0] for _k in range(_n_points)]
-
-        sensitivity_fig.add_trace(
-            go.Scatter(x=_sweep_values, y=_predictions, mode='lines',
-                      name=_param_name, line=dict(width=2)),
-            row=1, col=_idx+1
-        )
-        sensitivity_fig.add_trace(
-            go.Scatter(x=[current_params[_idx]], y=[_pred_val],
-                      mode='markers', marker=dict(size=12, color='red', symbol='diamond'),
-                      showlegend=False),
-            row=1, col=_idx+1
-        )
-        sensitivity_fig.update_xaxes(title_text=_param_name, row=1, col=_idx+1)
-
-    sensitivity_fig.update_layout(height=280, template='plotly_dark', showlegend=False,
-                                   margin=dict(t=40, b=40))
-
-    # =====================================================================
-    # 2. RESPONSE SURFACE (2D interaction)
-    # =====================================================================
-    _n_grid = 25
-    _x1_range = np.linspace(PARAM_BOUNDS[0, 0], PARAM_BOUNDS[0, 1], _n_grid)
-    _x2_range = np.linspace(PARAM_BOUNDS[1, 0], PARAM_BOUNDS[1, 1], _n_grid)
-    _X1, _X2 = np.meshgrid(_x1_range, _x2_range)
-    _Z = np.array([[pce_surrogate.predict(np.array([_X1[_i, _j], _X2[_i, _j], current_params[2]])).flat[0]
-                   for _j in range(_n_grid)] for _i in range(_n_grid)])
-
-    surface_fig = go.Figure()
-    surface_fig.add_trace(go.Surface(x=_X1, y=_X2, z=_Z, colorscale='Viridis', showscale=False))
-    surface_fig.add_trace(go.Scatter3d(
-        x=[current_params[0]], y=[current_params[1]], z=[_pred_val],
-        mode='markers', marker=dict(size=6, color='red', symbol='diamond'),
-        name='Current'
-    ))
-    surface_fig.update_layout(
-        height=350, template='plotly_dark', margin=dict(t=30, b=10, l=10, r=10),
-        scene=dict(xaxis_title='vio_expr', yaxis_title='vio_trl', zaxis_title='Output'),
-    )
-
-    # =====================================================================
-    # 3. SYNTHETIC TIMESERIES
-    # =====================================================================
-    _T = 500
+    _T = 1000  # timesteps (e.g., seconds of simulation)
     _t = np.arange(_T)
-    _base_output = _pred_val
-    _growth_rate = 0.001 * current_params[0]
-    _oscillation_freq = 0.01 * current_params[1]
-    _damping = 0.0005 * current_params[2]
-    _growth = np.exp((_growth_rate - _damping) * _t)
-    _oscillation = 0.1 * np.sin(2 * np.pi * _oscillation_freq * _t) * np.exp(-0.001 * _t)
-    np.random.seed(42)  # Deterministic noise for smoother updates
-    _noise = 0.02 * np.random.randn(_T) * _growth
-    _timeseries = _base_output * _growth + _oscillation + _noise
 
-    ts_fig = go.Figure()
-    ts_fig.add_trace(go.Scatter(x=_t, y=_timeseries, mode='lines',
-                                line=dict(color='cyan', width=1)))
-    ts_fig.update_layout(height=200, template='plotly_dark', margin=dict(t=30, b=40),
-                         xaxis_title='Time', yaxis_title='Value',
-                         title='Synthetic Timeseries')
+    # Parameter effects on timeseries dynamics:
+    # - vio_expression: affects baseline level and growth rate
+    # - vio_trl_eff: affects oscillation frequency (metabolic cycles)
+    # - mecillinam_conc: dampens growth (antibiotic effect)
+
+    _baseline = _pred_val  # PCE prediction sets baseline
+    _growth_rate = 0.002 * current_params[0]  # vio_expression drives growth
+    _osc_freq = 0.005 + 0.01 * current_params[1]  # vio_trl_eff affects oscillations
+    _damping = 0.001 * current_params[2]  # mecillinam dampens growth
+
+    # Build the timeseries
+    _trend = _baseline * np.exp((_growth_rate - _damping) * _t)
+    _oscillation = 0.15 * _baseline * np.sin(2 * np.pi * _osc_freq * _t)
+    np.random.seed(42)  # Deterministic for smooth updates
+    _noise = 0.03 * _baseline * np.random.randn(_T)
+
+    _timeseries = _trend + _oscillation * np.exp(-0.001 * _t) + _noise
+
+    # Also generate a "baseline" timeseries (all params at default)
+    _default_params = np.array([2.75, 1.25, 5.0])
+    _default_pred = float(pce_surrogate.predict(_default_params).flat[0])
+    _default_growth = 0.002 * _default_params[0]
+    _default_osc = 0.005 + 0.01 * _default_params[1]
+    _default_damp = 0.001 * _default_params[2]
+    _default_trend = _default_pred * np.exp((_default_growth - _default_damp) * _t)
+    _default_osc_signal = 0.15 * _default_pred * np.sin(2 * np.pi * _default_osc * _t)
+    _default_ts = _default_trend + _default_osc_signal * np.exp(-0.001 * _t) + _noise
 
     # =====================================================================
-    # UNIFIED LAYOUT
+    # BUILD FIGURE
+    # =====================================================================
+    ts_fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.7, 0.3],
+        subplot_titles=['Output Timeseries (drag sliders to see changes)', 'Difference from Baseline'],
+        vertical_spacing=0.12,
+    )
+
+    # Main timeseries plot
+    ts_fig.add_trace(go.Scatter(
+        x=_t, y=_default_ts,
+        name='Baseline (default params)',
+        line=dict(color='rgba(100, 100, 100, 0.5)', width=1, dash='dot'),
+    ), row=1, col=1)
+
+    ts_fig.add_trace(go.Scatter(
+        x=_t, y=_timeseries,
+        name='Current (your params)',
+        line=dict(color='cyan', width=2),
+        fill='tonexty',
+        fillcolor='rgba(0, 255, 255, 0.1)',
+    ), row=1, col=1)
+
+    # Difference plot
+    _diff = _timeseries - _default_ts
+    ts_fig.add_trace(go.Scatter(
+        x=_t, y=_diff,
+        name='Difference',
+        line=dict(color='magenta', width=1),
+        fill='tozeroy',
+        fillcolor='rgba(255, 0, 255, 0.2)',
+    ), row=2, col=1)
+
+    # Add zero line to difference plot
+    ts_fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1)
+
+    ts_fig.update_xaxes(title='Time (s)', row=2, col=1)
+    ts_fig.update_yaxes(title='Observable Value', row=1, col=1)
+    ts_fig.update_yaxes(title='Diff from baseline', row=2, col=1)
+
+    ts_fig.update_layout(
+        height=550,
+        template='plotly_dark',
+        showlegend=True,
+        legend=dict(x=0.02, y=0.98),
+        margin=dict(t=40, b=40),
+    )
+
+    # =====================================================================
+    # LAYOUT: Sliders on left, timeseries on right
     # =====================================================================
     _slider_panel = mo.vstack([
         mo.md("### Parameters"),
+        mo.md("*Drag sliders to see effect on output*"),
         vio_expr_slider,
         vio_trl_slider,
         mecillinam_slider,
+        mo.md("---"),
         mo.md(f"""
-**Prediction:** `{_pred_val:.4f}` ± {_std_val:.4f}
-        """),
-    ])
+**Current values:**
+- vio_expression: `{current_params[0]:.2f}`
+- vio_trl_eff: `{current_params[1]:.2f}`
+- mecillinam_conc: `{current_params[2]:.2f}`
 
-    _plots_panel = mo.vstack([
-        sensitivity_fig,
-        mo.hstack([surface_fig, ts_fig], justify="space-around"),
+**PCE Prediction:** `{_pred_val:.4f}` ± {_std_val:.4f}
+
+**Timeseries stats:**
+- Final value: `{_timeseries[-1]:.4f}`
+- Net growth: `{(_growth_rate - _damping)*1000:.2f}‰/step`
+        """),
     ])
 
     mo.hstack([
         _slider_panel,
-        _plots_panel,
-    ], widths=[1, 4], gap=2)
-
-    return current_params, sensitivity_fig, surface_fig, ts_fig
+        ts_fig,
+    ], widths=[1, 3], gap=2)
+    return
 
 
 @app.cell

@@ -23,16 +23,28 @@ This package implements the UQ framework specified in **RFC006** (`readmes/RFC00
 
 Run `pytest tests/test_milestone_084_2.py -v` to verify compliance.
 
+## Development Environment
+
+**IMPORTANT:** Always use `uv run` instead of `python` or `python3` for this repository:
+
+```bash
+# Correct
+uv run python script.py
+uv run pytest tests/
+uv run marimo run tutorials/03b_reactive_sensitivity.py
+
+# Incorrect - do not use
+python script.py
+python3 script.py
+```
+
 ## Tutorials
 
 Interactive marimo notebooks are available in the `tutorials/` directory:
 
 ```bash
-# Install marimo if needed
-pip install marimo
-
 # Run a tutorial
-marimo run tutorials/01_introduction.py
+uv run marimo run tutorials/01_introduction.py
 ```
 
 | Tutorial | Description | Topics |
@@ -40,27 +52,40 @@ marimo run tutorials/01_introduction.py
 | **01_introduction.py** | Getting started with UQ | Input parameters, parameter spaces, basic concepts |
 | **02_aggregation_strategies.py** | Aggregation and variance | Four strategies, variance decomposition, data visualization |
 | **03_sensitivity_analysis.py** | PCE and Sobol indices | Surrogate models, sensitivity ranking, multi-output analysis |
+| **03b_reactive_sensitivity.py** | **Reactive parameter exploration** | Real-time parameter → output timeseries visualization |
 | **04_cell_cycle_and_koopman.py** | Advanced analysis | **Koopman cell cycle variable**, DMD, spectral mode visualization |
-| **music.py** | Musical notation for Koopman | Cellular scores, orchestration charts, spectral-to-music mapping |
+| **05_music_notation.py** | Musical notation for Koopman | Cellular scores, orchestration charts, spectral-to-music mapping |
+| **06_calculate_cell_cycle.py** | Cell cycle computation | Compute cell cycle variable from timeseries |
 
 ## Project Structure
 
 ```
 uqEcoli/
-├── uq/                         # Main package
+├── uq/                         # Main UQ package
 │   ├── __init__.py             # Public API exports
 │   ├── inputs.py               # Input parameters (VioPathway, Mecillinam, Knockouts)
 │   ├── outputs.py              # Output extraction (Transcriptome, Proteome, Fluxes)
 │   ├── aggregation.py          # Four aggregation strategies
-│   ├── sensitivity.py          # PCE-based global sensitivity analysis
+│   ├── sensitivity.py          # PCE-based global sensitivity analysis + PCESurrogate.predict()
 │   ├── cell_cycle.py           # Cell cycle stratification (Phase 2)
 │   ├── wrappers.py             # UQPy/PyTUQ wrapper functions
 │   └── koopman.py              # Koopman spectral analysis
+├── apollo/                     # Musical notation for Koopman spectra
+│   ├── types.py                # CellularScore, CellularNote, LosslessScore
+│   ├── mappings.py             # Bijective frequency↔pitch, amplitude↔dynamics
+│   ├── encoding.py             # Spectrum → Score encoding
+│   ├── decoding.py             # Score → Spectrum reconstruction
+│   └── m21.py                  # music21 integration (MusicXML export)
+├── examples/                   # Interactive examples
+│   └── biocompose.py           # Interactive spectrum analyzer with EQ sliders
 ├── tutorials/                  # Interactive marimo notebooks
 │   ├── 01_introduction.py      # Getting started
 │   ├── 02_aggregation_strategies.py  # Aggregation and variance
 │   ├── 03_sensitivity_analysis.py    # PCE and Sobol
-│   └── 04_cell_cycle_and_koopman.py  # Advanced analysis
+│   ├── 03b_reactive_sensitivity.py   # Reactive parameter → timeseries
+│   ├── 04_cell_cycle_and_koopman.py  # Advanced analysis
+│   ├── 05_music_notation.py    # Apollo musical encoding
+│   └── 06_calculate_cell_cycle.py    # Cell cycle computation
 ├── tests/                      # Test suite
 │   ├── conftest.py             # Fixtures (synthetic + real data)
 │   ├── test_milestone_084_2.py # Explicit RFC006 compliance tests
@@ -365,6 +390,29 @@ sobol = analyzer.analyze_with_sobol(
     calc_second_order=True,  # Include interaction effects
 )
 ```
+
+### PCE Surrogate Prediction
+
+Once trained, PCE surrogates can make **instant predictions** without running simulations:
+
+```python
+# After training via analyzer.analyze_with_pce()
+params = np.array([2.5, 1.0, 5.0])  # vio_expression, vio_trl_eff, mecillinam
+output = pce_surrogate.predict(params)
+
+# Batch prediction
+param_batch = np.random.uniform(
+    pce_surrogate.input_bounds[:, 0],
+    pce_surrogate.input_bounds[:, 1],
+    size=(100, 3)
+)
+outputs = pce_surrogate.predict(param_batch)
+
+# With uncertainty estimate
+mean, std = pce_surrogate.predict_with_uncertainty(param_batch)
+```
+
+This enables **reactive parameter exploration** in Marimo notebooks - see `tutorials/03b_reactive_sensitivity.py`.
 
 ## Cell Cycle Variables
 
