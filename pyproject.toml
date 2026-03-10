@@ -6,6 +6,7 @@ authors = [{ name = "Alex Patrie", email = "alexanderpatrie@gmail.com" }]
 requires-python = ">=3.12.9"
 readme = "README.md"
 dependencies = [
+    "plotly>=6.6.0",
     "polars",
     "pydmd",
     "pytuq",
