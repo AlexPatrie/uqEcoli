@@ -26,10 +26,20 @@ def _(StrEnum, dc, np, pl, pprint):
 
     @dc.dataclass
     class Bins:
+        # TODO: instead of low, mid, high have continuous spectrum (with granularity)
         low: np.ndarray
         mid: np.ndarray
         high: np.ndarray
 
+        def vectorize(self):
+            bins = [getattr(self, binType) for binType in [BinBand.LOW, BinBand.MID, BinBand.HIGH]]
+            vec = []
+            for row in bins:
+                for val in row:
+                    vec.append(val)
+            # self.vector = np.ndarray(vec)
+            return np.arange(self.low.min(), self.high.max(), 1)
+        
     class Spectrum:
         data: np.ndarray
         dt: float
@@ -66,15 +76,25 @@ def _(StrEnum, dc, np, pl, pprint):
             high_bins = np.where(freqs >= high_thresh)[0]
             return Bins(low=low_bins, mid=mid_bins, high=high_bins)
 
-        def adjust(self, band: BinBand, dg: float):
-            selected_bin = getattr(self.bins, band)
-            self.data[selected_bin] *= dg
+        # def adjust(self, band: BinBand, dg: float, i_bin: int | None = None):
+        #     selected_bins = getattr(self.bins, band)
+        #     if i_bin is not None:
+        #         selected_bins = selected_bins[i_bin]
+        #     self.data[selected_bins] *= dg
+
+        def adjust(self, dg: float, band: BinBand | None = None, i_bin: int | None = None):
+            if i_bin is not None:
+                selected_bin = self.bins.vectorize()[i_bin]
+                self.data[selected_bin] *= dg
+            else:
+                selected_bins = getattr(self.bins, band)
+                self.data[selected_bins] *= dg
 
         @property
         def magnitude(self):
             return 20 * np.log10(np.abs(self.data[1:len(self.frequencies)]) + 1e-10)
 
-        def plot(self):
+        def plot(self, obs: str):
             import plotly.graph_objects as go
             freqs = self.frequencies[1:]
             magnitude_db = self.magnitude
@@ -83,7 +103,7 @@ def _(StrEnum, dc, np, pl, pprint):
             fig.add_trace(go.Scatter(x=freqs, y=magnitude_db, fill='tozeroy',
                                    line=dict(color='cyan', width=1)))
             fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)])
-            fig.update_layout(template='plotly_dark', title='Spectrum Analyzer')
+            fig.update_layout(template='plotly_dark', title=f'Spectrum Analyzer: {obs}')
             return fig
 
     class TimeseriesDataset:
@@ -150,7 +170,7 @@ def _(StrEnum, dc, np, pl, pprint):
 
     timeseries = TimeseriesDataset(data=timeseries_dataset)
     timeseries
-    return BinBand, timeseries
+    return BinBand, Spectrum, timeseries
 
 
 @app.cell
@@ -164,47 +184,84 @@ def _(timeseries):
 def _(spectrum, timeseries):
     ts_a = timeseries.from_spectrum(spectrum)
     ts_a
-    return (ts_a,)
-
-
-@app.cell
-def _(np, timeseries, ts_a):
-    np.all(ts_a == timeseries.df.select('a').to_numpy())
     return
 
 
 @app.cell
 def _(mo):
+    low_slider = mo.ui.slider(label="LOW", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
     mid_slider = mo.ui.slider(label="MID", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
-    mid_slider
-    return (mid_slider,)
+    high_slider = mo.ui.slider(label="HIGH", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
+    return high_slider, low_slider, mid_slider
 
 
 @app.cell
-def _(BinBand, mid_slider, timeseries):
-    # Create a fresh spectrum each time the slider changes
-    _spectrum = timeseries.to_spectrum('a')
-    _spectrum.adjust(band=BinBand.MID, dg=mid_slider.value)
-    _spectrum.plot()
+def _(BinBand, Spectrum, mo, spectrum):
+    class AllSliders(dict):
+        def flatten(self):
+            s = []
+            for row in self.values():
+                for r in row:
+                    s.append(r)
+            return s 
+        
+    class BinSliders:
+        def generate_range_sliders(self, band: BinBand, spectrum: Spectrum) -> list[mo.ui.slider]:
+                sliders = []
+                bins = getattr(spectrum.bins, band)
+                for i, b in enumerate(bins):
+                    freqs = spectrum.frequencies[bins]
+                    bin_min = -freqs.min()
+                    bin_max = freqs.max() * 4
+                    on_change = (lambda val: spectrum)
+                    b_slider = mo.ui.slider(full_width=True, label=f"     {band.value}:{b}     ", start=bin_min, stop=bin_max, step=1.0, show_value=True, value=spectrum.frequencies[bins][i])
+                    sliders.append(b_slider)
+                return sliders
+
+        def get_all_sliders(self):
+            bands = [BinBand.LOW, BinBand.MID, BinBand.HIGH]
+            return dict(zip(
+                bands, 
+                [self.generate_range_sliders(band, spectrum) for band in bands],
+            
+            ))
+
+        @property
+        def all(self):
+            return AllSliders(self.get_all_sliders())
+
+        def get_ui(self):
+            return list(map(
+                # lambda band: mo.accordion({band: self.generate_range_sliders(band, spectrum)}),
+                lambda band: self.generate_range_sliders(band, spectrum),
+                [BinBand.LOW, BinBand.MID, BinBand.HIGH]
+            ))
+
+        @property
+        def ui(self):
+            return mo.vstack(self.get_ui(), justify="start")
+
+
+    sliders = BinSliders()
     return
 
 
 @app.cell
-def _(mo, spectrum):
-    mid_sliders = []
-    for i, b in enumerate(spectrum.bins.mid):
-        freqs = spectrum.frequencies[spectrum.bins.mid]
-        bin_min = -freqs.min()
-        bin_max = freqs.max() * 4
-        on_change = (lambda val: spectrum)
-        b_slider = mo.ui.slider(label=f"MID:{b}", start=bin_min, stop=bin_max, step=1.0, show_value=True, value=spectrum.frequencies[spectrum.bins.mid][i])
-        mid_sliders.append(b_slider)
-    return (mid_sliders,)
+def _(BinBand, high_slider, low_slider, mid_slider, mo, timeseries):
+    def generate_spectrum_analyzer(observable: str):
+        # Create a fresh spectrum each time the slider changes
+        _spectrum = timeseries.to_spectrum(observable)
+        _spectrum.adjust(band=BinBand.LOW, dg=low_slider.value)
+        _spectrum.adjust(band=BinBand.MID, dg=mid_slider.value)
+        _spectrum.adjust(dg=high_slider.value, i_bin=100)
+    
+        return mo.vstack([
+            mo.hstack([low_slider, mid_slider, high_slider], justify="start"), 
+            _spectrum.plot(obs=observable)
+        ], justify="start")
 
-
-@app.cell
-def _(mid_sliders):
-    mid_sliders
+    observable = 'b'
+    generate_spectrum_analyzer(observable)
     return
 
 
