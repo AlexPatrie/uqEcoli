@@ -168,13 +168,35 @@ def _(StrEnum, dc, np, pl, pprint):
         ))
     })
 
-    timeseries = TimeseriesDataset(data=timeseries_dataset)
+    from uq.inputs import load_dataset
+    from pathlib import Path
+    def load_trajectory():
+        import json 
+        with open("baseline_observables.json", "r") as f:
+            obs = [col for col in json.load(f) if col.startswith("listener")]
+        obs.append("time")
+        X = load_dataset(experiment_id="api_simulation_default", outdir_root=Path('/Users/alexanderpatrie/sms/sms-api/artifacts/sims'), observables=obs)
+        observables = []
+        schema = X.collect_schema()
+        for obs_i in obs:
+            coltype = schema[obs_i]
+            if isinstance(coltype, pl.Float64):
+                observables.append(obs_i)
+        X = X.select(observables)
+        return X
+
+    X = load_trajectory()
+    t_range = X.select("time").to_numpy()
+
+    # timeseries = TimeseriesDataset(data=timeseries_dataset)
+    timeseries = TimeseriesDataset(data=X, t_colname="time")
+    observable_names = timeseries.observables
     return BinBand, Spectrum, observable_names, timeseries
 
 
 @app.cell
 def _(timeseries):
-    spectrum = timeseries.to_spectrum('a')
+    spectrum = timeseries.to_spectrum('listeners__mass__cell_mass')
     return (spectrum,)
 
 
@@ -194,7 +216,7 @@ def _(mo):
 
 @app.cell
 def _(mo, observable_names):
-    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="c")
+    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass")
     return (obs_dropdown,)
 
 
