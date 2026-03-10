@@ -279,13 +279,10 @@ def _(mo, np):
 @app.cell
 def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
     class InteractiveSpectrum:
         """Spectrum with continuous gain control via interpolated control points."""
-        spectrum: np.ndarray
-        freqs: np.ndarray
-        control_freqs: np.ndarray
-        control_gains: np.ndarray
 
         def __init__(self, spectrum, control_freqs: np.ndarray, control_gains: np.ndarray):
             self.spectrum = spectrum
@@ -318,78 +315,138 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
                 data = self.apply_gains()
             return 20 * np.log10(np.abs(data[1:len(self.freqs)+1]) + 1e-10)
 
+        def to_timeseries(self, modified_data: np.ndarray) -> np.ndarray:
+            """Reconstruct timeseries from modified spectrum via inverse FFT."""
+            return np.fft.ifft(modified_data).real
+
     # Read current gain values from sliders (this triggers reactivity!)
     current_gains = np.array(gain_sliders.value)
 
+    # Get original timeseries
+    _obs_name = obs_dropdown.value
+    _original_ts = timeseries.df.select(_obs_name).to_numpy().flatten()
+    _time = timeseries.t.flatten()
+
     # Create spectrum and apply gains
-    _spectrum = timeseries.to_spectrum(obs_dropdown.value)
+    _spectrum = timeseries.to_spectrum(_obs_name)
     interactive = InteractiveSpectrum(_spectrum, control_freqs, current_gains)
 
     # Get original and modified magnitudes
     original_mag = _spectrum.magnitude
-    modified_data = interactive.apply_gains()
-    modified_mag = interactive.get_magnitude_db(modified_data)
+    modified_spectrum_data = interactive.apply_gains()
+    modified_mag = interactive.get_magnitude_db(modified_spectrum_data)
     freqs = interactive.freqs
 
-    # Build the plot
-    spectrum_fig = go.Figure()
+    # Reconstruct modified timeseries via inverse FFT
+    _modified_ts = interactive.to_timeseries(modified_spectrum_data)
 
+    # =========================================================================
+    # BUILD UNIFIED FIGURE with spectrum on top, timeseries on bottom
+    # =========================================================================
+    combined_fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.5, 0.5],
+        subplot_titles=['Frequency Spectrum (drag sliders to modify)', 'Timeseries (reconstructed from spectrum)'],
+        vertical_spacing=0.12,
+    )
+
+    # ----- ROW 1: SPECTRUM -----
     # Original spectrum (dimmed)
-    spectrum_fig.add_trace(go.Scatter(
+    combined_fig.add_trace(go.Scatter(
         x=freqs, y=original_mag,
-        fill='tozeroy', name='Original',
+        fill='tozeroy', name='Original Spectrum',
         line=dict(color='rgba(100, 100, 100, 0.4)', width=1),
-        fillcolor='rgba(100, 100, 100, 0.2)'
-    ))
+        fillcolor='rgba(100, 100, 100, 0.2)',
+        legendgroup='spectrum',
+    ), row=1, col=1)
 
     # Modified spectrum (bright cyan)
-    spectrum_fig.add_trace(go.Scatter(
+    combined_fig.add_trace(go.Scatter(
         x=freqs, y=modified_mag,
-        fill='tozeroy', name='Modified',
+        fill='tozeroy', name='Modified Spectrum',
         line=dict(color='cyan', width=1),
-        fillcolor='rgba(0, 255, 255, 0.3)'
-    ))
+        fillcolor='rgba(0, 255, 255, 0.3)',
+        legendgroup='spectrum',
+    ), row=1, col=1)
 
     # Control points overlaid on spectrum
     marker_y = np.interp(control_freqs, freqs, modified_mag)
-    spectrum_fig.add_trace(go.Scatter(
+    combined_fig.add_trace(go.Scatter(
         x=control_freqs,
         y=marker_y,
         mode='markers+lines',
-        name='Control Points',
-        marker=dict(size=12, color='yellow', symbol='circle',
+        name='EQ Control Points',
+        marker=dict(size=10, color='yellow', symbol='circle',
                    line=dict(color='orange', width=2)),
         line=dict(color='rgba(255, 255, 0, 0.3)', width=1, dash='dot'),
         hovertemplate='%{x:.0f} Hz<br>Gain: %{customdata:.2f}<extra></extra>',
-        customdata=current_gains
-    ))
+        customdata=current_gains,
+        legendgroup='spectrum',
+    ), row=1, col=1)
 
-    spectrum_fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)],
-                    title='Frequency (Hz)')
-    spectrum_fig.update_yaxes(title='Magnitude (dB)')
-    spectrum_fig.update_layout(
+    # ----- ROW 2: TIMESERIES -----
+    # Original timeseries (dimmed)
+    combined_fig.add_trace(go.Scatter(
+        x=_time, y=_original_ts,
+        name='Original Timeseries',
+        line=dict(color='rgba(100, 100, 100, 0.5)', width=1),
+        legendgroup='timeseries',
+    ), row=2, col=1)
+
+    # Modified timeseries (bright magenta)
+    combined_fig.add_trace(go.Scatter(
+        x=_time, y=_modified_ts,
+        name='Modified Timeseries',
+        line=dict(color='magenta', width=1),
+        legendgroup='timeseries',
+    ), row=2, col=1)
+
+    # ----- LAYOUT -----
+    combined_fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)],
+                              title='Frequency (Hz)', row=1, col=1)
+    combined_fig.update_yaxes(title='Magnitude (dB)', row=1, col=1)
+
+    combined_fig.update_xaxes(title='Time', row=2, col=1)
+    combined_fig.update_yaxes(title='Value', row=2, col=1)
+
+    combined_fig.update_layout(
         template='plotly_dark',
-        title=f'Interactive Spectrum Analyzer: observable {obs_dropdown.value}',
-        height=400,
+        height=700,
         showlegend=True,
-        legend=dict(x=0.02, y=0.98)
+        legend=dict(x=1.02, y=1, xanchor='left'),
+        title=f'Interactive Spectrum Analyzer: {_obs_name}',
     )
 
-    # Display sliders above the plot - use list() to convert array elements for hstack
-    mo.vstack([
+    # =========================================================================
+    # UNIFIED LAYOUT with sliders on left, plots on right
+    # =========================================================================
+    _slider_panel = mo.vstack([
+        mo.md("### EQ Controls"),
         obs_dropdown,
-        mo.hstack(list(gain_sliders)[:6], justify="space-between"),
-        mo.hstack(list(gain_sliders)[6:], justify="space-between"),
-        spectrum_fig,
-        mo.md(f"**Current gains:** {[f'{g:.2f}' for g in current_gains]}")
+        mo.md("**Frequency Gains:**"),
+        *list(gain_sliders),  # All sliders stacked vertically
+        mo.md(f"**Gains:** {[f'{g:.2f}' for g in current_gains]}"),
     ])
+
+    mo.hstack([
+        _slider_panel,
+        combined_fig,
+    ], widths=[1, 4], gap=2)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(f"""
-    ### Continuous Spectrum EQ - Drag sliders to shape the frequency response
+    mo.md("""
+    ## Interactive Spectrum Analyzer
+
+    **How it works:**
+    1. The **top plot** shows the frequency spectrum (FFT of the timeseries)
+    2. Drag the **EQ sliders** to boost/cut different frequency bands
+    3. The **bottom plot** shows the timeseries reconstructed via inverse FFT
+    4. Changes propagate instantly: spectrum → IFFT → timeseries
+
+    **Try it:** Boost low frequencies to see smoother trends, or cut high frequencies to remove noise.
     """)
     return
 
