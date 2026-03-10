@@ -18,7 +18,7 @@ def _():
 
 
 @app.cell
-def _(StrEnum, dc, np, pl, pprint):
+def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
     class BinBand(StrEnum):
         LOW = 'low'
         MID = 'mid'
@@ -154,20 +154,21 @@ def _(StrEnum, dc, np, pl, pprint):
         assert np.all(_ts_a == ds.df.select('a').to_numpy())
 
 
-    T = 1111  # total duration
-    dt = 1.0  # global timestep/interval
-    t = (lambda T, dt: np.arange(start=0.0, stop=float(T), step=dt))(T, dt)
+    # loading fake data example
+    # T = 1111  # total duration
+    # dt = 1.0  # global timestep/interval
+    # t = (lambda T, dt: np.arange(start=0.0, stop=float(T), step=dt))(T, dt)
+    # N = 3  # num observables 
+    # observable_names = ['a', 'b', 'c']
+    # timeseries_dataset = pl.DataFrame({
+    #     "time": t, 
+    #     **dict(zip(
+    #         observable_names,
+    #         np.random.random((N, T))
+    #     ))
+    # })
 
-    N = 3  # num observables 
-    observable_names = ['a', 'b', 'c']
-    timeseries_dataset = pl.DataFrame({
-        "time": t, 
-        **dict(zip(
-            observable_names,
-            np.random.random((N, T))
-        ))
-    })
-
+    # instead, load the real deal :)
     from uq.inputs import load_dataset
     from pathlib import Path
     def load_trajectory():
@@ -191,7 +192,7 @@ def _(StrEnum, dc, np, pl, pprint):
     # timeseries = TimeseriesDataset(data=timeseries_dataset)
     timeseries = TimeseriesDataset(data=X, t_colname="time")
     observable_names = timeseries.observables
-    return BinBand, Spectrum, observable_names, timeseries
+    return BinBand, Spectrum, timeseries
 
 
 @app.cell
@@ -214,10 +215,12 @@ def _(mo):
     return
 
 
-@app.cell
-def _(mo, observable_names):
-    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass")
-    return (obs_dropdown,)
+app._unparsable_cell(
+    r"""
+    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass", full)
+    """,
+    name="_"
+)
 
 
 @app.cell
@@ -300,7 +303,16 @@ def _(mo, np):
 
 
 @app.cell
-def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
+def _(
+    control_freqs,
+    gain_sliders,
+    interp1d,
+    mo,
+    np,
+    obs_dropdown,
+    pprint,
+    timeseries,
+):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -373,7 +385,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         vertical_spacing=0.12,
     )
 
-    # ----- ROW 1: SPECTRUM -----
+    # ----- ROW 2: SPECTRUM -----
     # Original spectrum (dimmed)
     combined_fig.add_trace(go.Scatter(
         x=freqs, y=original_mag,
@@ -407,12 +419,12 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         legendgroup='spectrum',
     ), row=2, col=1)
 
-    # ----- ROW 2: TIMESERIES -----
-    # Original timeseries (dimmed)
+    # ----- ROW 1: TIMESERIES -----
+    # Original timeseries
     combined_fig.add_trace(go.Scatter(
         x=_time, y=_original_ts,
         name='Original Timeseries',
-        line=dict(color='rgba(100, 100, 100, 0.5)', width=1),
+        line=dict(color='rgba(0, 200, 255, 0.8)', width=1.5),
         legendgroup='timeseries',
     ), row=1, col=1)
 
@@ -448,14 +460,12 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         obs_dropdown,
         mo.md("**Frequency Gains:**"),
         # *list(gain_sliders),  # All sliders stacked vertically
-        mo.md(f"**Gains:** {[f'{g:.2f}' for g in current_gains]}"),
-    ])
+        mo.md(f"**Gains:**\n"),
+        mo.md(f"{pprint.pformat([f'{g:.2f}' for g in current_gains])}")
+    ], justify="start")
 
-    mo.hstack([
-        _slider_panel,
-        combined_fig,
-    ], widths=[1, 4], gap=2)
-    return
+    _slider_panel
+    return (combined_fig,)
 
 
 @app.cell
@@ -464,10 +474,10 @@ def _(mo):
     ## Interactive Spectrum Analyzer
 
     **How it works:**
-    1. The **top plot** shows the frequency spectrum (FFT of the timeseries)
+    1. The **top plot** shows the timeseries (original and reconstructed via inverse FFT)
     2. Drag the **EQ sliders** to boost/cut different frequency bands
-    3. The **bottom plot** shows the timeseries reconstructed via inverse FFT
-    4. Changes propagate instantly: spectrum → IFFT → timeseries
+    3. The **bottom plot** shows the frequency spectrum (FFT of the timeseries)
+    4. Changes propagate instantly: spectrum modifications → IFFT → timeseries
 
     **Try it:** Boost low frequencies to see smoother trends, or cut high frequencies to remove noise.
     """)
@@ -477,6 +487,15 @@ def _(mo):
 @app.cell
 def _(gain_sliders, mo):
     mo.hstack(list(gain_sliders))
+    return
+
+
+@app.cell
+def _(combined_fig, mo):
+    mo.hstack([
+        # _slider_panel,
+        combined_fig,
+    ], widths=[1, 4], gap=2)
     return
 
 
