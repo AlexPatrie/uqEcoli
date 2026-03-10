@@ -39,7 +39,7 @@ def _(StrEnum, dc, np, pl, pprint):
                     vec.append(val)
             # self.vector = np.ndarray(vec)
             return np.arange(self.low.min(), self.high.max(), 1)
-        
+
     class Spectrum:
         data: np.ndarray
         dt: float
@@ -169,21 +169,18 @@ def _(StrEnum, dc, np, pl, pprint):
     })
 
     timeseries = TimeseriesDataset(data=timeseries_dataset)
-    timeseries
-    return BinBand, Spectrum, timeseries
+    return BinBand, Spectrum, observable_names, timeseries
 
 
 @app.cell
 def _(timeseries):
     spectrum = timeseries.to_spectrum('a')
-    spectrum
     return (spectrum,)
 
 
 @app.cell
 def _(spectrum, timeseries):
     ts_a = timeseries.from_spectrum(spectrum)
-    ts_a
     return
 
 
@@ -192,7 +189,13 @@ def _(mo):
     low_slider = mo.ui.slider(label="LOW", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
     mid_slider = mo.ui.slider(label="MID", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
     high_slider = mo.ui.slider(label="HIGH", value=1.0, start=0.1, stop=10.0, step=0.1, show_value=True)
-    return high_slider, low_slider, mid_slider
+    return
+
+
+@app.cell
+def _(mo, observable_names):
+    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="c")
+    return (obs_dropdown,)
 
 
 @app.cell
@@ -204,7 +207,7 @@ def _(BinBand, Spectrum, mo, spectrum):
                 for r in row:
                     s.append(r)
             return s 
-        
+
     class BinSliders:
         def generate_range_sliders(self, band: BinBand, spectrum: Spectrum) -> list[mo.ui.slider]:
                 sliders = []
@@ -223,7 +226,7 @@ def _(BinBand, Spectrum, mo, spectrum):
             return dict(zip(
                 bands, 
                 [self.generate_range_sliders(band, spectrum) for band in bands],
-            
+
             ))
 
         @property
@@ -270,12 +273,11 @@ def _(mo, np):
         )
         for freq in control_freqs
     ])
-
-    return N_CONTROL_POINTS, control_freqs, gain_sliders, interp1d
+    return control_freqs, gain_sliders, interp1d
 
 
 @app.cell
-def _(control_freqs, gain_sliders, interp1d, mo, np, timeseries):
+def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
     import plotly.graph_objects as go
 
     class InteractiveSpectrum:
@@ -316,7 +318,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, timeseries):
     current_gains = np.array(gain_sliders.value)
 
     # Create spectrum and apply gains
-    _spectrum = timeseries.to_spectrum('b')
+    _spectrum = timeseries.to_spectrum(obs_dropdown.value)
     interactive = InteractiveSpectrum(_spectrum, control_freqs, current_gains)
 
     # Get original and modified magnitudes
@@ -363,7 +365,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, timeseries):
     spectrum_fig.update_yaxes(title='Magnitude (dB)')
     spectrum_fig.update_layout(
         template='plotly_dark',
-        title=f'Interactive Spectrum Analyzer: observable b',
+        title=f'Interactive Spectrum Analyzer: observable {obs_dropdown.value}',
         height=400,
         showlegend=True,
         legend=dict(x=0.02, y=0.98)
@@ -372,12 +374,13 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, timeseries):
     # Display sliders above the plot - use list() to convert array elements for hstack
     mo.vstack([
         mo.md("### Continuous Spectrum EQ - Drag sliders to shape the frequency response"),
+        obs_dropdown,
         mo.hstack(list(gain_sliders)[:6], justify="space-between"),
         mo.hstack(list(gain_sliders)[6:], justify="space-between"),
         spectrum_fig,
         mo.md(f"**Current gains:** {[f'{g:.2f}' for g in current_gains]}")
     ])
-    return InteractiveSpectrum, current_gains, freqs, go, interactive, modified_data, modified_mag, original_mag, spectrum_fig
+    return
 
 
 @app.cell
