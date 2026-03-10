@@ -247,22 +247,137 @@ def _(BinBand, Spectrum, mo, spectrum):
 
 
 @app.cell
-def _(BinBand, high_slider, low_slider, mid_slider, mo, timeseries):
-    def generate_spectrum_analyzer(observable: str):
-        # Create a fresh spectrum each time the slider changes
-        _spectrum = timeseries.to_spectrum(observable)
-        _spectrum.adjust(band=BinBand.LOW, dg=low_slider.value)
-        _spectrum.adjust(band=BinBand.MID, dg=mid_slider.value)
-        _spectrum.adjust(dg=high_slider.value, i_bin=100)
-    
-        return mo.vstack([
-            mo.hstack([low_slider, mid_slider, high_slider], justify="start"), 
-            _spectrum.plot(obs=observable)
-        ], justify="start")
+def _(mo, np):
+    from scipy.interpolate import interp1d
 
-    observable = 'b'
-    generate_spectrum_analyzer(observable)
-    return
+    # Create 12 gain sliders for control points across the frequency spectrum
+    N_CONTROL_POINTS = 12
+    control_freqs = np.logspace(np.log10(20), np.log10(20000), N_CONTROL_POINTS)
+
+    # Create labels for each frequency band
+    def _get_freq_label(freq):
+        if freq >= 1000:
+            return f"{freq/1000:.1f}kHz"
+        return f"{freq:.0f}Hz"
+
+    # Use mo.ui.array for proper reactivity - this makes the whole array reactive
+    gain_sliders = mo.ui.array([
+        mo.ui.slider(
+            start=0.1, stop=4.0, step=0.05,
+            value=1.0,
+            label=_get_freq_label(freq),
+            show_value=True
+        )
+        for freq in control_freqs
+    ])
+
+    return N_CONTROL_POINTS, control_freqs, gain_sliders, interp1d
+
+
+@app.cell
+def _(control_freqs, gain_sliders, interp1d, mo, np, timeseries):
+    import plotly.graph_objects as go
+
+    class InteractiveSpectrum:
+        """Spectrum with continuous gain control via interpolated control points."""
+
+        def __init__(self, spectrum, control_freqs: np.ndarray, control_gains: np.ndarray):
+            self.spectrum = spectrum
+            self.freqs = spectrum.frequencies[1:]  # exclude DC
+            self.control_freqs = control_freqs
+            self.control_gains = control_gains
+
+        def get_gain_curve(self) -> np.ndarray:
+            """Interpolate control points to get gain for every frequency bin."""
+            log_control = np.log10(self.control_freqs)
+            log_freqs = np.log10(np.clip(self.freqs, 1, None))
+
+            interp_func = interp1d(
+                log_control, self.control_gains,
+                kind='cubic', bounds_error=False,
+                fill_value=(self.control_gains[0], self.control_gains[-1])
+            )
+            return interp_func(log_freqs)
+
+        def apply_gains(self) -> np.ndarray:
+            """Apply interpolated gains to spectrum data."""
+            gain_curve = self.get_gain_curve()
+            modified_data = self.spectrum.data.copy()
+            modified_data[1:len(self.freqs)+1] *= gain_curve
+            return modified_data
+
+        def get_magnitude_db(self, data: np.ndarray | None = None) -> np.ndarray:
+            """Get magnitude in dB."""
+            if data is None:
+                data = self.apply_gains()
+            return 20 * np.log10(np.abs(data[1:len(self.freqs)+1]) + 1e-10)
+
+    # Read current gain values from sliders (this triggers reactivity!)
+    current_gains = np.array(gain_sliders.value)
+
+    # Create spectrum and apply gains
+    _spectrum = timeseries.to_spectrum('b')
+    interactive = InteractiveSpectrum(_spectrum, control_freqs, current_gains)
+
+    # Get original and modified magnitudes
+    original_mag = _spectrum.magnitude
+    modified_data = interactive.apply_gains()
+    modified_mag = interactive.get_magnitude_db(modified_data)
+    freqs = interactive.freqs
+
+    # Build the plot
+    spectrum_fig = go.Figure()
+
+    # Original spectrum (dimmed)
+    spectrum_fig.add_trace(go.Scatter(
+        x=freqs, y=original_mag,
+        fill='tozeroy', name='Original',
+        line=dict(color='rgba(100, 100, 100, 0.4)', width=1),
+        fillcolor='rgba(100, 100, 100, 0.2)'
+    ))
+
+    # Modified spectrum (bright cyan)
+    spectrum_fig.add_trace(go.Scatter(
+        x=freqs, y=modified_mag,
+        fill='tozeroy', name='Modified',
+        line=dict(color='cyan', width=1),
+        fillcolor='rgba(0, 255, 255, 0.3)'
+    ))
+
+    # Control points overlaid on spectrum
+    marker_y = np.interp(control_freqs, freqs, modified_mag)
+    spectrum_fig.add_trace(go.Scatter(
+        x=control_freqs,
+        y=marker_y,
+        mode='markers+lines',
+        name='Control Points',
+        marker=dict(size=12, color='yellow', symbol='circle',
+                   line=dict(color='orange', width=2)),
+        line=dict(color='rgba(255, 255, 0, 0.3)', width=1, dash='dot'),
+        hovertemplate='%{x:.0f} Hz<br>Gain: %{customdata:.2f}<extra></extra>',
+        customdata=current_gains
+    ))
+
+    spectrum_fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)],
+                    title='Frequency (Hz)')
+    spectrum_fig.update_yaxes(title='Magnitude (dB)')
+    spectrum_fig.update_layout(
+        template='plotly_dark',
+        title=f'Interactive Spectrum Analyzer: observable b',
+        height=400,
+        showlegend=True,
+        legend=dict(x=0.02, y=0.98)
+    )
+
+    # Display sliders above the plot - use list() to convert array elements for hstack
+    mo.vstack([
+        mo.md("### Continuous Spectrum EQ - Drag sliders to shape the frequency response"),
+        mo.hstack(list(gain_sliders)[:6], justify="space-between"),
+        mo.hstack(list(gain_sliders)[6:], justify="space-between"),
+        spectrum_fig,
+        mo.md(f"**Current gains:** {[f'{g:.2f}' for g in current_gains]}")
+    ])
+    return InteractiveSpectrum, current_gains, freqs, go, interactive, modified_data, modified_mag, original_mag, spectrum_fig
 
 
 @app.cell

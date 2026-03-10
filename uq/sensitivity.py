@@ -79,19 +79,77 @@ class SobolIndices:
         return [(self.parameter_names[i], indices[i]) for i in sorted_idx]
 
 
+def _legendre_polynomial(x: np.ndarray, order: int) -> np.ndarray:
+    """
+    Evaluate Legendre polynomial of given order at points x.
+
+    Uses the recurrence relation for numerical stability:
+    P_0(x) = 1
+    P_1(x) = x
+    P_n(x) = ((2n-1)*x*P_{n-1}(x) - (n-1)*P_{n-2}(x)) / n
+
+    Args:
+        x: Points at which to evaluate, in [-1, 1]
+        order: Polynomial order (non-negative integer)
+
+    Returns:
+        P_order(x) evaluated at each point
+    """
+    if order == 0:
+        return np.ones_like(x)
+    elif order == 1:
+        return x.copy()
+    else:
+        p_prev2 = np.ones_like(x)  # P_0
+        p_prev1 = x.copy()          # P_1
+        for n in range(2, order + 1):
+            p_curr = ((2 * n - 1) * x * p_prev1 - (n - 1) * p_prev2) / n
+            p_prev2 = p_prev1
+            p_prev1 = p_curr
+        return p_prev1
+
+
+def _hermite_polynomial(x: np.ndarray, order: int) -> np.ndarray:
+    """
+    Evaluate probabilist's Hermite polynomial (He_n) at points x.
+
+    Uses recurrence: He_0(x) = 1, He_1(x) = x, He_n(x) = x*He_{n-1}(x) - (n-1)*He_{n-2}(x)
+
+    Args:
+        x: Points at which to evaluate
+        order: Polynomial order
+
+    Returns:
+        He_order(x) evaluated at each point
+    """
+    if order == 0:
+        return np.ones_like(x)
+    elif order == 1:
+        return x.copy()
+    else:
+        h_prev2 = np.ones_like(x)
+        h_prev1 = x.copy()
+        for n in range(2, order + 1):
+            h_curr = x * h_prev1 - (n - 1) * h_prev2
+            h_prev2 = h_prev1
+            h_prev1 = h_curr
+        return h_prev1
+
+
 @dataclass
 class PCESurrogate:
     """
     Polynomial Chaos Expansion surrogate model.
 
     Attributes:
-        coefficients: PCE coefficients
-        multi_indices: Multi-index matrix for polynomial terms
-        basis_type: Type of polynomial basis used
+        coefficients: PCE coefficients, shape (n_terms,) or (n_terms, n_outputs)
+        multi_indices: Multi-index matrix for polynomial terms, shape (n_terms, n_params)
+        basis_type: Type of polynomial basis used ('legendre' or 'hermite')
         polynomial_order: Maximum polynomial order
         input_dim: Number of input parameters
         output_dim: Number of outputs
         r_squared: Coefficient of determination
+        input_bounds: Optional bounds for input normalization, shape (n_params, 2)
     """
 
     coefficients: np.ndarray
@@ -101,20 +159,160 @@ class PCESurrogate:
     input_dim: int = 0
     output_dim: int = 0
     r_squared: float = 0.0
+    input_bounds: Optional[np.ndarray] = None
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def _normalize_inputs(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict outputs using the PCE surrogate.
+        Normalize inputs to the domain expected by the polynomial basis.
+
+        For Legendre: map to [-1, 1]
+        For Hermite: standardize to mean=0, std=1
 
         Args:
             X: Input array of shape (n_samples, n_params)
 
         Returns:
-            Predicted outputs of shape (n_samples, n_outputs)
+            Normalized inputs
         """
-        # This is a simplified implementation
-        # Full implementation would use proper polynomial evaluation
-        raise NotImplementedError("Use UQPy or PyTUQ for PCE prediction")
+        if self.input_bounds is None:
+            # Assume inputs are already normalized
+            return X
+
+        if self.basis_type == "legendre":
+            # Map [lb, ub] -> [-1, 1]
+            lb = self.input_bounds[:, 0]
+            ub = self.input_bounds[:, 1]
+            return 2.0 * (X - lb) / (ub - lb) - 1.0
+        elif self.basis_type == "hermite":
+            # Standardize assuming uniform distribution
+            lb = self.input_bounds[:, 0]
+            ub = self.input_bounds[:, 1]
+            mean = (lb + ub) / 2
+            std = (ub - lb) / np.sqrt(12)  # std of uniform distribution
+            return (X - mean) / std
+        else:
+            return X
+
+    def _evaluate_basis(self, X_norm: np.ndarray) -> np.ndarray:
+        """
+        Evaluate all polynomial basis functions at normalized inputs.
+
+        Args:
+            X_norm: Normalized inputs, shape (n_samples, n_params)
+
+        Returns:
+            Basis matrix of shape (n_samples, n_terms)
+        """
+        n_samples = X_norm.shape[0]
+        n_terms = self.multi_indices.shape[0]
+
+        # Select polynomial function based on basis type
+        if self.basis_type == "legendre":
+            poly_func = _legendre_polynomial
+        elif self.basis_type == "hermite":
+            poly_func = _hermite_polynomial
+        else:
+            raise ValueError(f"Unknown basis type: {self.basis_type}")
+
+        # Evaluate basis functions
+        basis_matrix = np.ones((n_samples, n_terms))
+
+        for term_idx in range(n_terms):
+            for param_idx in range(self.input_dim):
+                order = int(self.multi_indices[term_idx, param_idx])
+                if order > 0:
+                    # Multiply by univariate polynomial
+                    basis_matrix[:, term_idx] *= poly_func(
+                        X_norm[:, param_idx], order
+                    )
+
+        return basis_matrix
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict outputs using the PCE surrogate.
+
+        The PCE prediction is computed as:
+            Y = sum_i(c_i * Psi_i(X))
+
+        where c_i are the coefficients and Psi_i are multivariate
+        polynomial basis functions constructed as products of
+        univariate polynomials according to the multi-index.
+
+        Args:
+            X: Input array of shape (n_samples, n_params) or (n_params,)
+
+        Returns:
+            Predicted outputs of shape (n_samples, n_outputs) or (n_outputs,)
+        """
+        # Handle 1D input
+        squeeze_output = False
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+            squeeze_output = True
+
+        # Validate input dimension
+        if X.shape[1] != self.input_dim:
+            raise ValueError(
+                f"Input has {X.shape[1]} features, expected {self.input_dim}"
+            )
+
+        # Normalize inputs
+        X_norm = self._normalize_inputs(X)
+
+        # Evaluate basis functions
+        basis_matrix = self._evaluate_basis(X_norm)  # (n_samples, n_terms)
+
+        # Compute predictions: Y = Phi @ coefficients
+        coeffs = self.coefficients
+        if coeffs.ndim == 1:
+            coeffs = coeffs.reshape(-1, 1)
+
+        predictions = basis_matrix @ coeffs  # (n_samples, n_outputs)
+
+        # Squeeze if single sample input
+        if squeeze_output:
+            predictions = predictions.squeeze(0)
+
+        return predictions
+
+    def predict_with_uncertainty(
+        self, X: np.ndarray, return_std: bool = True
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Predict outputs with uncertainty estimate.
+
+        For PCE, the uncertainty comes from the variance of the expansion.
+        This is a simplified estimate based on coefficient magnitudes.
+
+        Args:
+            X: Input array of shape (n_samples, n_params)
+            return_std: If True, return std; otherwise return variance
+
+        Returns:
+            Tuple of (predictions, uncertainty)
+        """
+        predictions = self.predict(X)
+
+        # Estimate variance from non-constant coefficients
+        # (This is approximate - full uncertainty would need coefficient covariance)
+        coeffs = self.coefficients
+        if coeffs.ndim == 1:
+            coeffs = coeffs.reshape(-1, 1)
+
+        # Variance from non-constant terms (skip first coefficient = mean)
+        variance = np.sum(coeffs[1:] ** 2, axis=0)
+
+        if return_std:
+            uncertainty = np.sqrt(variance)
+        else:
+            uncertainty = variance
+
+        # Broadcast uncertainty to match prediction shape
+        if predictions.ndim == 1:
+            return predictions, uncertainty
+        else:
+            return predictions, np.broadcast_to(uncertainty, predictions.shape)
 
 
 class SensitivityAnalyzer:
@@ -239,6 +437,9 @@ class SensitivityAnalyzer:
             parameter_names=self.parameter_space.parameter_names,
         )
 
+        # Get input bounds for prediction normalization
+        bounds = np.array(self.parameter_space.parameter_bounds)
+
         surrogate = PCESurrogate(
             coefficients=pce.coefficients,
             multi_indices=basis.multi_index_set,
@@ -246,6 +447,7 @@ class SensitivityAnalyzer:
             polynomial_order=polynomial_order,
             input_dim=self.parameter_space.n_parameters,
             output_dim=Y.shape[1] if Y.ndim > 1 else 1,
+            input_bounds=bounds,
         )
 
         return sobol, surrogate
@@ -295,6 +497,9 @@ class SensitivityAnalyzer:
             parameter_names=self.parameter_space.parameter_names,
         )
 
+        # Get input bounds for prediction normalization
+        bounds = np.array(self.parameter_space.parameter_bounds)
+
         surrogate = PCESurrogate(
             coefficients=pce.coefficients,
             multi_indices=pce.multi_indices,
@@ -302,6 +507,7 @@ class SensitivityAnalyzer:
             polynomial_order=polynomial_order,
             input_dim=self.parameter_space.n_parameters,
             output_dim=Y.shape[1] if Y.ndim > 1 else 1,
+            input_bounds=bounds,
         )
 
         return sobol, surrogate
