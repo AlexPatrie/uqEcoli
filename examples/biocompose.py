@@ -282,6 +282,10 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
 
     class InteractiveSpectrum:
         """Spectrum with continuous gain control via interpolated control points."""
+        spectrum: np.ndarray
+        freqs: np.ndarray
+        control_freqs: np.ndarray
+        control_gains: np.ndarray
 
         def __init__(self, spectrum, control_freqs: np.ndarray, control_gains: np.ndarray):
             self.spectrum = spectrum
