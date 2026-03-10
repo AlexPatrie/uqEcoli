@@ -359,7 +359,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         line=dict(color='rgba(100, 100, 100, 0.4)', width=1),
         fillcolor='rgba(100, 100, 100, 0.2)',
         legendgroup='spectrum',
-    ), row=1, col=1)
+    ), row=2, col=1)
 
     # Modified spectrum (bright cyan)
     combined_fig.add_trace(go.Scatter(
@@ -368,7 +368,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         line=dict(color='cyan', width=1),
         fillcolor='rgba(0, 255, 255, 0.3)',
         legendgroup='spectrum',
-    ), row=1, col=1)
+    ), row=2, col=1)
 
     # Control points overlaid on spectrum
     marker_y = np.interp(control_freqs, freqs, modified_mag)
@@ -383,7 +383,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         hovertemplate='%{x:.0f} Hz<br>Gain: %{customdata:.2f}<extra></extra>',
         customdata=current_gains,
         legendgroup='spectrum',
-    ), row=1, col=1)
+    ), row=2, col=1)
 
     # ----- ROW 2: TIMESERIES -----
     # Original timeseries (dimmed)
@@ -392,7 +392,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         name='Original Timeseries',
         line=dict(color='rgba(100, 100, 100, 0.5)', width=1),
         legendgroup='timeseries',
-    ), row=2, col=1)
+    ), row=1, col=1)
 
     # Modified timeseries (bright magenta)
     combined_fig.add_trace(go.Scatter(
@@ -400,15 +400,15 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
         name='Modified Timeseries',
         line=dict(color='magenta', width=1),
         legendgroup='timeseries',
-    ), row=2, col=1)
+    ), row=1, col=1)
 
     # ----- LAYOUT -----
     combined_fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)],
-                              title='Frequency (Hz)', row=1, col=1)
-    combined_fig.update_yaxes(title='Magnitude (dB)', row=1, col=1)
+                              title='Frequency (Hz)', row=2, col=1)
+    combined_fig.update_yaxes(title='Magnitude (dB)', row=2, col=1)
 
-    combined_fig.update_xaxes(title='Time', row=2, col=1)
-    combined_fig.update_yaxes(title='Value', row=2, col=1)
+    combined_fig.update_xaxes(title='Time', row=1, col=1)
+    combined_fig.update_yaxes(title='Value', row=1, col=1)
 
     combined_fig.update_layout(
         template='plotly_dark',
