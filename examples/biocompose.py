@@ -347,7 +347,7 @@ def _(control_freqs, gain_sliders, interp1d, mo, np, obs_dropdown, timeseries):
     combined_fig = make_subplots(
         rows=2, cols=1,
         row_heights=[0.5, 0.5],
-        subplot_titles=['Frequency Spectrum (drag sliders to modify)', 'Timeseries (reconstructed from spectrum)'],
+        subplot_titles=['Timeseries (reconstructed from spectrum)', 'Frequency Spectrum (drag sliders to modify)'],
         vertical_spacing=0.12,
     )
 
