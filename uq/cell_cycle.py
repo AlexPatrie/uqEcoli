@@ -49,6 +49,9 @@ from uq.koopman import (
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
+    from uq.aggregation import AggregatedOutput
+    from uq.sensitivity import CellCycleRelevanceResult
+
 
 class CellCyclePhase(str, Enum):
     """Standard cell cycle phases for E. coli."""
@@ -532,9 +535,7 @@ class KoopmanCellCycleVariable(CellCycleVariableComputer):
         # Build trajectory matrix from observable columns
         obs_cols = [c for c in self._observable_columns if c in data.columns]
         if len(obs_cols) < 1:
-            raise ValueError(
-                f"No observable columns found in data. Required: {self._observable_columns}"
-            )
+            raise ValueError(f"No observable columns found in data. Required: {self._observable_columns}")
 
         # Extract data as numpy array
         X = data.select(obs_cols).to_numpy().astype(np.float64)
@@ -606,7 +607,7 @@ class KoopmanCellCycleVariable(CellCycleVariableComputer):
         phases = np.zeros(n_points)
         for t in range(n_points):
             # Complex phase from eigenvalue evolution
-            complex_val = projections[t] * (eigenvalue ** t)
+            complex_val = projections[t] * (eigenvalue**t)
             phases[t] = np.angle(complex_val)
 
         # Normalize phase to [0, 1]
@@ -927,3 +928,221 @@ def register_cell_cycle_variable(
         computer: CellCycleVariableComputer instance
     """
     CellCycleAggregator.VARIABLES[name] = type(computer)
+
+
+class GSAInformedCellCycleVariable(CellCycleVariableComputer):
+    """
+    GSA-informed cell cycle variable per RFC006 Section 3.
+
+    This class implements the full RFC006-compliant workflow:
+    1. Run GSA for aggregation strategies 1-3 (uniform, by_generation, by_lineage_seed)
+    2. Analyze variance decomposition to identify cell-cycle-relevant observables
+    3. Use those observables to compute the Koopman cell cycle variable
+
+    Per RFC006: "The choice of the 'cell cycle variable' will be informed by
+    the sensitivity analyses (1-3), will be explored through dedicated
+    visualisations, and will be discussed with all subteams."
+
+    This class automates the "informed by sensitivity analyses" requirement.
+
+    Example:
+        >>> from uq import GSAInformedCellCycleVariable
+        >>>
+        >>> # Create with pre-computed aggregation results
+        >>> gsa_cc = GSAInformedCellCycleVariable(
+        ...     aggregated_uniform=agg_uniform,
+        ...     aggregated_by_gen=agg_by_gen,
+        ...     aggregated_by_seed=agg_by_seed,
+        ...     observable_names=observable_names,
+        ...     expected_cycle_time=3600.0,
+        ... )
+        >>>
+        >>> # Compute cell cycle variable
+        >>> cc_var = gsa_cc.compute(trajectory_data)
+        >>>
+        >>> # Access which observables were selected
+        >>> print(gsa_cc.selected_observables)
+        >>> print(gsa_cc.relevance_result)
+    """
+
+    def __init__(
+        self,
+        aggregated_uniform: "AggregatedOutput",
+        aggregated_by_gen: "AggregatedOutput",
+        aggregated_by_seed: "AggregatedOutput",
+        observable_names: list[str],
+        expected_cycle_time: float = 3600.0,
+        min_observables: int = 2,
+        max_observables: int = 10,
+        min_residual_fraction: float = 0.1,
+        dt: float = 1.0,
+        use_edmd: bool = True,
+    ):
+        """
+        Initialize GSA-informed cell cycle variable.
+
+        Args:
+            aggregated_uniform: Results from UNIFORM aggregation strategy
+            aggregated_by_gen: Results from BY_GENERATION aggregation strategy
+            aggregated_by_seed: Results from BY_LINEAGE_SEED aggregation strategy
+            observable_names: Names of all available observables
+            expected_cycle_time: Expected cell cycle duration in seconds
+            min_observables: Minimum number of observables to select
+            max_observables: Maximum number of observables to select
+            min_residual_fraction: Minimum residual variance fraction for relevance
+            dt: Timestep of trajectory data
+            use_edmd: Whether to use Extended DMD
+        """
+        self._aggregated_uniform = aggregated_uniform
+        self._aggregated_by_gen = aggregated_by_gen
+        self._aggregated_by_seed = aggregated_by_seed
+        self._observable_names = observable_names
+        self._expected_cycle_time = expected_cycle_time
+        self._min_observables = min_observables
+        self._max_observables = max_observables
+        self._min_residual_fraction = min_residual_fraction
+        self._dt = dt
+        self._use_edmd = use_edmd
+
+        # These are populated after compute()
+        self._relevance_result: Optional[CellCycleRelevanceResult] = None
+        self._selected_observables: list[str] = []
+        self._koopman_cc: Optional[KoopmanCellCycleVariable] = None
+
+    @property
+    def name(self) -> str:
+        return "gsa_informed"
+
+    @property
+    def required_columns(self) -> list[str]:
+        # Return selected observables if available, otherwise all
+        if self._selected_observables:
+            return self._selected_observables + ["generation", "agent_id", "time"]
+        return self._observable_names + ["generation", "agent_id", "time"]
+
+    @property
+    def selected_observables(self) -> list[str]:
+        """Observables selected by GSA analysis."""
+        return self._selected_observables
+
+    @property
+    def relevance_result(self) -> Optional["CellCycleRelevanceResult"]:
+        """Full GSA relevance analysis result."""
+        return self._relevance_result
+
+    @property
+    def koopman_variable(self) -> Optional[KoopmanCellCycleVariable]:
+        """The underlying Koopman cell cycle variable (after compute)."""
+        return self._koopman_cc
+
+    def _run_gsa_selection(self) -> None:
+        """Run GSA to select relevant observables."""
+        from uq.sensitivity import identify_cell_cycle_relevant_observables
+
+        self._relevance_result = identify_cell_cycle_relevant_observables(
+            aggregated_uniform=self._aggregated_uniform,
+            aggregated_by_gen=self._aggregated_by_gen,
+            aggregated_by_seed=self._aggregated_by_seed,
+            observable_names=self._observable_names,
+            min_residual_fraction=self._min_residual_fraction,
+            top_n=self._max_observables,
+        )
+
+        # Get selected observables
+        self._selected_observables = self._relevance_result.relevant_observables
+
+        # Ensure minimum number
+        if len(self._selected_observables) < self._min_observables:
+            all_ranked = sorted(
+                self._relevance_result.relevance_scores.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )
+            self._selected_observables = [name for name, _ in all_ranked[: self._min_observables]]
+
+    def compute(
+        self,
+        data: pl.DataFrame,
+        sim_data: Optional["SimulationDataEcoli"] = None,
+    ) -> CellCycleVariable:
+        """
+        Compute GSA-informed cell cycle variable.
+
+        This method:
+        1. Analyzes variance decomposition from strategies 1-3
+        2. Selects observables with high residual (cell-cycle-related) variance
+        3. Computes Koopman cell cycle variable using selected observables
+
+        Args:
+            data: Polars DataFrame with observable time series
+            sim_data: Optional SimulationDataEcoli (not used)
+
+        Returns:
+            CellCycleVariable with GSA-informed computation
+        """
+        # Step 1: Run GSA selection if not already done
+        if not self._selected_observables:
+            self._run_gsa_selection()
+
+        # Step 2: Create Koopman CC with selected observables
+        # Filter to observables that exist in data
+        available_obs = [col for col in self._selected_observables if col in data.columns]
+        if len(available_obs) < 2:
+            # Fall back to any numeric columns
+            available_obs = [
+                col
+                for col in data.columns
+                if col not in ["generation", "agent_id", "time", "lineage_seed"]
+                and data[col].dtype in [pl.Float64, pl.Float32, pl.Int64, pl.Int32]
+            ][: self._max_observables]
+
+        self._koopman_cc = KoopmanCellCycleVariable(
+            expected_cycle_time=self._expected_cycle_time,
+            dt=self._dt,
+            use_edmd=self._use_edmd,
+            observable_columns=available_obs,
+        )
+
+        # Step 3: Compute cell cycle variable
+        result = self._koopman_cc.compute(data, sim_data)
+
+        # Add GSA metadata
+        result.metadata["gsa_informed"] = True
+        result.metadata["selected_observables"] = available_obs
+        if self._relevance_result is not None:
+            result.metadata["relevance_scores"] = {
+                obs: self._relevance_result.relevance_scores.get(obs, 0.0) for obs in available_obs
+            }
+            result.metadata["variance_by_strategy"] = {
+                k: v.tolist() if isinstance(v, np.ndarray) else v
+                for k, v in self._relevance_result.variance_by_strategy.items()
+            }
+
+        return result
+
+    def get_relevance_summary(self) -> dict:
+        """
+        Get a summary of the GSA relevance analysis.
+
+        Returns:
+            Dict with summary statistics and selected observables
+        """
+        if self._relevance_result is None:
+            return {"error": "GSA analysis not yet run. Call compute() first."}
+
+        return {
+            "selected_observables": self._selected_observables,
+            "n_selected": len(self._selected_observables),
+            "top_relevance_scores": {
+                obs: self._relevance_result.relevance_scores.get(obs, 0.0) for obs in self._selected_observables[:5]
+            },
+            "mean_residual_fraction": float(
+                np.mean(self._relevance_result.residual_variance_fraction)
+                if self._relevance_result.residual_variance_fraction is not None
+                else 0.0
+            ),
+        }
+
+
+# Register the GSA-informed variable
+CellCycleAggregator.VARIABLES["gsa_informed"] = GSAInformedCellCycleVariable

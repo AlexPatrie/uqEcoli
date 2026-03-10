@@ -15,6 +15,7 @@ app = marimo.App(width="medium")
 @app.cell
 def __():
     import marimo as mo
+
     return (mo,)
 
 
@@ -55,6 +56,7 @@ def __():
         PCESurrogate,
         SensitivityMethod,
     )
+
     return (
         InputParameterSpace,
         PCESurrogate,
@@ -84,9 +86,9 @@ def __(InputParameterSpace, mo):
     param_space = InputParameterSpace(
         include_vio=True,
         include_mecillinam=True,
-        vio_expression_bounds=(0.5, 5.0),      # Expression factor
-        vio_trl_eff_bounds=(0.5, 2.0),         # Translation efficiency
-        mecillinam_conc_bounds=(0.0, 10.0),    # Antibiotic concentration
+        vio_expression_bounds=(0.5, 5.0),  # Expression factor
+        vio_trl_eff_bounds=(0.5, 2.0),  # Translation efficiency
+        mecillinam_conc_bounds=(0.0, 10.0),  # Antibiotic concentration
     )
 
     mo.md(f"""
@@ -291,8 +293,8 @@ def __(SobolIndices, mo, np, param_space):
 
     total_var = 10.25
     sobol_indices = SobolIndices(
-        first_order=np.array([9/total_var, 1/total_var, 0.25/total_var]),
-        total_order=np.array([9/total_var, 1/total_var, 0.25/total_var]),  # No interactions
+        first_order=np.array([9 / total_var, 1 / total_var, 0.25 / total_var]),
+        total_order=np.array([9 / total_var, 1 / total_var, 0.25 / total_var]),  # No interactions
         parameter_names=param_space.parameter_names,
         output_names=["model_output"],
     )
@@ -328,13 +330,16 @@ def __(mo, sobol_indices):
     # Get most influential parameters
     top_params = sobol_indices.get_most_influential(n=3, index_type="total")
 
-    mo.md("""
+    mo.md(
+        """
     ### Parameter Ranking (by Total-Order Index)
 
-    """ + "\n".join([
-        f"**{i+1}. {name}**: Sᴛ = {value:.3f} ({100*value:.1f}% of variance)"
-        for i, (name, value) in enumerate(top_params)
-    ]) + """
+    """
+        + "\n".join([
+            f"**{i + 1}. {name}**: Sᴛ = {value:.3f} ({100 * value:.1f}% of variance)"
+            for i, (name, value) in enumerate(top_params)
+        ])
+        + """
 
     **Interpretation:**
     - `vio_expression` dominates - it explains ~88% of output variance
@@ -343,7 +348,8 @@ def __(mo, sobol_indices):
 
     This matches our synthetic model where the coefficient for x₁ is 3x larger
     than x₂ and 6x larger than x₃.
-    """)
+    """
+    )
     return (top_params,)
 
 
@@ -486,7 +492,7 @@ def __(PCESurrogate, mo, np):
     | R² (fit quality) | {pce_surrogate.r_squared:.2f} |
     | Number of Terms | {len(pce_surrogate.coefficients)} |
 
-    The surrogate captures {100*pce_surrogate.r_squared:.0f}% of the variance in the
+    The surrogate captures {100 * pce_surrogate.r_squared:.0f}% of the variance in the
     original model - a good fit!
     """)
     return (pce_surrogate,)

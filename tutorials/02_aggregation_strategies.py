@@ -15,6 +15,7 @@ app = marimo.App(width="medium")
 @app.cell
 def __():
     import marimo as mo
+
     return (mo,)
 
 
@@ -55,6 +56,7 @@ def __():
         AggregatedOutput,
         compute_variance_decomposition,
     )
+
     return (
         AggregatedOutput,
         AggregationStrategy,
@@ -100,7 +102,7 @@ def __(np, pl):
                     time_in_gen = t / n_timepoints
 
                     # Mass grows exponentially within generation
-                    base_mass = 1.0 * (2.0 ** time_in_gen)
+                    base_mass = 1.0 * (2.0**time_in_gen)
                     mass = base_mass * (1 + seed_effect + gen_effect + rng.normal(0, 0.05))
 
                     # Growth rate with cell cycle variation
@@ -130,8 +132,8 @@ def __(mo, sim_data):
     mo.md(f"""
     **Synthetic Data Summary:**
     - Total rows: `{len(sim_data)}`
-    - Lineage seeds: `{sim_data['lineage_seed'].unique().to_list()}`
-    - Generations: `{sorted(sim_data['generation'].unique().to_list())}`
+    - Lineage seeds: `{sim_data["lineage_seed"].unique().to_list()}`
+    - Generations: `{sorted(sim_data["generation"].unique().to_list())}`
     - Features: `dry_mass`, `growth_rate`
     """)
     return
@@ -211,18 +213,21 @@ def __(AggregatedOutput, data, mo, np, sim_data):
         groups=unique_gens,
     )
 
-    mo.md(f"""
+    mo.md(
+        f"""
     ### By-Generation Results
 
     **Shape:** {by_generation.mean.shape} (generations x features)
 
     | Generation | Mean Mass | Std Mass | Mean Growth | Std Growth | N |
     |------------|-----------|----------|-------------|------------|---|
-    """ + "\n".join([
-        f"| {g} | {by_generation.mean[i, 0]:.3f} | {by_generation.std[i, 0]:.3f} | "
-        f"{by_generation.mean[i, 1]:.5f} | {by_generation.std[i, 1]:.5f} | {by_generation.n_samples[i]} |"
-        for i, g in enumerate(unique_gens)
-    ]))
+    """
+        + "\n".join([
+            f"| {g} | {by_generation.mean[i, 0]:.3f} | {by_generation.std[i, 0]:.3f} | "
+            f"{by_generation.mean[i, 1]:.5f} | {by_generation.std[i, 1]:.5f} | {by_generation.n_samples[i]} |"
+            for i, g in enumerate(unique_gens)
+        ])
+    )
     return (
         by_generation,
         gen_counts,
@@ -284,18 +289,21 @@ def __(AggregatedOutput, data, mo, np, sim_data):
         groups=unique_seeds,
     )
 
-    mo.md(f"""
+    mo.md(
+        f"""
     ### By-Seed Results
 
     **Shape:** {by_seed.mean.shape} (seeds x features)
 
     | Seed | Mean Mass | Std Mass | Mean Growth | Std Growth | N |
     |------|-----------|----------|-------------|------------|---|
-    """ + "\n".join([
-        f"| {s} | {by_seed.mean[i, 0]:.3f} | {by_seed.std[i, 0]:.3f} | "
-        f"{by_seed.mean[i, 1]:.5f} | {by_seed.std[i, 1]:.5f} | {by_seed.n_samples[i]} |"
-        for i, s in enumerate(unique_seeds)
-    ]))
+    """
+        + "\n".join([
+            f"| {s} | {by_seed.mean[i, 0]:.3f} | {by_seed.std[i, 0]:.3f} | "
+            f"{by_seed.mean[i, 1]:.5f} | {by_seed.std[i, 1]:.5f} | {by_seed.n_samples[i]} |"
+            for i, s in enumerate(unique_seeds)
+        ])
+    )
     return by_seed, seed_counts, seed_means, seed_stds, seeds, unique_seeds
 
 
@@ -348,16 +356,16 @@ def __(by_generation, by_seed, compute_variance_decomposition, mo, uniform_resul
 
     | Component | Dry Mass | Growth Rate |
     |-----------|----------|-------------|
-    | **Total Variance** | {decomp['total_variance'][0]:.6f} | {decomp['total_variance'][1]:.10f} |
-    | **Between-Generation** | {decomp['between_generation_variance'][0]:.6f} | {decomp['between_generation_variance'][1]:.10f} |
-    | **Between-Seed** | {decomp['between_seed_variance'][0]:.6f} | {decomp['between_seed_variance'][1]:.10f} |
+    | **Total Variance** | {decomp["total_variance"][0]:.6f} | {decomp["total_variance"][1]:.10f} |
+    | **Between-Generation** | {decomp["between_generation_variance"][0]:.6f} | {decomp["between_generation_variance"][1]:.10f} |
+    | **Between-Seed** | {decomp["between_seed_variance"][0]:.6f} | {decomp["between_seed_variance"][1]:.10f} |
 
     ### Variance Fractions
 
     | Source | Dry Mass | Growth Rate |
     |--------|----------|-------------|
-    | **Generation** | {100*decomp['generation_fraction'][0]:.1f}% | {100*decomp['generation_fraction'][1]:.1f}% |
-    | **Seed** | {100*decomp['seed_fraction'][0]:.1f}% | {100*decomp['seed_fraction'][1]:.1f}% |
+    | **Generation** | {100 * decomp["generation_fraction"][0]:.1f}% | {100 * decomp["generation_fraction"][1]:.1f}% |
+    | **Seed** | {100 * decomp["seed_fraction"][0]:.1f}% | {100 * decomp["seed_fraction"][1]:.1f}% |
     """)
     return (decomp,)
 
@@ -368,12 +376,12 @@ def __(decomp, mo):
     ### Interpreting the Decomposition
 
     **For Dry Mass:**
-    - {100*decomp['generation_fraction'][0]:.1f}% of variance is due to generation effects
-    - {100*decomp['seed_fraction'][0]:.1f}% is due to stochastic seeding
+    - {100 * decomp["generation_fraction"][0]:.1f}% of variance is due to generation effects
+    - {100 * decomp["seed_fraction"][0]:.1f}% is due to stochastic seeding
 
     **For Growth Rate:**
-    - {100*decomp['generation_fraction'][1]:.1f}% of variance is due to generation effects
-    - {100*decomp['seed_fraction'][1]:.1f}% is due to stochastic seeding
+    - {100 * decomp["generation_fraction"][1]:.1f}% of variance is due to generation effects
+    - {100 * decomp["seed_fraction"][1]:.1f}% is due to stochastic seeding
 
     **Takeaway**: Mass shows strong generation effects (cells grow larger over
     generations in our synthetic data), while growth rate is more stable.

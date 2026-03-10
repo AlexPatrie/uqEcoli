@@ -12,6 +12,18 @@ test:
 tutorial4:
 	@uv run marimo edit tutorials/04_cell_cycle_and_koopman.py
 
+.PHONY: tutorial-music
+tutorial-music:
+	@uv run marimo edit tutorials/music.py
+
+.PHONY: tutorial5
+tutorial5:
+	@uv run marimo edit tutorials/05_music_notation.py
+
+.PHONY: tutorial6
+tutorial6:
+	@uv run marimo edit tutorials/06_calculate_cell_cycle.py
+
 .PHONY: check
 check: ## Run code quality tools.
 	@echo "🚀 Checking lock file consistency with 'pyproject.toml'"

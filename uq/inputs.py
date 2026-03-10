@@ -383,15 +383,13 @@ def load_dataset(
     base_path = Path(outdir_root) / experiment_id / "history" / f"experiment_id={experiment_id}"
 
     # Scan nested parquet files (variant/lineage_seed/generation/agent_id/*.pq)
-    lf = polars.scan_parquet(str(base_path) + "/**/*.pq")
-
+    lf = polars.scan_parquet(str(base_path))
     if observables is not None:
         # Filter to only existing columns
         available = lf.collect_schema().names()
         valid_observables = [col for col in observables if col in available]
         if valid_observables:
             lf = lf.select(valid_observables)
-
     return lf.collect()
 
 

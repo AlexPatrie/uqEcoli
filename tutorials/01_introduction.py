@@ -15,6 +15,7 @@ app = marimo.App(width="medium")
 @app.cell
 def __():
     import marimo as mo
+
     return (mo,)
 
 
@@ -60,6 +61,7 @@ def __(mo):
 def __():
     # Import the input parameter classes
     from uq import VioPathwayParams, MecillinamParams, GeneKnockoutParams
+
     return GeneKnockoutParams, MecillinamParams, VioPathwayParams
 
 
@@ -80,11 +82,11 @@ def __(mo):
 def __(VioPathwayParams, mo):
     # Create vio pathway parameters
     vio_params = VioPathwayParams(
-        enabled=True,                    # Enable the pathway
-        induction_gen=1,                 # Induce at generation 1
-        expression=2.5,                  # 2.5x expression factor
-        translation_efficiency=1.2,      # 1.2x translation efficiency
-        condition="basal",               # Base media condition
+        enabled=True,  # Enable the pathway
+        induction_gen=1,  # Induce at generation 1
+        expression=2.5,  # 2.5x expression factor
+        translation_efficiency=1.2,  # 1.2x translation efficiency
+        condition="basal",  # Base media condition
     )
 
     mo.md(f"""
@@ -114,9 +116,9 @@ def __(mo):
 def __(MecillinamParams, mo):
     # Create mecillinam parameters with a step increase
     mec_params = MecillinamParams(
-        times=[0.0, 1800.0, 3600.0],           # Time points in seconds
-        concentrations=[0.0, 2.5, 5.0],        # Concentration at each time
-        knockouts=["murG"],                     # Genes to knock out
+        times=[0.0, 1800.0, 3600.0],  # Time points in seconds
+        concentrations=[0.0, 2.5, 5.0],  # Concentration at each time
+        knockouts=["murG"],  # Genes to knock out
     )
 
     mo.md(f"""
@@ -148,8 +150,8 @@ def __(mo):
 def __(GeneKnockoutParams, mo):
     # Create knockout parameters
     ko_params = GeneKnockoutParams(
-        gene_deletions=["lacZ", "galK"],        # Delete these genes
-        translation_knockouts=["murG"],          # Block translation of these
+        gene_deletions=["lacZ", "galK"],  # Delete these genes
+        translation_knockouts=["murG"],  # Block translation of these
     )
 
     mo.md(f"""
@@ -182,8 +184,8 @@ def __(ko_params, mec_params, mo, vio_params):
         vio=vio_params,
         mecillinam=mec_params,
         knockouts=ko_params,
-        seed=42,               # Random seed for reproducibility
-        generations=8,         # Number of generations to simulate
+        seed=42,  # Random seed for reproducibility
+        generations=8,  # Number of generations to simulate
     )
 
     mo.md(f"""
@@ -234,11 +236,11 @@ def __(mo):
 
     # Define a parameter space
     param_space = InputParameterSpace(
-        include_vio=True,                          # Include vio parameters
-        include_mecillinam=True,                   # Include mecillinam
-        vio_expression_bounds=(0.5, 5.0),          # Expression range
-        vio_trl_eff_bounds=(0.5, 2.0),             # Translation efficiency range
-        mecillinam_conc_bounds=(0.0, 10.0),        # Concentration range
+        include_vio=True,  # Include vio parameters
+        include_mecillinam=True,  # Include mecillinam
+        vio_expression_bounds=(0.5, 5.0),  # Expression range
+        vio_trl_eff_bounds=(0.5, 2.0),  # Translation efficiency range
+        mecillinam_conc_bounds=(0.0, 10.0),  # Concentration range
     )
 
     mo.md(f"""

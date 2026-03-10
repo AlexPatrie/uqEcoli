@@ -99,6 +99,8 @@ from uq.aggregation import (
 # Cell cycle stratification (Phase 2)
 # The Koopman-based cell cycle variable uses spectral analysis to identify
 # the cell cycle mode and extract its eigenfunction phase as the cycle coordinate.
+# GSAInformedCellCycleVariable implements the RFC006 requirement that the cell
+# cycle variable choice be "informed by the sensitivity analyses (1-3)".
 from uq.cell_cycle import (
     CellAngleCellCycleVariable,
     CellCycleAggregator,
@@ -107,6 +109,7 @@ from uq.cell_cycle import (
     CellCycleVariableComputer,
     CompositeCellCycleVariable,
     DNAReplicationCellCycleVariable,
+    GSAInformedCellCycleVariable,
     KoopmanCellCycleVariable,
     MassBasedCellCycleVariable,
     register_cell_cycle_variable,
@@ -143,12 +146,17 @@ from uq.outputs import (
 )
 
 # Sensitivity analysis
+# CellCycleRelevanceResult and related functions implement RFC006's requirement
+# that the cell cycle variable choice be "informed by the sensitivity analyses (1-3)"
 from uq.sensitivity import (
+    CellCycleRelevanceResult,
     PCESurrogate,
     SensitivityAnalyzer,
     SensitivityMethod,
     SobolIndices,
     analyze_precomputed_results,
+    identify_cell_cycle_relevant_observables,
+    run_gsa_informed_cell_cycle_analysis,
     run_sensitivity_analysis,
 )
 
@@ -188,13 +196,16 @@ __all__ = [
     "create_pytuq_model",
     "create_uqpy_model",
     # Sensitivity analysis
+    "CellCycleRelevanceResult",
     "PCESurrogate",
     "SensitivityAnalyzer",
     "SensitivityMethod",
     "SobolIndices",
     "analyze_precomputed_results",
+    "identify_cell_cycle_relevant_observables",
+    "run_gsa_informed_cell_cycle_analysis",
     "run_sensitivity_analysis",
-    # Cell cycle (Koopman-based variable is the recommended approach)
+    # Cell cycle (GSAInformedCellCycleVariable is the RFC006-compliant approach)
     "CellAngleCellCycleVariable",
     "CellCycleAggregator",
     "CellCyclePhase",
@@ -202,6 +213,7 @@ __all__ = [
     "CellCycleVariableComputer",
     "CompositeCellCycleVariable",
     "DNAReplicationCellCycleVariable",
+    "GSAInformedCellCycleVariable",
     "KoopmanCellCycleVariable",
     "MassBasedCellCycleVariable",
     "register_cell_cycle_variable",

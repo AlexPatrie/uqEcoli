@@ -41,6 +41,7 @@ marimo run tutorials/01_introduction.py
 | **02_aggregation_strategies.py** | Aggregation and variance | Four strategies, variance decomposition, data visualization |
 | **03_sensitivity_analysis.py** | PCE and Sobol indices | Surrogate models, sensitivity ranking, multi-output analysis |
 | **04_cell_cycle_and_koopman.py** | Advanced analysis | **Koopman cell cycle variable**, DMD, spectral mode visualization |
+| **music.py** | Musical notation for Koopman | Cellular scores, orchestration charts, spectral-to-music mapping |
 
 ## Project Structure
 
@@ -369,9 +370,98 @@ sobol = analyzer.analyze_with_sobol(
 
 Cell cycle variables implement aggregation strategy #4 from RFC006, enabling "phenotypic" sensitivity analysis across the physiological time dimension within a cell's lifespan.
 
-### Koopman Eigenfunction Phase (Recommended)
+### GSA-Informed Cell Cycle Variable (RFC006 Compliant)
 
-The **recommended approach** uses Koopman spectral analysis via Dynamic Mode Decomposition (DMD) to identify the cell cycle mode and extract its eigenfunction phase as the cell cycle coordinate:
+Per RFC006 Section 3: *"The choice of the 'cell cycle variable' will be informed by the sensitivity analyses (1-3)."*
+
+The **`GSAInformedCellCycleVariable`** implements this requirement by:
+1. Running variance decomposition from strategies 1-3 (uniform, by_generation, by_lineage_seed)
+2. Identifying observables where variance is NOT explained by generation/seed (i.e., cell-cycle-related variance)
+3. Using those observables to compute the Koopman cell cycle variable
+
+```python
+from uq import (
+    GSAInformedCellCycleVariable,
+    Aggregator,
+    AggregationStrategy,
+)
+
+# Step 1: Run aggregation for strategies 1-3
+aggregator = Aggregator(conn, history_sql, config_sql)
+agg_uniform, _ = aggregator.aggregate_transcriptome(AggregationStrategy.UNIFORM)
+agg_by_gen, _ = aggregator.aggregate_transcriptome(AggregationStrategy.BY_GENERATION)
+agg_by_seed, _ = aggregator.aggregate_transcriptome(AggregationStrategy.BY_LINEAGE_SEED)
+
+# Step 2: Create GSA-informed cell cycle variable
+gsa_cc = GSAInformedCellCycleVariable(
+    aggregated_uniform=agg_uniform,
+    aggregated_by_gen=agg_by_gen,
+    aggregated_by_seed=agg_by_seed,
+    observable_names=observable_names,
+    expected_cycle_time=3600.0,  # Expected cell cycle in seconds
+)
+
+# Step 3: Compute cell cycle variable
+cc_var = gsa_cc.compute(trajectory_data)
+
+# Step 4: Inspect which observables were selected by GSA
+print(f"Selected observables: {gsa_cc.selected_observables}")
+print(f"Relevance summary: {gsa_cc.get_relevance_summary()}")
+```
+
+**The workflow:**
+
+```
+Step 1: Run GSA (strategies 1-3)
+        ↓
+        Variance decomposition:
+        - What fraction explained by generation?
+        - What fraction explained by seed?
+        - Residual fraction = cell-cycle-related!
+        ↓
+Step 2: Identify cell-cycle-relevant observables
+        ↓
+        Select observables with high residual variance
+        (not explained by gen/seed)
+        ↓
+Step 3: Compute Koopman cell cycle variable
+        ↓
+        Uses ONLY the GSA-selected observables
+        ↓
+Step 4: Result includes GSA metadata
+        ↓
+        cc_var.metadata["gsa_informed"] = True
+        cc_var.metadata["selected_observables"] = [...]
+        cc_var.metadata["relevance_scores"] = {...}
+```
+
+This closes the loop required by RFC006 between sensitivity analyses (1-3) and the cell cycle variable (strategy 4).
+
+### Convenience Function
+
+For a streamlined workflow:
+
+```python
+from uq import run_gsa_informed_cell_cycle_analysis
+
+# All-in-one function
+cc_var, relevance_result = run_gsa_informed_cell_cycle_analysis(
+    aggregated_uniform=agg_uniform,
+    aggregated_by_gen=agg_by_gen,
+    aggregated_by_seed=agg_by_seed,
+    trajectory_data=data,
+    observable_names=observable_names,
+    expected_cycle_time=3600.0,
+)
+
+# Access results
+print(f"Selected observables: {relevance_result.relevant_observables}")
+print(f"Variance by strategy: {relevance_result.variance_by_strategy}")
+```
+
+### Koopman Eigenfunction Phase (Standalone)
+
+If you want to use the Koopman approach **without** GSA-informed observable selection (e.g., for quick prototyping), you can use `KoopmanCellCycleVariable` directly:
 
 ```python
 from uq import KoopmanCellCycleVariable, CellCycleAggregator
@@ -399,7 +489,13 @@ print(f"Estimated period: {koopman_cc.cell_cycle_mode.period}")
 
 ### Why Koopman is Ideal for Cell Cycle Variables
 
-The Koopman eigenfunction phase is the **ideal approach** for defining the cell cycle variable required by RFC006 aggregation strategy #4. Here's why:
+RFC006 Section 3 specifies that aggregation strategy #4 requires:
+
+> *"the definition of a low-dimensional (possibly scalar) 'cell cycle variable' computed from omics variables... used for deterministically binning simulation data into cell stages"*
+
+The RFC mentions **"cell angle"** as an established example and notes that *"any deterministic function of relevant process variables inside vEcoli may be considered if it has approximately cyclic behaviour."*
+
+The Koopman eigenfunction phase is the **ideal approach** for satisfying these RFC006 requirements—superior to both the mentioned "cell angle" approach and ad-hoc heuristic methods. Here's why:
 
 #### 1. Theoretical Foundation
 
@@ -424,7 +520,22 @@ The Koopman approach **discovers** the cell cycle from data rather than assuming
 
 This is critical for vEcoli simulations where the emergent cell cycle may deviate from idealized models.
 
-#### 3. Natural Phase Wrapping
+#### 3. Superior to "Cell Angle" (RFC006's Example)
+
+RFC006 mentions "cell angle" as an established example. While cell angle has been used in the literature, **Koopman is superior** for several reasons:
+
+| Aspect | Cell Angle | Koopman Eigenfunction Phase |
+|--------|------------|----------------------------|
+| **Definition** | 2D PCA projection of (mass, growth_rate) | Eigenfunction of dominant oscillatory mode |
+| **Dimensionality** | Requires choosing 2 specific observables | Uses all available observables jointly |
+| **Periodicity** | Geometric (may not align with true cycle) | Spectral (captures actual periodic dynamics) |
+| **Coordinate dependence** | Sensitive to which variables are chosen | Invariant to observable choice |
+| **Validation** | No built-in check | Mode frequency must match cell cycle |
+| **Theoretical basis** | Empirical/heuristic | Dynamical systems theory |
+
+The cell angle approach assumes that plotting mass vs. growth rate creates a circular trajectory, and the angle in this 2D space represents cycle progress. This is a **geometric approximation** that may not capture the true dynamical structure. The Koopman eigenfunction, by contrast, is the **mathematically correct** coordinate for periodic dynamics.
+
+#### 4. Natural Phase Wrapping
 
 RFC006 requires the cell cycle variable to map each cell state to a value in [0, 1] that wraps once per cycle. The Koopman eigenfunction phase **naturally satisfies this requirement**:
 
@@ -440,7 +551,7 @@ where `ψ(x)` is the Koopman eigenfunction. This phase:
 
 Heuristic methods can fail these properties at cycle boundaries or during non-exponential growth phases.
 
-#### 4. Robustness to Noise and Perturbations
+#### 5. Robustness to Noise and Perturbations
 
 DMD extracts the **dominant coherent structures** from noisy data:
 
@@ -450,7 +561,7 @@ DMD extracts the **dominant coherent structures** from noisy data:
 
 This is especially important for stochastic whole-cell simulations where individual trajectories are noisy.
 
-#### 5. Multi-Observable Integration
+#### 6. Multi-Observable Integration
 
 The Koopman approach naturally integrates information from **multiple observables**:
 
@@ -467,7 +578,7 @@ koopman_cc = KoopmanCellCycleVariable(
 
 The DMD finds the cell cycle mode that **best explains the joint dynamics** of all observables, rather than relying on a single proxy variable.
 
-#### 6. Interpretable Diagnostics
+#### 7. Interpretable Diagnostics
 
 The Koopman approach provides rich diagnostic information:
 
@@ -483,7 +594,50 @@ print(f"Is oscillatory: {mode.is_oscillatory}")   # Should be True
 
 If the cell cycle mode has unexpected properties (wrong frequency, decaying, not oscillatory), this indicates a problem with the simulation or data—providing built-in validation.
 
-#### 7. Consistency with UQ Framework Goals
+#### 8. Satisfies RFC006's IV&V Requirement
+
+RFC006 specifies that the cell cycle variable should have *"a quantitative relationship... between the input variables to this 'cell cycle variable' and omics measurements from IV&V."*
+
+The Koopman approach **naturally satisfies this requirement**:
+
+- **Mode shape analysis**: The Koopman mode shape reveals exactly which omics variables (transcriptome, proteome, fluxes) participate in the cell cycle dynamics and with what amplitude
+- **Quantitative relationship**: The projection onto the mode eigenvector provides an explicit linear combination of omics measurements
+- **Interpretable coefficients**: The mode coefficients can be directly related to experimental measurements
+
+```python
+mode = koopman_cc.cell_cycle_mode
+# mode.mode contains coefficients for each observable
+# These define the quantitative relationship with omics measurements
+for i, (obs, coef) in enumerate(zip(observable_names, mode.mode)):
+    print(f"{obs}: {np.abs(coef):.3f}")
+```
+
+Heuristic methods (mass-based, cell angle) use pre-defined formulas that may not reflect the actual quantitative relationships in the simulation data.
+
+#### 9. Integration with Sensitivity Analysis (RFC006 Phase 2)
+
+RFC006 specifies that the cell cycle variable choice should be *"informed by the sensitivity analyses (1-3)"*. The Koopman approach **directly supports this**:
+
+- **Spectral sensitivity**: We can measure how input parameters affect the cell cycle mode's frequency, amplitude, and shape
+- **Mode stability**: Parameters that destabilize the cell cycle mode (shift eigenvalue off unit circle) are identified
+- **Harmonic analysis**: Changes in the harmonic content reveal how parameters affect cell cycle regularity
+
+```python
+from uq import KoopmanSensitivityAnalyzer
+
+# Compare cell cycle mode across parameter variations
+analyzer = KoopmanSensitivityAnalyzer()
+sensitivity = analyzer.spectral_sensitivity(
+    X_baseline=baseline_trajectory,
+    X_perturbed=[perturbed_trajectory],
+    parameter_names=["vio_expression"],
+)
+# Reveals which parameters most affect cell cycle dynamics
+```
+
+This closes the loop between aggregation strategies (1-3) and strategy (4), as RFC006 envisions.
+
+#### 10. Consistency with UQ Framework Goals
 
 RFC006 aims to characterize uncertainty across different aggregation strategies. The Koopman cell cycle variable aligns with this goal:
 
@@ -791,7 +945,9 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 | `OutputExtractor` | `uq.outputs` | Extracts outputs from Parquet data |
 | `Aggregator` | `uq.aggregation` | Implements aggregation strategies 1-3 |
 | `CellCycleAggregator` | `uq.cell_cycle` | Implements aggregation strategy 4 |
-| `KoopmanCellCycleVariable` | `uq.cell_cycle` | **Recommended** Koopman eigenfunction-based cell cycle variable |
+| `GSAInformedCellCycleVariable` | `uq.cell_cycle` | **RFC006-compliant** GSA-informed cell cycle variable |
+| `KoopmanCellCycleVariable` | `uq.cell_cycle` | Koopman eigenfunction-based cell cycle variable |
+| `CellCycleRelevanceResult` | `uq.sensitivity` | Results from GSA cell cycle relevance analysis |
 | `SimulationWrapper` | `uq.wrappers` | Runs simulations for sensitivity analysis |
 | `PrecomputedWrapper` | `uq.wrappers` | Uses existing simulation results |
 | `SensitivityAnalyzer` | `uq.sensitivity` | PCE and Sobol sensitivity analysis |
@@ -806,6 +962,8 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 |----------|--------|-------------|
 | `run_sensitivity_analysis` | `uq.sensitivity` | Complete analysis workflow |
 | `analyze_precomputed_results` | `uq.sensitivity` | Analyze existing results |
+| `identify_cell_cycle_relevant_observables` | `uq.sensitivity` | **RFC006** Identify CC-relevant observables via GSA |
+| `run_gsa_informed_cell_cycle_analysis` | `uq.sensitivity` | **RFC006** Complete GSA→CC variable workflow |
 | `compute_variance_decomposition` | `uq.aggregation` | Decompose variance by source |
 | `create_uqpy_model` | `uq.wrappers` | Create UQPy-compatible model |
 | `create_pytuq_model` | `uq.wrappers` | Create PyTUQ-compatible model |

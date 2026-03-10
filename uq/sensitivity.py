@@ -12,13 +12,18 @@ The implementation supports both UQPy and PyTUQ libraries for:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 
-from uq.aggregation import AggregationStrategy
+from uq.aggregation import AggregatedOutput, AggregationStrategy
 from uq.inputs import InputParameterSpace
 from uq.wrappers import PrecomputedWrapper, SimulationWrapper, WrapperConfig
+
+if TYPE_CHECKING:
+    import polars as pl
+
+    from uq.cell_cycle import CellCycleVariable
 
 
 class SensitivityMethod(str, Enum):
@@ -480,6 +485,188 @@ def run_sensitivity_analysis(
         n_samples=n_samples,
         use_uqpy=use_uqpy,
     )
+
+
+@dataclass
+class CellCycleRelevanceResult:
+    """
+    Results from GSA-based cell cycle relevance analysis.
+
+    This captures which observables are most relevant for defining
+    the cell cycle variable, as informed by sensitivity analyses
+    across aggregation strategies 1-3 per RFC006 Section 3.
+
+    Attributes:
+        relevant_observables: List of observable names ranked by CC relevance
+        relevance_scores: Dict mapping observable name to relevance score
+        variance_by_strategy: Variance explained by each aggregation strategy
+        sobol_by_generation: Sobol indices from BY_GENERATION strategy
+        sobol_by_seed: Sobol indices from BY_LINEAGE_SEED strategy
+        sobol_uniform: Sobol indices from UNIFORM strategy
+        residual_variance_fraction: Fraction of variance NOT explained by gen/seed
+    """
+
+    relevant_observables: list[str]
+    relevance_scores: dict[str, float]
+    variance_by_strategy: dict[str, np.ndarray]
+    sobol_by_generation: Optional[SobolIndices] = None
+    sobol_by_seed: Optional[SobolIndices] = None
+    sobol_uniform: Optional[SobolIndices] = None
+    residual_variance_fraction: Optional[np.ndarray] = None
+
+
+def identify_cell_cycle_relevant_observables(
+    aggregated_uniform: "AggregatedOutput",
+    aggregated_by_gen: "AggregatedOutput",
+    aggregated_by_seed: "AggregatedOutput",
+    observable_names: list[str],
+    min_residual_fraction: float = 0.1,
+    top_n: Optional[int] = None,
+) -> CellCycleRelevanceResult:
+    """
+    Identify observables most relevant for cell cycle variable definition.
+
+    Per RFC006 Section 3: "The choice of the 'cell cycle variable' will be
+    informed by the sensitivity analyses (1-3)."
+
+    This function analyzes variance decomposition across strategies 1-3 to
+    identify observables where variance is NOT explained by generation or
+    lineage seed effects - i.e., variance attributable to cell cycle dynamics.
+
+    Args:
+        aggregated_uniform: Aggregation results from UNIFORM strategy
+        aggregated_by_gen: Aggregation results from BY_GENERATION strategy
+        aggregated_by_seed: Aggregation results from BY_LINEAGE_SEED strategy
+        observable_names: Names of the observables
+        min_residual_fraction: Minimum fraction of residual variance for relevance
+        top_n: If provided, return only top N observables
+
+    Returns:
+        CellCycleRelevanceResult with ranked observables and relevance scores
+    """
+    from uq.aggregation import compute_variance_decomposition
+
+    # Compute variance decomposition
+    decomposition = compute_variance_decomposition(
+        aggregated_by_gen=aggregated_by_gen,
+        aggregated_by_seed=aggregated_by_seed,
+        aggregated_uniform=aggregated_uniform,
+    )
+
+    # Residual variance = variance NOT explained by generation or seed
+    # This is the variance attributable to within-cell dynamics (cell cycle!)
+    residual_fraction = 1.0 - decomposition["generation_fraction"] - decomposition["seed_fraction"]
+    residual_fraction = np.maximum(residual_fraction, 0)  # Clip to non-negative
+
+    # Score observables by residual variance fraction
+    # Higher residual = more cell-cycle-related
+    relevance_scores = {}
+    for i, name in enumerate(observable_names):
+        if i < len(residual_fraction):
+            score = float(residual_fraction[i]) if residual_fraction.ndim == 1 else float(residual_fraction.mean())
+            relevance_scores[name] = score
+
+    # Rank observables by relevance
+    ranked = sorted(relevance_scores.items(), key=lambda x: x[1], reverse=True)
+
+    # Filter by minimum residual fraction
+    relevant = [(name, score) for name, score in ranked if score >= min_residual_fraction]
+
+    # Optionally limit to top N
+    if top_n is not None:
+        relevant = relevant[:top_n]
+
+    return CellCycleRelevanceResult(
+        relevant_observables=[name for name, _ in relevant],
+        relevance_scores=relevance_scores,
+        variance_by_strategy={
+            "generation_fraction": decomposition["generation_fraction"],
+            "seed_fraction": decomposition["seed_fraction"],
+            "residual_fraction": residual_fraction,
+        },
+        residual_variance_fraction=residual_fraction,
+    )
+
+
+def run_gsa_informed_cell_cycle_analysis(
+    aggregated_uniform: "AggregatedOutput",
+    aggregated_by_gen: "AggregatedOutput",
+    aggregated_by_seed: "AggregatedOutput",
+    trajectory_data: "pl.DataFrame",
+    observable_names: list[str],
+    expected_cycle_time: float = 3600.0,
+    min_observables: int = 2,
+    max_observables: int = 10,
+    min_residual_fraction: float = 0.1,
+    dt: float = 1.0,
+    use_edmd: bool = True,
+) -> tuple["CellCycleVariable", CellCycleRelevanceResult]:
+    """
+    Run the complete GSA-informed cell cycle variable computation.
+
+    This is the main integration point per RFC006 Section 3:
+    1. Analyze variance decomposition from strategies 1-3
+    2. Identify cell-cycle-relevant observables
+    3. Compute Koopman cell cycle variable using those observables
+
+    Args:
+        aggregated_uniform: Results from UNIFORM aggregation
+        aggregated_by_gen: Results from BY_GENERATION aggregation
+        aggregated_by_seed: Results from BY_LINEAGE_SEED aggregation
+        trajectory_data: DataFrame with observable time series
+        observable_names: All available observable names
+        expected_cycle_time: Expected cell cycle duration in seconds
+        min_observables: Minimum number of observables to use
+        max_observables: Maximum number of observables to use
+        min_residual_fraction: Minimum residual variance fraction for relevance
+        dt: Timestep of trajectory data
+        use_edmd: Whether to use Extended DMD
+
+    Returns:
+        Tuple of (CellCycleVariable, CellCycleRelevanceResult)
+    """
+    from uq.cell_cycle import KoopmanCellCycleVariable
+
+    # Step 1: Identify relevant observables via GSA
+    relevance_result = identify_cell_cycle_relevant_observables(
+        aggregated_uniform=aggregated_uniform,
+        aggregated_by_gen=aggregated_by_gen,
+        aggregated_by_seed=aggregated_by_seed,
+        observable_names=observable_names,
+        min_residual_fraction=min_residual_fraction,
+        top_n=max_observables,
+    )
+
+    # Ensure minimum number of observables
+    selected_observables = relevance_result.relevant_observables
+    if len(selected_observables) < min_observables:
+        # Fall back to top observables by any variance
+        all_ranked = sorted(
+            relevance_result.relevance_scores.items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        selected_observables = [name for name, _ in all_ranked[:min_observables]]
+
+    # Step 2: Create Koopman cell cycle variable with informed observables
+    koopman_cc = KoopmanCellCycleVariable(
+        expected_cycle_time=expected_cycle_time,
+        dt=dt,
+        use_edmd=use_edmd,
+        observable_columns=selected_observables,
+    )
+
+    # Step 3: Compute cell cycle variable
+    cc_variable = koopman_cc.compute(trajectory_data)
+
+    # Add GSA metadata to the result
+    cc_variable.metadata["gsa_informed"] = True
+    cc_variable.metadata["selected_observables"] = selected_observables
+    cc_variable.metadata["relevance_scores"] = {
+        obs: relevance_result.relevance_scores.get(obs, 0.0) for obs in selected_observables
+    }
+
+    return cc_variable, relevance_result
 
 
 def analyze_precomputed_results(

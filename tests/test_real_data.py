@@ -67,7 +67,7 @@ class TestRealDataLoading:
     @pytest.mark.real_data
     def test_load_dataset_function(self):
         """uq.inputs.load_dataset should load real simulation data."""
-        from uq.tests.conftest import _get_repo_root, _load_real_dataset_safe
+        from tests.conftest import _get_repo_root, _load_real_dataset_safe
 
         log_header("LOADING REAL SIMULATION DATA")
 
