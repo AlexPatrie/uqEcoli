@@ -19,6 +19,9 @@ dependencies = [
     "vl-convert-python",
 ]
 
+[project.scripts]
+uq = "uq.cli:app"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "uq",

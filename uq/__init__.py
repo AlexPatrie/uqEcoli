@@ -132,12 +132,8 @@ from uq.cell_cycle import (
     register_cell_cycle_variable,
 )
 from uq.inputs import (
-    GeneKnockoutParams,
     InputParameterSpaceVecoli,
-    MecillinamParams,
-    MediaCondition,
     UQInputParameters,
-    VioPathwayParams,
     get_available_columns,
     load_dataset,
 )
@@ -190,12 +186,8 @@ from uq.wrappers import (
 
 __all__ = [
     # Input parameters
-    "GeneKnockoutParams",
     "InputParameterSpaceVecoli",
-    "MecillinamParams",
-    "MediaCondition",
     "UQInputParameters",
-    "VioPathwayParams",
     "get_available_columns",
     "load_dataset",
     # Output extraction

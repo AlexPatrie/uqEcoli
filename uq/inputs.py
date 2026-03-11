@@ -13,7 +13,7 @@ import abc
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, override
 
 import numpy as np
 import polars
@@ -195,6 +195,7 @@ class InputParameterSpaceVecoli(InputParameterSpace):
         """
         return np.array(self.parameter_bounds)
 
+    @override
     def sample_to_params(
         self,
         sample: np.ndarray,
@@ -236,6 +237,7 @@ class InputParameterSpaceVecoli(InputParameterSpace):
 
         return params
 
+    @override
     def params_to_sample(self, params: UQInputParameters) -> np.ndarray:
         """
         Convert UQInputParameters to a sample array.

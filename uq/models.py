@@ -1,7 +1,6 @@
-from dataclasses import asdict, dataclass
-
 import abc
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional
@@ -23,7 +22,17 @@ class MediaCondition(str, Enum):
 
 
 @dataclass
-class VioPathwayParams:
+class BaseClass:
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def export(self, f: Path) -> None:
+        with open(f.__str__(), "w") as fp:
+            json.dump(self.model_dump(), fp, indent=3)
+
+
+@dataclass
+class VioPathwayParams(BaseClass):
     """
     Parameters for violacein (vio) pathway presence.
 
@@ -75,7 +84,7 @@ class VioPathwayParams:
 
 
 @dataclass
-class MecillinamParams:
+class MecillinamParams(BaseClass):
     """
     Parameters for mecillinam antibiotic condition.
 
@@ -111,7 +120,7 @@ class MecillinamParams:
 
 
 @dataclass
-class GeneKnockoutParams:
+class GeneKnockoutParams(BaseClass):
     """
     Parameters for gene knockout conditions.
 
@@ -128,7 +137,7 @@ class GeneKnockoutParams:
 
 
 @dataclass
-class UQInputParameters:
+class UQInputParameters(BaseClass):
     """
     Complete set of input parameters for UQ analysis.
 
@@ -191,7 +200,7 @@ class CellCyclePhase(str, Enum):
 
 
 @dataclass
-class CellCycleVariable:
+class CellCycleVariable(BaseClass):
     """
     Container for cell cycle variable values.
 
@@ -228,13 +237,13 @@ class CellCycleVariable:
 
 
 @dataclass
-class PrescreeningConfig:
+class PrescreeningConfig(BaseClass):
     n_trajectories: int = 20
     n_top: int = 5  # how many params to keep
 
 
 @dataclass
-class Parameter:
+class Parameter(BaseClass):
     name: str
     bounds: tuple[float, float]
     default: float | int | complex

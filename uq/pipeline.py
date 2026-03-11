@@ -1,25 +1,6 @@
-from dataclasses import asdict, dataclass
-from itertools import combinations_with_replacement
-from typing import Callable, Optional
-
-import numpy as np
-
 from uq import InputParameterSpaceVecoli, SensitivityAnalyzer
 from uq.inputs import InputParameterSpace
 from uq.models import Parameter, PrescreeningConfig
-
-"""
-=========================================================================
-PARAMETER CONFIGURATION - CUSTOMIZE THIS FOR YOUR USE CASE
-=========================================================================
-
-Define your parameters as a list of dictionaries with:
-    - name: str           - Parameter name (used in labels)
-    - bounds: [min, max]  - Parameter range
-    - default: float      - Default/baseline value (optional, defaults to midpoint)
-    - step: float         - Slider step size (optional, auto-calculated if omitted)
-    - description: str    - What this parameter does (optional, for documentation)
-"""
 
 
 def prescreen_parameters(full_space: InputParameterSpace, config: PrescreeningConfig | None = None) -> list[Parameter]:
@@ -49,9 +30,6 @@ def prescreen_parameters_vecoli(
     return prescreen_parameters(full_space=full_space, config=prescreen_config)
 
 
-# -------------------------------------------------------------------------
-# EXAMPLE 1: Default vEcoli-like parameters (3 params)
-# -------------------------------------------------------------------------
 PARAMETER_CONFIG = [
     {
         "name": "expression_factor",
