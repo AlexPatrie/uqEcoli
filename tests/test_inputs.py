@@ -158,27 +158,27 @@ class TestInputParameterSpace:
     @pytest.mark.unit
     def test_vio_only(self):
         """InputParameterSpace can include only vio parameters."""
-        from uq import InputParameterSpace
+        from uq import InputParameterSpaceVecoli
 
-        space = InputParameterSpace(include_vio=True, include_mecillinam=False)
+        space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=False)
         assert space.n_parameters == 2
         assert all("vio" in name for name in space.parameter_names)
 
     @pytest.mark.unit
     def test_mecillinam_only(self):
         """InputParameterSpace can include only mecillinam parameters."""
-        from uq import InputParameterSpace
+        from uq import InputParameterSpaceVecoli
 
-        space = InputParameterSpace(include_vio=False, include_mecillinam=True)
+        space = InputParameterSpaceVecoli(include_vio=False, include_mecillinam=True)
         assert space.n_parameters == 1
         assert "mecillinam" in space.parameter_names[0]
 
     @pytest.mark.unit
     def test_custom_bounds(self):
         """InputParameterSpace accepts custom bounds."""
-        from uq import InputParameterSpace
+        from uq import InputParameterSpaceVecoli
 
-        space = InputParameterSpace(
+        space = InputParameterSpaceVecoli(
             vio_expression_bounds=(1.0, 3.0),
             vio_trl_eff_bounds=(0.5, 1.5),
             mecillinam_conc_bounds=(0.0, 5.0),

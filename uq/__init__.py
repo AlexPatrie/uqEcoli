@@ -133,7 +133,7 @@ from uq.cell_cycle import (
 )
 from uq.inputs import (
     GeneKnockoutParams,
-    InputParameterSpace,
+    InputParameterSpaceVecoli,
     MecillinamParams,
     MediaCondition,
     UQInputParameters,
@@ -191,7 +191,7 @@ from uq.wrappers import (
 __all__ = [
     # Input parameters
     "GeneKnockoutParams",
-    "InputParameterSpace",
+    "InputParameterSpaceVecoli",
     "MecillinamParams",
     "MediaCondition",
     "UQInputParameters",

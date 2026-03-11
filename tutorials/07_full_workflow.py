@@ -97,21 +97,21 @@ def _(np):
     ]
 
     FULL_PARAM_BOUNDS = [
-        (0.1, 5.0),    # gene_expression_A (strong effect)
-        (0.1, 5.0),    # gene_expression_B (medium effect)
-        (0.1, 5.0),    # gene_expression_C (weak effect)
-        (0.5, 2.0),    # translation_eff_A (strong effect)
-        (0.5, 2.0),    # translation_eff_B (weak effect)
-        (0.5, 2.0),    # translation_eff_C (negligible)
-        (0.01, 0.5),   # degradation_rate (medium effect)
+        (0.1, 5.0),  # gene_expression_A (strong effect)
+        (0.1, 5.0),  # gene_expression_B (medium effect)
+        (0.1, 5.0),  # gene_expression_C (weak effect)
+        (0.5, 2.0),  # translation_eff_A (strong effect)
+        (0.5, 2.0),  # translation_eff_B (weak effect)
+        (0.5, 2.0),  # translation_eff_C (negligible)
+        (0.01, 0.5),  # degradation_rate (medium effect)
         (0.001, 0.1),  # diffusion_coeff (negligible)
-        (0.1, 10.0),   # binding_affinity (medium effect)
-        (0.0, 10.0),   # inhibitor_conc (strong negative effect)
-        (0.0, 5.0),    # activator_conc (medium effect)
-        (0.8, 1.2),    # temperature_factor (negligible)
-        (0.9, 1.1),    # pH_factor (negligible)
-        (0.1, 2.0),    # nutrient_level (weak effect)
-        (0.0, 1.0),    # stress_response (weak effect)
+        (0.1, 10.0),  # binding_affinity (medium effect)
+        (0.0, 10.0),  # inhibitor_conc (strong negative effect)
+        (0.0, 5.0),  # activator_conc (medium effect)
+        (0.8, 1.2),  # temperature_factor (negligible)
+        (0.9, 1.1),  # pH_factor (negligible)
+        (0.1, 2.0),  # nutrient_level (weak effect)
+        (0.0, 1.0),  # stress_response (weak effect)
     ]
 
     N_PARAMS = len(FULL_PARAM_NAMES)
@@ -435,33 +435,49 @@ def _(
 
     # Create figure
     fig = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         row_heights=[0.7, 0.3],
         subplot_titles=["Output Trajectory", "Difference from Baseline"],
         vertical_spacing=0.12,
     )
 
-    fig.add_trace(go.Scatter(
-        x=_t, y=_baseline_ts,
-        name="Baseline",
-        line=dict(color="gray", dash="dot"),
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_baseline_ts,
+            name="Baseline",
+            line=dict(color="gray", dash="dot"),
+        ),
+        row=1,
+        col=1,
+    )
 
-    fig.add_trace(go.Scatter(
-        x=_t, y=_current_ts,
-        name="Current",
-        line=dict(color="cyan", width=2),
-        fill="tonexty",
-        fillcolor="rgba(0, 255, 255, 0.1)",
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_current_ts,
+            name="Current",
+            line=dict(color="cyan", width=2),
+            fill="tonexty",
+            fillcolor="rgba(0, 255, 255, 0.1)",
+        ),
+        row=1,
+        col=1,
+    )
 
-    fig.add_trace(go.Scatter(
-        x=_t, y=_current_ts - _baseline_ts,
-        name="Difference",
-        line=dict(color="magenta"),
-        fill="tozeroy",
-        fillcolor="rgba(255, 0, 255, 0.2)",
-    ), row=2, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_current_ts - _baseline_ts,
+            name="Difference",
+            line=dict(color="magenta"),
+            fill="tozeroy",
+            fillcolor="rgba(255, 0, 255, 0.2)",
+        ),
+        row=2,
+        col=1,
+    )
 
     fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1)
 
@@ -474,8 +490,7 @@ def _(
 
     # Parameter info panel
     _param_info = "\n".join([
-        f"- **{cfg['name']}**: `{param_sliders.value[i]:.3f}`"
-        for i, cfg in enumerate(PARAMETER_CONFIG)
+        f"- **{cfg['name']}**: `{param_sliders.value[i]:.3f}`" for i, cfg in enumerate(PARAMETER_CONFIG)
     ])
 
     _info_panel = mo.vstack([
@@ -493,7 +508,7 @@ def _(
 ---
 
 **Fixed parameters** (negligible influence):
-{', '.join(FIXED_DEFAULTS.keys())}
+{", ".join(FIXED_DEFAULTS.keys())}
         """),
     ])
 

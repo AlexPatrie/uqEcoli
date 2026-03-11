@@ -9,6 +9,7 @@ This module defines the scientifically most relevant input variables for UQ:
 These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libraries.
 """
 
+import abc
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -17,180 +18,118 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 import numpy as np
 import polars
 
+from uq.models import UQInputParameters
+
 if TYPE_CHECKING:
     pass
 
 
-class MediaCondition(str, Enum):
-    """Available media conditions for simulations."""
-
-    BASAL = "basal"
-    WITH_AA = "with_aa"
-    ACETATE = "acetate"
-    SUCCINATE = "succinate"
-    NO_OXYGEN = "no_oxygen"
-
-
-@dataclass
-class VioPathwayParams:
+class InputParameterSpace(abc.ABC):
+    parameter_names: list[str]
+    parameter_bounds: list[tuple[float, float]]
+    parameter_types: list[Literal["continuous", "discrete", "categorical"]]
     """
-    Parameters for violacein (vio) pathway presence.
+    Defines the parameter space for UQ sensitivity analysis.
 
-    The vio pathway is a new gene that can be induced at specific generations
-    with controllable expression and translation efficiency.
+    This class provides methods to sample input parameters and to convert
+    between the UQ library format (numpy arrays) and UQInputParameters.
 
     Attributes:
-        enabled: Whether the vio pathway is present
-        induction_gen: Generation at which to induce new gene expression
-        knockout_gen: Generation to knock out new gene expression (optional)
-        expression: Factor by which to multiply new gene expression once induced
-        translation_efficiency: Translation efficiency for new gene once induced
-        rel_exp_adj_list: List of relative expression adjustments per gene
-        rel_trl_eff_adj_list: List of relative translation efficiency adjustments
-        condition: Environmental condition (basal, with_aa, etc.)
+        parameter_names: Names of the parameters being varied
+        parameter_bounds: Lower and upper bounds for each parameter
+        parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
     """
 
-    enabled: bool = True
-    induction_gen: int = 1
-    knockout_gen: Optional[int] = None
-    expression: float = 1.0
-    translation_efficiency: float = 1.0
-    rel_exp_adj_list: list[float] = field(default_factory=lambda: [1.0])
-    rel_trl_eff_adj_list: list[float] = field(default_factory=lambda: [1.0])
-    condition: MediaCondition = MediaCondition.BASAL
+    def __init__(
+        self,
+        *args,
+        parameter_names: list[str] | None = None,
+        parameter_bounds: list[tuple[float, float]] | None = None,
+        parameter_types: list[Literal["continuous", "discrete", "categorical"]] | None = None,
+        **kwargs,
+    ) -> None:
+        self.parameter_names = parameter_names or []
+        self.parameter_bounds = parameter_bounds or []
+        self.parameter_types = parameter_types or []
+        self.implementation_init(*args, **kwargs)
 
-    def to_variant_params(self) -> dict[str, Any]:
+    def implementation_init(self, *args, **kwargs) -> None:
+        return None
+
+    @property
+    def n_parameters(self) -> int:
+        """Number of parameters in the space."""
+        return len(self.parameter_names)
+
+    @property
+    def bounds_array(self) -> np.ndarray:
         """
-        Convert to variant parameter dictionary for new_gene_internal_shift_variable_strength.
+        Parameter bounds as numpy array for UQPy.
 
         Returns:
-            Dictionary compatible with apply_variant function
+            Array of shape (n_parameters, 2) with [lower, upper] bounds
         """
-        params: dict[str, Any] = {
-            "condition": self.condition.value,
-            "induction_gen": self.induction_gen,
-            "exp_trl_eff": {
-                "exp": self.expression,
-                "trl_eff": self.translation_efficiency,
-            },
-            "rel_adj": {
-                "rel_exp_adj_list": self.rel_exp_adj_list,
-                "rel_trl_eff_adj_list": self.rel_trl_eff_adj_list,
-            },
-        }
-        if self.knockout_gen is not None:
-            params["knockout_gen"] = self.knockout_gen
-        return params
+        return np.array(self.parameter_bounds)
 
-
-@dataclass
-class MecillinamParams:
-    """
-    Parameters for mecillinam antibiotic condition.
-
-    Mecillinam is a beta-lactam antibiotic that inhibits PBP2 (penicillin-binding
-    protein 2), affecting cell wall synthesis and cell shape.
-
-    Attributes:
-        times: Times at which to change mecillinam concentration (seconds)
-        concentrations: Mecillinam concentrations at each time point (mM)
-        knockouts: Gene IDs for which to knock out translation
-    """
-
-    times: list[float] = field(default_factory=lambda: [0.0])
-    concentrations: list[float] = field(default_factory=lambda: [0.0])
-    knockouts: list[str] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        if len(self.times) != len(self.concentrations):
-            raise ValueError("times and concentrations must have the same length")
-
-    def to_variant_params(self) -> dict[str, Any]:
+    @abc.abstractmethod
+    def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParameters:
         """
-        Convert to variant parameter dictionary for mecillinam_timeline.
+        Convert a sample from the parameter space to UQInputParameters.
+
+        Args:
+            sample: Array of parameter values in the same order as parameter_names
+            **kwargs: implementation-specific
 
         Returns:
-            Dictionary compatible with apply_variant function
+            UQInputParameters instance
         """
-        return {
-            "times": self.times,
-            "concentrations": self.concentrations,
-            "knockouts": self.knockouts,
-        }
+        pass
 
-
-@dataclass
-class GeneKnockoutParams:
-    """
-    Parameters for gene knockout conditions.
-
-    Gene knockouts can be applied at the ParCa level (gene_deletions) or
-    at the translation level (translation efficiency = 0).
-
-    Attributes:
-        gene_deletions: List of gene IDs to delete at ParCa level
-        translation_knockouts: List of gene IDs to knock out at translation level
-    """
-
-    gene_deletions: list[str] = field(default_factory=list)
-    translation_knockouts: list[str] = field(default_factory=list)
-
-
-@dataclass
-class UQInputParameters:
-    """
-    Complete set of input parameters for UQ analysis.
-
-    This combines all input parameter types into a single container that can
-    be used to parametrize simulation runs for sensitivity analysis.
-
-    Attributes:
-        vio: Violacein pathway parameters
-        mecillinam: Mecillinam antibiotic parameters
-        knockouts: Gene knockout parameters
-        seed: Random seed for the simulation
-        generations: Number of generations to simulate
-        condition: Base media condition (if not set by vio)
-    """
-
-    vio: VioPathwayParams = field(default_factory=VioPathwayParams)
-    mecillinam: MecillinamParams = field(default_factory=MecillinamParams)
-    knockouts: GeneKnockoutParams = field(default_factory=GeneKnockoutParams)
-    seed: int = 0
-    generations: int = 8
-    condition: MediaCondition = MediaCondition.BASAL
-
-    def to_config_dict(self) -> dict[str, Any]:
+    @abc.abstractmethod
+    def params_to_sample(self, params: UQInputParameters) -> np.ndarray:
         """
-        Convert to configuration dictionary for EcoliSim.
+        Convert UQInputParameters to a sample array.
+
+        Args:
+            params: UQInputParameters instance
 
         Returns:
-            Dictionary that can be used to configure a simulation
+            Array of parameter values
         """
-        config: dict[str, Any] = {
-            "seed": self.seed,
-            "generations": self.generations,
-        }
+        pass
 
-        # Add variants based on which parameters are active
-        variants: dict[str, list[dict[str, Any]]] = {}
+    def get_uqpy_distributions(self) -> list[Any]:
+        """
+        Get UQPy distribution objects for this parameter space.
 
-        if self.vio.enabled:
-            variants["new_gene_internal_shift_variable_strength"] = [self.vio.to_variant_params()]
-        else:
-            # Just set the condition if vio is not enabled
-            variants["condition"] = [{"condition": self.condition.value}]
+        Returns:
+            List of UQPy Distribution objects (Uniform distributions)
+        """
+        try:
+            from UQpy.distributions import Uniform
+        except ImportError:
+            raise ImportError("UQPy is required for sensitivity analysis. Install it with: pip install UQpy")
 
-        if any(self.mecillinam.concentrations):
-            variants["mecillinam_timeline"] = [self.mecillinam.to_variant_params()]
+        distributions = []
+        for lb, ub in self.parameter_bounds:
+            distributions.append(Uniform(loc=lb, scale=ub - lb))
+        return distributions
 
-        if variants:
-            config["variants"] = variants
+    def get_pytuq_bounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Get PyTUQ-compatible bounds arrays.
 
-        return config
+        Returns:
+            Tuple of (lower_bounds, upper_bounds) arrays
+        """
+        bounds = self.bounds_array
+        return bounds[:, 0], bounds[:, 1]
 
 
-class InputParameterSpace:
+class InputParameterSpaceVecoli(InputParameterSpace):
+    parameter_names: list[str]
+    parameter_bounds: list[tuple[float, float]]
+    parameter_types: list[Literal["continuous", "discrete", "categorical"]]
     """
     Defines the parameter space for UQ sensitivity analysis.
 
@@ -223,9 +162,9 @@ class InputParameterSpace:
             include_mecillinam: Whether to include mecillinam parameters
             knockout_genes: List of genes that can be knocked out (discrete parameter)
         """
-        self.parameter_names: list[str] = []
-        self.parameter_bounds: list[tuple[float, float]] = []
-        self.parameter_types: list[Literal["continuous", "discrete", "categorical"]] = []
+        self.parameter_names = []
+        self.parameter_bounds = []
+        self.parameter_types = []
 
         if include_vio:
             self.parameter_names.extend(["vio_expression", "vio_trl_eff"])

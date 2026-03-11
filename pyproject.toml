@@ -3,10 +3,10 @@ name = "uqEcoli"
 version = "0.0.1"
 description = "uqEcoli"
 authors = [{ name = "Alex Patrie", email = "alexanderpatrie@gmail.com" }]
-requires-python = ">=3.12.9"
+requires-python = ">=3.12.12"
 readme = "README.md"
 dependencies = [
-    "plotly>=6.6.0",
+    "plotly",
     "polars",
     "pydmd",
     "pytuq",
@@ -15,7 +15,8 @@ dependencies = [
     "sobol",
     "typer",
     "uqpy",
-    "vl-convert-python>=1.9.0.post1",
+    "vecoli",
+    "vl-convert-python",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -66,6 +67,9 @@ default-groups = [
     "dev",
     "docs"
 ]
+
+[tool.uv.sources]
+vecoli = { path = "../vEcoli-private", editable = true }
 
 [tool.mypy]
 files = ["uq"]
@@ -140,9 +144,22 @@ ignore = [
     "S603",
     "S324",
     "S301",
-    "F401"
+    "F401",
+    "SIM108",
+    "F841",
+    "RUF002",
+    "RUF001",
+    "C901",
+    "S608",
+    "B028",
+    "RUF005",
+    "S112",
+    "RUF022",
+    "C401",
+    "B018",
+    "C408"
 ]
-exclude = [".venv/*", "docs/*", "tutorials/*"]
+exclude = [".venv/*", "docs/*", "tutorials/*", "examples/*"]
 
 [tool.ruff.format]
 preview = true

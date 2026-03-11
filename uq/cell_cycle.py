@@ -45,58 +45,13 @@ from uq.koopman import (
     ExtendedDMD,
     KoopmanMode,
 )
+from uq.models import CellCyclePhase, CellCycleVariable
 
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
     from uq.aggregation import AggregatedOutput
     from uq.sensitivity import CellCycleRelevanceResult
-
-
-class CellCyclePhase(str, Enum):
-    """Standard cell cycle phases for E. coli."""
-
-    B_PERIOD = "B_period"  # Pre-initiation (birth to replication initiation)
-    C_PERIOD = "C_period"  # DNA replication
-    D_PERIOD = "D_period"  # Post-replication to division
-    UNKNOWN = "unknown"
-
-
-@dataclass
-class CellCycleVariable:
-    """
-    Container for cell cycle variable values.
-
-    Attributes:
-        values: The computed cell cycle variable values, shape (n_timepoints,)
-        phase_labels: Cell cycle phase labels for each timepoint
-        normalized: Whether values are normalized to [0, 1]
-        variable_name: Name of the cell cycle variable
-        metadata: Additional metadata about the computation
-    """
-
-    values: np.ndarray
-    phase_labels: Optional[np.ndarray] = None
-    normalized: bool = True
-    variable_name: str = "cell_cycle_variable"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_stage_bins(self, n_bins: int = 10) -> np.ndarray:
-        """
-        Bin the cell cycle variable into discrete stages.
-
-        Args:
-            n_bins: Number of bins/stages
-
-        Returns:
-            Array of bin indices (0 to n_bins-1)
-        """
-        if self.normalized:
-            bins = np.linspace(0, 1, n_bins + 1)
-        else:
-            bins = np.linspace(self.values.min(), self.values.max(), n_bins + 1)
-
-        return np.digitize(self.values, bins) - 1
 
 
 class CellCycleVariableComputer(ABC):

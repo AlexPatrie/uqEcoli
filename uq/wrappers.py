@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy, Aggregator
-from uq.inputs import InputParameterSpace, UQInputParameters
+from uq.inputs import InputParameterSpaceVecoli, UQInputParameters
 from uq.outputs import OutputType
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ class SimulationWrapper:
     def __init__(
         self,
         config: WrapperConfig,
-        parameter_space: InputParameterSpace,
+        parameter_space: InputParameterSpaceVecoli,
     ):
         """
         Initialize the simulation wrapper.
@@ -364,7 +364,7 @@ class PrecomputedWrapper:
     def __init__(
         self,
         data_dir: str,
-        parameter_space: InputParameterSpace,
+        parameter_space: InputParameterSpaceVecoli,
         aggregation_strategy: AggregationStrategy = AggregationStrategy.UNIFORM,
         output_types: Optional[list[OutputType]] = None,
         generation_lower_bound: Optional[int] = None,
@@ -547,7 +547,7 @@ class PrecomputedWrapper:
 
 def create_uqpy_model(
     config: WrapperConfig,
-    parameter_space: InputParameterSpace,
+    parameter_space: InputParameterSpaceVecoli,
 ) -> Any:
     """
     Create a UQPy-compatible model wrapper.
@@ -585,7 +585,7 @@ def create_uqpy_model(
 
 def create_pytuq_model(
     config: WrapperConfig,
-    parameter_space: InputParameterSpace,
+    parameter_space: InputParameterSpaceVecoli,
 ) -> Callable[[np.ndarray], np.ndarray]:
     """
     Create a PyTUQ-compatible model function.

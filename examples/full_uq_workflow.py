@@ -45,7 +45,7 @@ from uq import (
     DynamicModeDecomposition,
     GeneKnockoutParams,
     # Input parameters
-    InputParameterSpace,
+    InputParameterSpaceVecoli,
     MassBasedCellCycleVariable,
     MecillinamParams,
     # Output extraction
@@ -324,7 +324,7 @@ def run_full_uq_workflow(
 
     # 1e. Parameter Space for Sensitivity Analysis
     print("\n1e. Parameter Space for Sensitivity Analysis:")
-    param_space = InputParameterSpace(
+    param_space = InputParameterSpaceVecoli(
         include_vio=True,
         include_mecillinam=True,
         vio_expression_bounds=(0.0, 5.0),

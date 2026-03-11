@@ -1,7 +1,12 @@
-import numpy as np
-from dataclasses import dataclass, asdict
-from typing import Callable, Optional
+from dataclasses import asdict, dataclass
 from itertools import combinations_with_replacement
+from typing import Callable, Optional
+
+import numpy as np
+
+from uq import InputParameterSpaceVecoli, SensitivityAnalyzer
+from uq.inputs import InputParameterSpace
+from uq.models import Parameter, PrescreeningConfig
 
 """
 =========================================================================
@@ -14,37 +19,35 @@ Define your parameters as a list of dictionaries with:
     - default: float      - Default/baseline value (optional, defaults to midpoint)
     - step: float         - Slider step size (optional, auto-calculated if omitted)
     - description: str    - What this parameter does (optional, for documentation)
-
-Example configurations are provided below. Uncomment/modify as needed.
 """
 
 
-@dataclass
-class ParameterConfig:
-    name: str
-    bounds: tuple[float, float]
-    default: float | int | complex
-    step: float
-    description: str
+def prescreen_parameters(full_space: InputParameterSpace, config: PrescreeningConfig | None = None) -> list[Parameter]:
+    analyzer = SensitivityAnalyzer(full_space)
+    conf = config or PrescreeningConfig()
+    screening = analyzer.analyze_with_morris(n_trajectories=conf.n_trajectories)
+    return screening.to_parameter_config(parameter_bounds=full_space.parameter_bounds, top_n=conf.n_top)
 
-    def model_dump(self):
-        d = asdict(self)
-        bounds = tuple(self.bounds)
-        d['bounds'] = bounds
-        return d
 
-# from uq import SensitivityAnalyzer, InputParameterSpace
-# # 1. Full parameter space (many params)
-# full_space = InputParameterSpace(include_vio=True, include_mecillinam=True, ...)
-# # 2. Morris screening (cheap)
-# analyzer = SensitivityAnalyzer(full_space, wrapper)
-# morris = analyzer.analyze_with_morris(n_trajectories=20)
-# print(morris.summary())
-# # 3. Get PARAMETER_CONFIG for reactive tutorial
-# PARAMETER_CONFIG = morris.to_parameter_config(
-#     parameter_bounds=full_space.parameter_bounds,
-#     top_n=5,
-# )
+def prescreen_parameters_vecoli(
+    vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
+    vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
+    mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
+    include_vio: bool = True,
+    include_mecillinam: bool = True,
+    knockout_genes: list[str] | None = None,
+    prescreen_config: PrescreeningConfig | None = None,
+):
+    full_space = InputParameterSpaceVecoli(
+        vio_expression_bounds=vio_expression_bounds,
+        vio_trl_eff_bounds=vio_trl_eff_bounds,
+        mecillinam_conc_bounds=mecillinam_conc_bounds,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+        knockout_genes=knockout_genes,
+    )
+    return prescreen_parameters(full_space=full_space, config=prescreen_config)
+
 
 # -------------------------------------------------------------------------
 # EXAMPLE 1: Default vEcoli-like parameters (3 params)

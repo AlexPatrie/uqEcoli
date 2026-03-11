@@ -42,13 +42,13 @@ class TestE2EInputToOutput:
     def test_full_input_parameter_workflow(self):
         """Complete workflow from parameter space to simulation-ready params."""
         from uq import (
-            InputParameterSpace,
+            InputParameterSpaceVecoli,
             UQInputParameters,
             VioPathwayParams,
         )
 
         # 1. Define parameter space
-        space = InputParameterSpace(
+        space = InputParameterSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
             vio_expression_bounds=(0.5, 5.0),
@@ -157,10 +157,10 @@ class TestE2ESensitivityWorkflow:
     @pytest.mark.e2e
     def test_pce_sensitivity_with_synthetic_function(self, rng):
         """Complete PCE sensitivity analysis with known analytic function."""
-        from uq import InputParameterSpace, SobolIndices
+        from uq import InputParameterSpaceVecoli, SobolIndices
 
         # 1. Define parameter space
-        space = InputParameterSpace(
+        space = InputParameterSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
             vio_expression_bounds=(0.0, 1.0),
@@ -403,7 +403,7 @@ class TestE2ECompleteWorkflow:
         """
         from uq import (
             AggregatedOutput,
-            InputParameterSpace,
+            InputParameterSpaceVecoli,
             SobolIndices,
             compute_variance_decomposition,
         )
@@ -411,7 +411,7 @@ class TestE2ECompleteWorkflow:
         # =========================================================
         # STEP 1: Define input parameter space
         # =========================================================
-        param_space = InputParameterSpace(
+        param_space = InputParameterSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
             vio_expression_bounds=(0.5, 5.0),

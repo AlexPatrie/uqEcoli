@@ -48,7 +48,7 @@ def _(mo):
 def _():
     import numpy as np
     from uq import (
-        InputParameterSpace,
+        InputParameterSpaceVecoli,
         SensitivityAnalyzer,
         SobolIndices,
         PCESurrogate,
@@ -56,7 +56,7 @@ def _():
     )
 
     return (
-        InputParameterSpace,
+        InputParameterSpaceVecoli,
         PCESurrogate,
         SensitivityAnalyzer,
         SobolIndices,

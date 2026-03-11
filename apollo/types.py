@@ -8,7 +8,7 @@ as musical notation, including both lossy (standard notation) and lossless
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
@@ -455,7 +455,5 @@ class LosslessScore:
 
 
 # Type alias for external imports
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from uq.koopman import KoopmanMode, KoopmanSpectrum

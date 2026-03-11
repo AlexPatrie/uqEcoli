@@ -231,11 +231,11 @@ def __(mo):
 
 @app.cell
 def __(mo):
-    from uq import InputParameterSpace
+    from uq import InputParameterSpaceVecoli
     import numpy as np
 
     # Define a parameter space
-    param_space = InputParameterSpace(
+    param_space = InputParameterSpaceVecoli(
         include_vio=True,  # Include vio parameters
         include_mecillinam=True,  # Include mecillinam
         vio_expression_bounds=(0.5, 5.0),  # Expression range
@@ -249,7 +249,7 @@ def __(mo):
     - Parameter Names: `{param_space.parameter_names}`
     - Parameter Bounds: `{param_space.parameter_bounds}`
     """)
-    return InputParameterSpace, np, param_space
+    return InputParameterSpaceVecoli, np, param_space
 
 
 @app.cell

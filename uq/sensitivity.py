@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy
-from uq.inputs import InputParameterSpace
+from uq.inputs import InputParameterSpaceVecoli
+from uq.models import Parameter
 from uq.wrappers import PrecomputedWrapper, SimulationWrapper, WrapperConfig
 
 if TYPE_CHECKING:
@@ -230,7 +231,7 @@ class MorrisIndices:
         top_n: Optional[int] = None,
         mu_star_threshold: Optional[float] = None,
         include_descriptions: bool = True,
-    ) -> list[dict]:
+    ) -> list[Parameter]:
         """
         Convert screening results to PARAMETER_CONFIG format for tutorials.
 
@@ -331,7 +332,7 @@ class MorrisIndices:
         name_to_mu_star = {name: self.mu_star[i] for i, name in enumerate(self.parameter_names)}
         config.sort(key=lambda x: name_to_mu_star.get(x["name"], 0), reverse=True)
 
-        return config
+        return [Parameter(**conf) for conf in config]
 
 
 def _legendre_polynomial(x: np.ndarray, order: int) -> np.ndarray:
@@ -575,7 +576,7 @@ class SensitivityAnalyzer:
 
     def __init__(
         self,
-        parameter_space: InputParameterSpace,
+        parameter_space: InputParameterSpaceVecoli,
         wrapper: Optional[Union[SimulationWrapper, PrecomputedWrapper]] = None,
         samples: Optional[np.ndarray] = None,
         outputs: Optional[np.ndarray] = None,
@@ -1106,7 +1107,7 @@ def run_sensitivity_analysis(
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = InputParameterSpace(
+    parameter_space = InputParameterSpaceVecoli(
         vio_expression_bounds=vio_expression_bounds,
         vio_trl_eff_bounds=vio_trl_eff_bounds,
         mecillinam_conc_bounds=mecillinam_conc_bounds,
@@ -1341,7 +1342,7 @@ def analyze_precomputed_results(
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = InputParameterSpace(
+    parameter_space = InputParameterSpaceVecoli(
         include_vio=include_vio,
         include_mecillinam=include_mecillinam,
     )

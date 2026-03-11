@@ -40,7 +40,7 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    from dataclasses import dataclass, asdict 
+    from dataclasses import dataclass, asdict
     from typing import Callable, Optional
     from itertools import combinations_with_replacement
 
@@ -66,18 +66,17 @@ def _(asdict, dataclass):
 
     @dataclass
     class ParameterConfig:
-        name: str 
+        name: str
         bounds: tuple[float, float]
-        default: float | int | complex 
-        step: float 
+        default: float | int | complex
+        step: float
         description: str
 
         def model_dump(self):
             d = asdict(self)
             bounds = tuple(self.bounds)
-            d['bounds'] = bounds 
-            return d 
-
+            d["bounds"] = bounds
+            return d
 
     # -------------------------------------------------------------------------
     # EXAMPLE 1: Default vEcoli-like parameters (3 params)
@@ -282,16 +281,10 @@ def _(combinations_with_replacement, np):
                 coefficients[i] = 1.5
             elif total_order == 1:
                 # Linear terms: larger, some positive, some negative
-                coefficients[i] = np.random.uniform(0.2, 0.8) * np.random.choice(
-                    [1, -1], p=[0.7, 0.3]
-                )
+                coefficients[i] = np.random.uniform(0.2, 0.8) * np.random.choice([1, -1], p=[0.7, 0.3])
             else:
                 # Higher-order terms: smaller
-                coefficients[i] = (
-                    np.random.uniform(0.05, 0.2)
-                    / total_order
-                    * np.random.choice([1, -1])
-                )
+                coefficients[i] = np.random.uniform(0.05, 0.2) / total_order * np.random.choice([1, -1])
 
         return coefficients
 
@@ -332,12 +325,7 @@ def _(
     # Extract parameter info from config
     PARAM_NAMES = [p["name"] for p in PARAMETER_CONFIG]
     PARAM_BOUNDS = np.array([p["bounds"] for p in PARAMETER_CONFIG])
-    PARAM_DEFAULTS = np.array(
-        [
-            p.get("default", (p["bounds"][0] + p["bounds"][1]) / 2)
-            for p in PARAMETER_CONFIG
-        ]
-    )
+    PARAM_DEFAULTS = np.array([p.get("default", (p["bounds"][0] + p["bounds"][1]) / 2) for p in PARAMETER_CONFIG])
     N_PARAMS = len(PARAMETER_CONFIG)
 
     # Generate PCE basis and coefficients
@@ -428,9 +416,7 @@ def _(
 
     # Predict using the PCE surrogate
     _prediction = pce_surrogate.predict(current_params)
-    _pred_mean, _pred_std = pce_surrogate.predict_with_uncertainty(
-        current_params.reshape(1, -1)
-    )
+    _pred_mean, _pred_std = pce_surrogate.predict_with_uncertainty(current_params.reshape(1, -1))
     _pred_val = float(_prediction.flat[0])
     _std_val = float(_pred_std.flat[0])
 
@@ -508,9 +494,7 @@ def _(
         col=1,
     )
 
-    ts_fig.add_hline(
-        y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1
-    )
+    ts_fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1)
 
     ts_fig.update_xaxes(title="Time (steps)", row=2, col=1)
     ts_fig.update_yaxes(title="Observable Value", row=1, col=1)
@@ -527,23 +511,20 @@ def _(
     # =========================================================================
     # BUILD PARAMETER INFO PANEL
     # =========================================================================
-    _param_lines = "\n".join(
-        [f"- **{PARAM_NAMES[_i]}**: `{current_params[_i]:.4f}`" for _i in range(len(PARAM_NAMES))]
-    )
+    _param_lines = "\n".join([f"- **{PARAM_NAMES[_i]}**: `{current_params[_i]:.4f}`" for _i in range(len(PARAM_NAMES))])
 
     _desc_lines = ""
     for _cfg in PARAMETER_CONFIG:
         if "description" in _cfg:
             _desc_lines += f"- *{_cfg['name']}*: {_cfg['description']}\n"
 
-    _slider_panel = mo.vstack(
-        [
-            mo.md("### Parameters"),
-            mo.md("*Drag sliders to see effect on output*"),
-            param_sliders,
-            mo.md("---"),
-            mo.md(
-                f"""
+    _slider_panel = mo.vstack([
+        mo.md("### Parameters"),
+        mo.md("*Drag sliders to see effect on output*"),
+        param_sliders,
+        mo.md("---"),
+        mo.md(
+            f"""
     **Current values:**
     {_param_lines}
 
@@ -554,9 +535,8 @@ def _(
     - Mean: `{np.mean(_timeseries):.4f}`
     - Std: `{np.std(_timeseries):.4f}`
     """
-            ),
-        ]
-    )
+        ),
+    ])
 
     mo.hstack([_slider_panel, ts_fig], widths=[1, 3], gap=2)
     return

@@ -348,9 +348,9 @@ def knockout_params():
 @pytest.fixture
 def input_parameter_space():
     """InputParameterSpace configured for testing."""
-    from uq import InputParameterSpace
+    from uq import InputParameterSpaceVecoli
 
-    return InputParameterSpace(
+    return InputParameterSpaceVecoli(
         include_vio=True,
         include_mecillinam=True,
         vio_expression_bounds=(0.0, 5.0),

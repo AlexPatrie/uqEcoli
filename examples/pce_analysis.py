@@ -36,7 +36,8 @@ def _(mo):
               return sobol_indices, PCESurrogate(coefficients=pce.coeffs, ...)
     ```
 
-    **Bottom line**: Your code handles the PCE surrogate construction requirement. It needs to be wrapped with the aggregation strategies and Sobol extraction to fully satisfy Milestone 08.4.2.
+    **Bottom line**: Your code handles the PCE surrogate construction requirement. It needs to be
+    wrapped with the aggregation strategies and Sobol extraction to fully satisfy Milestone 08.4.2.
     """
     )
     return

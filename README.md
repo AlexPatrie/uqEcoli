@@ -129,7 +129,7 @@ This installs [UQPy](https://uqpyproject.readthedocs.io/), the primary library u
 
 ```python
 from uq import (
-    InputParameterSpace,
+    InputParameterSpaceVecoli,
     WrapperConfig,
     SimulationWrapper,
     SensitivityAnalyzer,
@@ -137,12 +137,12 @@ from uq import (
 )
 
 # 1. Define the input parameter space
-param_space = InputParameterSpace(
-    include_vio=True,                          # Include violacein pathway parameters
-    include_mecillinam=True,                   # Include mecillinam antibiotic parameters
-    vio_expression_bounds=(0.0, 5.0),          # Expression factor range
-    vio_trl_eff_bounds=(0.0, 2.0),             # Translation efficiency range
-    mecillinam_conc_bounds=(0.0, 10.0),        # Concentration range (mM)
+param_space = InputParameterSpaceVecoli(
+    include_vio=True,  # Include violacein pathway parameters
+    include_mecillinam=True,  # Include mecillinam antibiotic parameters
+    vio_expression_bounds=(0.0, 5.0),  # Expression factor range
+    vio_trl_eff_bounds=(0.0, 2.0),  # Translation efficiency range
+    mecillinam_conc_bounds=(0.0, 10.0),  # Concentration range (mM)
 )
 
 # 2. Configure the simulation wrapper
@@ -961,7 +961,7 @@ lb, ub = param_space.get_pytuq_bounds()
 
 ```python
 from uq import (
-    InputParameterSpace,
+    InputParameterSpaceVecoli,
     WrapperConfig,
     SimulationWrapper,
     SensitivityAnalyzer,
@@ -970,7 +970,7 @@ from uq import (
 )
 
 # Configure
-param_space = InputParameterSpace(include_vio=True, include_mecillinam=True)
+param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
 config = WrapperConfig(
     sim_data_path="./sim_data.cPickle",
     output_dir="./uq_analysis",

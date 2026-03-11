@@ -384,11 +384,11 @@ class TestRealDataSensitivity:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import InputParameterSpace
+        from uq import InputParameterSpaceVecoli
 
         log_header("PARAMETER SPACE VALIDATION - REAL DATA")
 
-        space = InputParameterSpace(
+        space = InputParameterSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
         )
@@ -450,7 +450,7 @@ class TestRealDataE2E:
             pytest.skip("Real simulation data not available")
 
         from uq import (
-            InputParameterSpace,
+            InputParameterSpaceVecoli,
             compute_variance_decomposition,
         )
 
@@ -464,7 +464,7 @@ class TestRealDataE2E:
 
         # 1. Define parameter space
         log_section("Step 1: Define Parameter Space")
-        param_space = InputParameterSpace(
+        param_space = InputParameterSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
         )

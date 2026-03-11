@@ -26,6 +26,7 @@ Methods implemented:
 - Cell cycle mode identification
 """
 
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -790,7 +791,8 @@ def extract_koopman_features(
                 "agent_id": agent,
                 "spectrum": spectrum,
             })
-        except Exception:
+        except Exception as e:
+            warnings.warn(e)
             continue
 
     # Aggregate features across cells
