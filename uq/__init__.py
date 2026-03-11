@@ -158,6 +158,15 @@ from uq.outputs import (
     get_output_variable_info,
 )
 
+# Pipeline utilities
+from uq.pipeline import (
+    PCEFitResult,
+    PCESurrogateConfig,
+    fit_pce_coefficients,
+    generate_multi_indices,
+    prescreen_parameters,
+)
+
 # Sensitivity analysis
 # CellCycleRelevanceResult and related functions implement RFC006's requirement
 # that the cell cycle variable choice be "informed by the sensitivity analyses (1-3)"
@@ -238,6 +247,12 @@ __all__ = [
     "KoopmanSensitivityAnalyzer",
     "KoopmanSpectrum",
     "extract_koopman_features",
+    # Pipeline utilities
+    "PCEFitResult",
+    "PCESurrogateConfig",
+    "fit_pce_coefficients",
+    "generate_multi_indices",
+    "prescreen_parameters",
 ]
 
 __version__ = "0.1.0"

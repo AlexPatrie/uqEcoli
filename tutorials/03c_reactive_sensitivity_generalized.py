@@ -44,11 +44,11 @@ def _():
     from typing import Callable, Optional
     from itertools import combinations_with_replacement
 
-    return Callable, asdict, combinations_with_replacement, dataclass, np
+    return Callable, combinations_with_replacement, np
 
 
 @app.cell
-def _(asdict, dataclass):
+def _():
     """
     =========================================================================
     PARAMETER CONFIGURATION - CUSTOMIZE THIS FOR YOUR USE CASE
@@ -63,20 +63,6 @@ def _(asdict, dataclass):
 
     Example configurations are provided below. Uncomment/modify as needed.
     """
-
-    @dataclass
-    class ParameterConfig:
-        name: str
-        bounds: tuple[float, float]
-        default: float | int | complex
-        step: float
-        description: str
-
-        def model_dump(self):
-            d = asdict(self)
-            bounds = tuple(self.bounds)
-            d["bounds"] = bounds
-            return d
 
     # -------------------------------------------------------------------------
     # EXAMPLE 1: Default vEcoli-like parameters (3 params)
