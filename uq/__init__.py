@@ -24,7 +24,8 @@ aggregation
 wrappers
     Input-to-output wrapper functions compatible with UQPy and PyTUQ
 sensitivity
-    Global sensitivity analysis using PCE surrogate methods
+    Global sensitivity analysis using PCE surrogate methods, with Morris
+    screening for efficient parameter importance ranking in high dimensions
 cell_cycle
     Cell cycle stratification for Phase 2 analysis, including Koopman eigenfunction-
     based cell cycle variable (recommended approach per RFC006 Section 1.3)
@@ -78,6 +79,22 @@ For precomputed results::
         data_dir="./simulation_outputs",
         aggregation_strategy=AggregationStrategy.BY_GENERATION,
     )
+
+Screening workflow (for high-dimensional parameter spaces)::
+
+    from uq import SensitivityAnalyzer, MorrisIndices
+
+    # Stage 1: Morris screening (cheap, O(n) evaluations)
+    morris = analyzer.analyze_with_morris(n_trajectories=10)
+    print(morris.summary())
+
+    # Identify top candidates for detailed analysis
+    important_params = morris.get_screening_candidates(top_n=5)
+    print(f"Focus on: {important_params}")
+
+    # Stage 2: Detailed PCE analysis on subset
+    # (Create new analyzer with reduced parameter space)
+    sobol, pce = reduced_analyzer.analyze_with_pce(polynomial_order=3)
 
 References
 ----------
@@ -148,8 +165,10 @@ from uq.outputs import (
 # Sensitivity analysis
 # CellCycleRelevanceResult and related functions implement RFC006's requirement
 # that the cell cycle variable choice be "informed by the sensitivity analyses (1-3)"
+# MorrisIndices supports the screening phase for high-dimensional parameter spaces
 from uq.sensitivity import (
     CellCycleRelevanceResult,
+    MorrisIndices,
     PCESurrogate,
     SensitivityAnalyzer,
     SensitivityMethod,
@@ -197,6 +216,7 @@ __all__ = [
     "create_uqpy_model",
     # Sensitivity analysis
     "CellCycleRelevanceResult",
+    "MorrisIndices",
     "PCESurrogate",
     "SensitivityAnalyzer",
     "SensitivityMethod",

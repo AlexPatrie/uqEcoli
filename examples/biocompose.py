@@ -6,12 +6,13 @@ app = marimo.App(width="full", layout_file="layouts/biocompose.grid.json")
 
 @app.cell
 def _():
+    import dataclasses as dc
     import pprint
-    import dataclasses as dc, typing as ty 
+    import typing as ty
     from enum import StrEnum
 
     import marimo as mo
-    import numpy as np 
+    import numpy as np
     import polars as pl
 
     return StrEnum, dc, mo, np, pl, pprint
@@ -20,9 +21,9 @@ def _():
 @app.cell
 def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
     class BinBand(StrEnum):
-        LOW = 'low'
-        MID = 'mid'
-        HIGH = 'high'
+        LOW = "low"
+        MID = "mid"
+        HIGH = "high"
 
     @dc.dataclass
     class Bins:
@@ -46,17 +47,16 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
 
         def __init__(self, data, dt: float):
             self.data = data
-            self.dt = dt 
+            self.dt = dt
 
         def __repr__(self) -> str:
             bins = self.bins
+
             def get_range(r: str):
                 v = getattr(bins, r)
                 return f"{int(v.min())} - {int(v.max())}"
-            low, mid, high = list(map(
-                lambda c: get_range(c), 
-                ["low", "mid", "high"]
-            ))
+
+            low, mid, high = list(map(lambda c: get_range(c), ["low", "mid", "high"]))
             return f"Spectrum:\n\n{pprint.pformat(self.data)}\n=====\nBins:\n\nlow: {low}\nmid: {mid}\nhigh: {high}"
 
         @property
@@ -64,15 +64,15 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
             # freqs is now in Hz, same length as spectrum
             sample_rate: int = 44100
             # d=1/sample_rate
-            return np.fft.rfftfreq(len(self.data), d=1/sample_rate)
+            return np.fft.rfftfreq(len(self.data), d=1 / sample_rate)
 
         @property
         def bins(self):
             mid_thresh = 300
             high_thresh = mid_thresh * 10
             freqs = self.frequencies
-            low_bins  = np.where(freqs < mid_thresh)[0]
-            mid_bins  = np.where((freqs >= mid_thresh) & (freqs < high_thresh))[0]
+            low_bins = np.where(freqs < mid_thresh)[0]
+            mid_bins = np.where((freqs >= mid_thresh) & (freqs < high_thresh))[0]
             high_bins = np.where(freqs >= high_thresh)[0]
             return Bins(low=low_bins, mid=mid_bins, high=high_bins)
 
@@ -92,18 +92,18 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
 
         @property
         def magnitude(self):
-            return 20 * np.log10(np.abs(self.data[1:len(self.frequencies)]) + 1e-10)
+            return 20 * np.log10(np.abs(self.data[1 : len(self.frequencies)]) + 1e-10)
 
         def plot(self, obs: str):
             import plotly.graph_objects as go
+
             freqs = self.frequencies[1:]
             magnitude_db = self.magnitude
 
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=freqs, y=magnitude_db, fill='tozeroy',
-                                   line=dict(color='cyan', width=1)))
-            fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)])
-            fig.update_layout(template='plotly_dark', title=f'Spectrum Analyzer: {obs}')
+            fig.add_trace(go.Scatter(x=freqs, y=magnitude_db, fill="tozeroy", line=dict(color="cyan", width=1)))
+            fig.update_xaxes(type="log", range=[np.log10(20), np.log10(20000)])
+            fig.update_layout(template="plotly_dark", title=f"Spectrum Analyzer: {obs}")
             return fig
 
     class TimeseriesDataset:
@@ -138,30 +138,23 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
         _dt = 1.0  # global timestep/interval
         _t = (lambda T, dt: np.arange(start=0.0, stop=float(T), step=dt))(T, dt)
 
-        _N = 3  # num observables 
-        _observable_names = ['a', 'b', 'c']
-        _timeseries_dataset = pl.DataFrame({
-            "time": t, 
-            **dict(zip(
-                observable_names,
-                np.random.random((N, T))
-            ))
-        })
+        _N = 3  # num observables
+        _observable_names = ["a", "b", "c"]
+        _timeseries_dataset = pl.DataFrame({"time": t, **dict(zip(observable_names, np.random.random((N, T))))})
         ds = TimeseriesDataset(data=_timeseries_dataset)
-        _spectrum = ds.to_spectrum('a')
-        _ts_a = ds.df.select('a').to_numpy()
+        _spectrum = ds.to_spectrum("a")
+        _ts_a = ds.df.select("a").to_numpy()
         ds.from_spectrum(_spectrum) == _ts_a
-        assert np.all(_ts_a == ds.df.select('a').to_numpy())
-
+        assert np.all(_ts_a == ds.df.select("a").to_numpy())
 
     # loading fake data example
     # T = 1111  # total duration
     # dt = 1.0  # global timestep/interval
     # t = (lambda T, dt: np.arange(start=0.0, stop=float(T), step=dt))(T, dt)
-    # N = 3  # num observables 
+    # N = 3  # num observables
     # observable_names = ['a', 'b', 'c']
     # timeseries_dataset = pl.DataFrame({
-    #     "time": t, 
+    #     "time": t,
     #     **dict(zip(
     #         observable_names,
     #         np.random.random((N, T))
@@ -169,14 +162,21 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
     # })
 
     # instead, load the real deal :)
-    from uq.inputs import load_dataset
     from pathlib import Path
+
+    from uq.inputs import load_dataset
+
     def load_trajectory():
-        import json 
-        with open("baseline_observables.json", "r") as f:
+        import json
+
+        with open("baseline_observables.json") as f:
             obs = [col for col in json.load(f) if col.startswith("listener")]
         obs.append("time")
-        X = load_dataset(experiment_id="api_simulation_default", outdir_root=Path('/Users/alexanderpatrie/sms/sms-api/artifacts/sims'), observables=obs)
+        X = load_dataset(
+            experiment_id="api_simulation_default",
+            outdir_root=Path("/Users/alexanderpatrie/sms/sms-api/artifacts/sims"),
+            observables=obs,
+        )
         observables = []
         schema = X.collect_schema()
         for obs_i in obs:
@@ -197,7 +197,7 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
 
 @app.cell
 def _(timeseries):
-    spectrum = timeseries.to_spectrum('listeners__mass__cell_mass')
+    spectrum = timeseries.to_spectrum("listeners__mass__cell_mass")
     return (spectrum,)
 
 
@@ -217,7 +217,9 @@ def _(mo):
 
 @app.cell
 def _(mo, observable_names):
-    obs_dropdown = mo.ui.dropdown(label="observable name:", options=observable_names, value="listeners__mass__cell_mass")
+    obs_dropdown = mo.ui.dropdown(
+        label="observable name:", options=observable_names, value="listeners__mass__cell_mass"
+    )
     return (obs_dropdown,)
 
 
@@ -229,44 +231,54 @@ def _(BinBand, Spectrum, mo, spectrum):
             for row in self.values():
                 for r in row:
                     s.append(r)
-            return s 
+            return s
 
     class BinSliders:
         def generate_range_sliders(self, band: BinBand, spectrum: Spectrum) -> list[mo.ui.slider]:
-                sliders = []
-                bins = getattr(spectrum.bins, band)
-                for i, b in enumerate(bins):
-                    freqs = spectrum.frequencies[bins]
-                    bin_min = -freqs.min()
-                    bin_max = freqs.max() * 4
-                    on_change = (lambda val: spectrum)
-                    b_slider = mo.ui.slider(full_width=True, label=f"     {band.value}:{b}     ", start=bin_min, stop=bin_max, step=1.0, show_value=True, value=spectrum.frequencies[bins][i])
-                    sliders.append(b_slider)
-                return sliders
+            sliders = []
+            bins = getattr(spectrum.bins, band)
+            for i, b in enumerate(bins):
+                freqs = spectrum.frequencies[bins]
+                bin_min = -freqs.min()
+                bin_max = freqs.max() * 4
+                on_change = lambda val: spectrum
+                b_slider = mo.ui.slider(
+                    full_width=True,
+                    label=f"     {band.value}:{b}     ",
+                    start=bin_min,
+                    stop=bin_max,
+                    step=1.0,
+                    show_value=True,
+                    value=spectrum.frequencies[bins][i],
+                )
+                sliders.append(b_slider)
+            return sliders
 
         def get_all_sliders(self):
             bands = [BinBand.LOW, BinBand.MID, BinBand.HIGH]
-            return dict(zip(
-                bands, 
-                [self.generate_range_sliders(band, spectrum) for band in bands],
-
-            ))
+            return dict(
+                zip(
+                    bands,
+                    [self.generate_range_sliders(band, spectrum) for band in bands],
+                )
+            )
 
         @property
         def all(self):
             return AllSliders(self.get_all_sliders())
 
         def get_ui(self):
-            return list(map(
-                # lambda band: mo.accordion({band: self.generate_range_sliders(band, spectrum)}),
-                lambda band: self.generate_range_sliders(band, spectrum),
-                [BinBand.LOW, BinBand.MID, BinBand.HIGH]
-            ))
+            return list(
+                map(
+                    # lambda band: mo.accordion({band: self.generate_range_sliders(band, spectrum)}),
+                    lambda band: self.generate_range_sliders(band, spectrum),
+                    [BinBand.LOW, BinBand.MID, BinBand.HIGH],
+                )
+            )
 
         @property
         def ui(self):
             return mo.vstack(self.get_ui(), justify="start")
-
 
     sliders = BinSliders()
     return
@@ -283,17 +295,19 @@ def _(mo, np):
     # Create labels for each frequency band
     def _get_freq_label(freq):
         if freq >= 1000:
-            return f"{freq/1000:.1f}kHz"
+            return f"{freq / 1000:.1f}kHz"
         return f"{freq:.0f}Hz"
 
     # Use mo.ui.array for proper reactivity - this makes the whole array reactive
     gain_sliders = mo.ui.array([
         mo.ui.slider(
             orientation="vertical",
-            start=0.1, stop=4.0, step=0.05,
+            start=0.1,
+            stop=4.0,
+            step=0.05,
             value=1.0,
             label=_get_freq_label(freq),
-            show_value=True
+            show_value=True,
         )
         for freq in control_freqs
     ])
@@ -329,9 +343,11 @@ def _(
             log_freqs = np.log10(np.clip(self.freqs, 1, None))
 
             interp_func = interp1d(
-                log_control, self.control_gains,
-                kind='cubic', bounds_error=False,
-                fill_value=(self.control_gains[0], self.control_gains[-1])
+                log_control,
+                self.control_gains,
+                kind="cubic",
+                bounds_error=False,
+                fill_value=(self.control_gains[0], self.control_gains[-1]),
             )
             return interp_func(log_freqs)
 
@@ -339,14 +355,14 @@ def _(
             """Apply interpolated gains to spectrum data."""
             gain_curve = self.get_gain_curve()
             modified_data = self.spectrum.data.copy()
-            modified_data[1:len(self.freqs)+1] *= gain_curve
+            modified_data[1 : len(self.freqs) + 1] *= gain_curve
             return modified_data
 
         def get_magnitude_db(self, data: np.ndarray | None = None) -> np.ndarray:
             """Get magnitude in dB."""
             if data is None:
                 data = self.apply_gains()
-            return 20 * np.log10(np.abs(data[1:len(self.freqs)+1]) + 1e-10)
+            return 20 * np.log10(np.abs(data[1 : len(self.freqs) + 1]) + 1e-10)
 
         def to_timeseries(self, modified_data: np.ndarray) -> np.ndarray:
             """Reconstruct timeseries from modified spectrum via inverse FFT."""
@@ -377,90 +393,118 @@ def _(
     # BUILD UNIFIED FIGURE with spectrum on top, timeseries on bottom
     # =========================================================================
     combined_fig = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         row_heights=[0.5, 0.5],
-        subplot_titles=['Timeseries (reconstructed from spectrum)', 'Frequency Spectrum (drag sliders to modify)'],
+        subplot_titles=["Timeseries (reconstructed from spectrum)", "Frequency Spectrum (drag sliders to modify)"],
         vertical_spacing=0.12,
     )
 
     # ----- ROW 2: SPECTRUM -----
     # Original spectrum (dimmed)
-    combined_fig.add_trace(go.Scatter(
-        x=freqs, y=original_mag,
-        fill='tozeroy', name='Original Spectrum',
-        line=dict(color='rgba(100, 100, 100, 0.4)', width=1),
-        fillcolor='rgba(100, 100, 100, 0.2)',
-        legendgroup='spectrum',
-    ), row=2, col=1)
+    combined_fig.add_trace(
+        go.Scatter(
+            x=freqs,
+            y=original_mag,
+            fill="tozeroy",
+            name="Original Spectrum",
+            line=dict(color="rgba(100, 100, 100, 0.4)", width=1),
+            fillcolor="rgba(100, 100, 100, 0.2)",
+            legendgroup="spectrum",
+        ),
+        row=2,
+        col=1,
+    )
 
     # Modified spectrum (bright cyan)
-    combined_fig.add_trace(go.Scatter(
-        x=freqs, y=modified_mag,
-        fill='tozeroy', name='Modified Spectrum',
-        line=dict(color='cyan', width=1),
-        fillcolor='rgba(0, 255, 255, 0.3)',
-        legendgroup='spectrum',
-    ), row=2, col=1)
+    combined_fig.add_trace(
+        go.Scatter(
+            x=freqs,
+            y=modified_mag,
+            fill="tozeroy",
+            name="Modified Spectrum",
+            line=dict(color="cyan", width=1),
+            fillcolor="rgba(0, 255, 255, 0.3)",
+            legendgroup="spectrum",
+        ),
+        row=2,
+        col=1,
+    )
 
     # Control points overlaid on spectrum
     marker_y = np.interp(control_freqs, freqs, modified_mag)
-    combined_fig.add_trace(go.Scatter(
-        x=control_freqs,
-        y=marker_y,
-        mode='markers+lines',
-        name='EQ Control Points',
-        marker=dict(size=10, color='yellow', symbol='circle',
-                   line=dict(color='orange', width=2)),
-        line=dict(color='rgba(255, 255, 0, 0.3)', width=1, dash='dot'),
-        hovertemplate='%{x:.0f} Hz<br>Gain: %{customdata:.2f}<extra></extra>',
-        customdata=current_gains,
-        legendgroup='spectrum',
-    ), row=2, col=1)
+    combined_fig.add_trace(
+        go.Scatter(
+            x=control_freqs,
+            y=marker_y,
+            mode="markers+lines",
+            name="EQ Control Points",
+            marker=dict(size=10, color="yellow", symbol="circle", line=dict(color="orange", width=2)),
+            line=dict(color="rgba(255, 255, 0, 0.3)", width=1, dash="dot"),
+            hovertemplate="%{x:.0f} Hz<br>Gain: %{customdata:.2f}<extra></extra>",
+            customdata=current_gains,
+            legendgroup="spectrum",
+        ),
+        row=2,
+        col=1,
+    )
 
     # ----- ROW 1: TIMESERIES -----
     # Original timeseries
-    combined_fig.add_trace(go.Scatter(
-        x=_time, y=_original_ts,
-        name='Original Timeseries',
-        line=dict(color='rgba(0, 200, 255, 0.8)', width=1.5),
-        legendgroup='timeseries',
-    ), row=1, col=1)
+    combined_fig.add_trace(
+        go.Scatter(
+            x=_time,
+            y=_original_ts,
+            name="Original Timeseries",
+            line=dict(color="rgba(0, 200, 255, 0.8)", width=1.5),
+            legendgroup="timeseries",
+        ),
+        row=1,
+        col=1,
+    )
 
     # Modified timeseries (bright magenta)
-    combined_fig.add_trace(go.Scatter(
-        x=_time, y=_modified_ts,
-        name='Modified Timeseries',
-        line=dict(color='magenta', width=1),
-        legendgroup='timeseries',
-    ), row=1, col=1)
+    combined_fig.add_trace(
+        go.Scatter(
+            x=_time,
+            y=_modified_ts,
+            name="Modified Timeseries",
+            line=dict(color="magenta", width=1),
+            legendgroup="timeseries",
+        ),
+        row=1,
+        col=1,
+    )
 
     # ----- LAYOUT -----
-    combined_fig.update_xaxes(type='log', range=[np.log10(20), np.log10(20000)],
-                              title='Frequency (Hz)', row=2, col=1)
-    combined_fig.update_yaxes(title='Magnitude (dB)', row=2, col=1)
+    combined_fig.update_xaxes(type="log", range=[np.log10(20), np.log10(20000)], title="Frequency (Hz)", row=2, col=1)
+    combined_fig.update_yaxes(title="Magnitude (dB)", row=2, col=1)
 
-    combined_fig.update_xaxes(title='Time', row=1, col=1)
-    combined_fig.update_yaxes(title='Value', row=1, col=1)
+    combined_fig.update_xaxes(title="Time", row=1, col=1)
+    combined_fig.update_yaxes(title="Value", row=1, col=1)
 
     combined_fig.update_layout(
-        template='plotly_dark',
+        template="plotly_dark",
         height=700,
         showlegend=True,
-        legend=dict(x=1.02, y=1, xanchor='left'),
-        title=f'Interactive Spectrum Analyzer: {_obs_name}',
+        legend=dict(x=1.02, y=1, xanchor="left"),
+        title=f"Interactive Spectrum Analyzer: {_obs_name}",
     )
 
     # =========================================================================
     # UNIFIED LAYOUT with sliders on left, plots on right
     # =========================================================================
-    _slider_panel = mo.vstack([
-        mo.md("### EQ Controls"),
-        obs_dropdown,
-        mo.md("**Frequency Gains:**"),
-        # *list(gain_sliders),  # All sliders stacked vertically
-        mo.md(f"**Gains:**\n"),
-        mo.md(f"{pprint.pformat([f'{g:.2f}' for g in current_gains])}")
-    ], justify="start")
+    _slider_panel = mo.vstack(
+        [
+            mo.md("### EQ Controls"),
+            obs_dropdown,
+            mo.md("**Frequency Gains:**"),
+            # *list(gain_sliders),  # All sliders stacked vertically
+            mo.md("**Gains:**\n"),
+            mo.md(f"{pprint.pformat([f'{g:.2f}' for g in current_gains])}"),
+        ],
+        justify="start",
+    )
 
     _slider_panel
     return (combined_fig,)
@@ -490,10 +534,14 @@ def _(gain_sliders, mo):
 
 @app.cell
 def _(combined_fig, mo):
-    mo.hstack([
-        # _slider_panel,
-        combined_fig,
-    ], widths=[1, 4], gap=2)
+    mo.hstack(
+        [
+            # _slider_panel,
+            combined_fig,
+        ],
+        widths=[1, 4],
+        gap=2,
+    )
     return
 
 

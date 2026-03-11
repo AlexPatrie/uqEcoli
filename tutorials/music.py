@@ -70,6 +70,7 @@ def _(Enum):
 
     class Clef(Enum):
         """Clefs represent observable classes."""
+
         TREBLE = ("transcriptome", "mRNA counts")
         BASS = ("proteome", "protein levels")
         ALTO = ("metabolome", "metabolic fluxes")
@@ -77,14 +78,16 @@ def _(Enum):
 
     class NoteValue(Enum):
         """Note values represent mode stability (inverse decay rate)."""
+
         WHOLE = (1.0, 0.001, "very stable")
         HALF = (0.5, 0.01, "stable")
         QUARTER = (0.25, 0.1, "moderate decay")
         EIGHTH = (0.125, 1.0, "fast decay")
-        SIXTEENTH = (0.0625, float('inf'), "transient")
+        SIXTEENTH = (0.0625, float("inf"), "transient")
 
     class Dynamic(Enum):
         """Dynamics represent mode amplitude."""
+
         PPP = ("ppp", 0.01, "pianississimo")
         PP = ("pp", 0.05, "pianissimo")
         P = ("p", 0.1, "piano")
@@ -96,6 +99,7 @@ def _(Enum):
 
     class Articulation(Enum):
         """Articulations represent growth/decay character."""
+
         STACCATO = ("staccato", "sharply decaying")
         TENUTO = ("tenuto", "sustained")
         ACCENT = ("accent", "growing")
@@ -103,6 +107,7 @@ def _(Enum):
 
     class Tempo(Enum):
         """Tempo markings represent cell cycle duration."""
+
         GRAVE = ("Grave", 120, "stationary phase")
         LARGO = ("Largo", 90, "minimal media")
         ADAGIO = ("Adagio", 70, "moderate growth")
@@ -118,13 +123,37 @@ def _(Enum):
 def _(mo, pd):
     # Create visualization of the mapping
     mapping_data = [
-        {"Musical Element": "Pitch (vertical)", "Koopman Equivalent": "Mode frequency", "Example": "Higher = faster oscillation"},
-        {"Musical Element": "Note duration", "Koopman Equivalent": "Mode stability", "Example": "Whole note = persistent mode"},
-        {"Musical Element": "Dynamics (pp-ff)", "Koopman Equivalent": "Mode amplitude", "Example": "fff = dominant mode"},
-        {"Musical Element": "Time signature", "Koopman Equivalent": "Cell cycle period", "Example": "4/4 = standard cycle"},
-        {"Musical Element": "Key signature", "Koopman Equivalent": "Harmonic structure", "Example": "C major = integer harmonics"},
+        {
+            "Musical Element": "Pitch (vertical)",
+            "Koopman Equivalent": "Mode frequency",
+            "Example": "Higher = faster oscillation",
+        },
+        {
+            "Musical Element": "Note duration",
+            "Koopman Equivalent": "Mode stability",
+            "Example": "Whole note = persistent mode",
+        },
+        {
+            "Musical Element": "Dynamics (pp-ff)",
+            "Koopman Equivalent": "Mode amplitude",
+            "Example": "fff = dominant mode",
+        },
+        {
+            "Musical Element": "Time signature",
+            "Koopman Equivalent": "Cell cycle period",
+            "Example": "4/4 = standard cycle",
+        },
+        {
+            "Musical Element": "Key signature",
+            "Koopman Equivalent": "Harmonic structure",
+            "Example": "C major = integer harmonics",
+        },
         {"Musical Element": "Articulation", "Koopman Equivalent": "Growth/decay rate", "Example": "Tenuto = sustained"},
-        {"Musical Element": "Tempo marking", "Koopman Equivalent": "Cycle duration", "Example": "Allegro = fast growth"},
+        {
+            "Musical Element": "Tempo marking",
+            "Koopman Equivalent": "Cycle duration",
+            "Example": "Allegro = fast growth",
+        },
         {"Musical Element": "Clef", "Koopman Equivalent": "Observable class", "Example": "Treble = transcriptome"},
     ]
 
@@ -162,11 +191,12 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
     @dataclass
     class CellularNote:
         """A single note in the cellular score, representing one Koopman mode."""
-        harmonic: float          # Harmonic number (1.0 = fundamental)
-        amplitude: float         # Mode amplitude (0-1)
-        growth_rate: float       # Growth/decay rate
-        frequency: float         # Actual frequency in Hz
-        observable_class: str    # Which observable class
+
+        harmonic: float  # Harmonic number (1.0 = fundamental)
+        amplitude: float  # Mode amplitude (0-1)
+        growth_rate: float  # Growth/decay rate
+        frequency: float  # Actual frequency in Hz
+        observable_class: str  # Which observable class
 
         def get_note_value(self) -> NoteValue:
             """Convert growth rate to note duration."""
@@ -235,10 +265,10 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
 
             return f"{note} {dyn} {art}  {harm}"
 
-
     @dataclass
     class CellularStaff:
         """A staff in the cellular score, representing one observable class."""
+
         clef: Clef
         notes: list = field(default_factory=list)
         time_signature: str = "4/4"
@@ -273,7 +303,6 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
 
             return "\n".join(lines)
 
-
     @dataclass
     class CellularScore:
         """
@@ -282,6 +311,7 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
         Converts Koopman spectral analysis results into musical notation,
         enabling intuitive understanding of cellular dynamics.
         """
+
         title: str = "Cellular Score"
         tempo: Tempo = Tempo.ANDANTE
         key: str = "C major"
@@ -347,7 +377,7 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
             fundamental_freq = 1.0 / (cell_cycle_time * 60)  # Convert to Hz
 
             # Determine key based on harmonic structure
-            harmonics = [m['frequency'] / fundamental_freq for m in modes if m['frequency'] > 0]
+            harmonics = [m["frequency"] / fundamental_freq for m in modes if m["frequency"] > 0]
             harmonic_deviation = np.mean([abs(h - round(h)) for h in harmonics]) if harmonics else 0
 
             if harmonic_deviation < 0.05:
@@ -367,17 +397,17 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
 
             # Group observables by class
             obs_classes = {
-                'transcriptome': [o for o in observable_names if 'mRNA' in o or 'rna' in o.lower()],
-                'proteome': [o for o in observable_names if 'protein' in o.lower()],
-                'metabolome': [o for o in observable_names if 'flux' in o.lower()],
-                'properties': [o for o in observable_names if 'mass' in o.lower() or 'growth' in o.lower()],
+                "transcriptome": [o for o in observable_names if "mRNA" in o or "rna" in o.lower()],
+                "proteome": [o for o in observable_names if "protein" in o.lower()],
+                "metabolome": [o for o in observable_names if "flux" in o.lower()],
+                "properties": [o for o in observable_names if "mass" in o.lower() or "growth" in o.lower()],
             }
 
             clef_map = {
-                'transcriptome': Clef.TREBLE,
-                'proteome': Clef.BASS,
-                'metabolome': Clef.ALTO,
-                'properties': Clef.TENOR,
+                "transcriptome": Clef.TREBLE,
+                "proteome": Clef.BASS,
+                "metabolome": Clef.ALTO,
+                "properties": Clef.TENOR,
             }
 
             # Create staves for each observable class
@@ -388,21 +418,21 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
                 staff = CellularStaff(clef=clef_map[obs_class])
 
                 for mode in modes:
-                    freq = mode['frequency']
+                    freq = mode["frequency"]
                     if freq <= 0:
                         harmonic = 0  # Growth mode
                     else:
                         harmonic = freq / fundamental_freq
 
                     # Get average amplitude for this observable class
-                    mode_shape = mode.get('mode_shape', {})
+                    mode_shape = mode.get("mode_shape", {})
                     class_amps = [mode_shape.get(o, 0) for o in obs_list]
-                    avg_amp = np.mean(class_amps) if class_amps else mode['amplitude']
+                    avg_amp = np.mean(class_amps) if class_amps else mode["amplitude"]
 
                     note = CellularNote(
                         harmonic=harmonic,
                         amplitude=avg_amp,
-                        growth_rate=mode['growth_rate'],
+                        growth_rate=mode["growth_rate"],
                         frequency=freq,
                         observable_class=obs_class,
                     )
@@ -468,12 +498,10 @@ def _(np):
 
         # Growth mode (non-oscillatory)
         modes.append({
-            'frequency': 0.0,
-            'amplitude': 0.8 if condition == "healthy" else 0.5,
-            'growth_rate': 0.001,  # Slight positive growth
-            'mode_shape': {
-                'mass': 0.9, 'mRNA_total': 0.3, 'protein_total': 0.4, 'flux_total': 0.2
-            },
+            "frequency": 0.0,
+            "amplitude": 0.8 if condition == "healthy" else 0.5,
+            "growth_rate": 0.001,  # Slight positive growth
+            "mode_shape": {"mass": 0.9, "mRNA_total": 0.3, "protein_total": 0.4, "flux_total": 0.2},
         })
 
         # Oscillatory modes (harmonics of cell cycle)
@@ -481,24 +509,24 @@ def _(np):
             freq_deviation = rng.normal(0, freq_noise)
             freq = fundamental_freq * n * (1 + freq_deviation)
 
-            amplitude = (1.0 / (n ** amp_decay)) * (1 + rng.normal(0, noise_level))
+            amplitude = (1.0 / (n**amp_decay)) * (1 + rng.normal(0, noise_level))
             amplitude = max(0.01, min(1.0, amplitude))
 
             growth_rate = -stability * n + rng.normal(0, stability * 0.5)
 
             # Mode shape varies by harmonic
             mode_shape = {
-                'mass': 0.8 / n + rng.random() * 0.2,
-                'mRNA_total': 0.6 + 0.2 * np.sin(n * np.pi / 3) + rng.random() * 0.2,
-                'protein_total': 0.5 + 0.1 * np.cos(n * np.pi / 4) + rng.random() * 0.2,
-                'flux_total': 0.3 + 0.4 * (n % 2) + rng.random() * 0.2,
+                "mass": 0.8 / n + rng.random() * 0.2,
+                "mRNA_total": 0.6 + 0.2 * np.sin(n * np.pi / 3) + rng.random() * 0.2,
+                "protein_total": 0.5 + 0.1 * np.cos(n * np.pi / 4) + rng.random() * 0.2,
+                "flux_total": 0.3 + 0.4 * (n % 2) + rng.random() * 0.2,
             }
 
             modes.append({
-                'frequency': freq,
-                'amplitude': amplitude,
-                'growth_rate': growth_rate,
-                'mode_shape': mode_shape,
+                "frequency": freq,
+                "amplitude": amplitude,
+                "growth_rate": growth_rate,
+                "mode_shape": mode_shape,
             })
 
         return modes
@@ -513,7 +541,7 @@ def _(np):
 @app.cell
 def _(CellularScore, healthy_spectrum, mo):
     # Create and display the healthy cell score
-    observable_names = ['mass', 'mRNA_total', 'protein_total', 'flux_total']
+    observable_names = ["mass", "mRNA_total", "protein_total", "flux_total"]
 
     healthy_score = CellularScore.from_spectrum(
         modes=healthy_spectrum,
@@ -549,17 +577,17 @@ def _(healthy_spectrum, mo, mutant_spectrum, pd, stressed_spectrum):
         fundamental_freq = 1.0 / (cell_cycle_time * 60)
         rows = []
         for _i, mode in enumerate(spectrum):
-            freq = mode['frequency']
+            freq = mode["frequency"]
             harmonic = freq / fundamental_freq if freq > 0 else 0
             rows.append({
-                'condition': condition,
-                'mode_idx': _i,
-                'frequency': freq,
-                'harmonic': harmonic,
-                'amplitude': mode['amplitude'],
-                'growth_rate': mode['growth_rate'],
-                'is_oscillatory': freq > 0,
-                'note_size': 100 + mode['amplitude'] * 400,
+                "condition": condition,
+                "mode_idx": _i,
+                "frequency": freq,
+                "harmonic": harmonic,
+                "amplitude": mode["amplitude"],
+                "growth_rate": mode["growth_rate"],
+                "is_oscillatory": freq > 0,
+                "note_size": 100 + mode["amplitude"] * 400,
             })
         return pd.DataFrame(rows)
 
@@ -585,42 +613,44 @@ def _(healthy_spectrum, mo, mutant_spectrum, pd, stressed_spectrum):
 @app.cell
 def _(all_spectra, alt, pd):
     # Create the "score" visualization
-    score_chart = alt.Chart(all_spectra).mark_circle().encode(
-        x=alt.X('condition:N', title='Condition', axis=alt.Axis(labelAngle=0)),
-        y=alt.Y('harmonic:Q', title='Harmonic Number (Pitch)',
-                scale=alt.Scale(domain=[-0.5, 5])),
-        size=alt.Size('amplitude:Q', title='Amplitude (Dynamics)',
-                      scale=alt.Scale(range=[50, 500]),
-                      legend=alt.Legend(title="Amplitude")),
-        color=alt.Color('growth_rate:Q', title='Growth Rate',
-                        scale=alt.Scale(scheme='redblue', domain=[-0.1, 0.01]),
-                        legend=alt.Legend(title="Stability")),
-        tooltip=['condition', 'harmonic', 'amplitude', 'growth_rate', 'frequency']
-    ).properties(
-        width=400,
-        height=400,
-        title='Koopman Spectrum as Musical Score'
+    score_chart = (
+        alt.Chart(all_spectra)
+        .mark_circle()
+        .encode(
+            x=alt.X("condition:N", title="Condition", axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("harmonic:Q", title="Harmonic Number (Pitch)", scale=alt.Scale(domain=[-0.5, 5])),
+            size=alt.Size(
+                "amplitude:Q",
+                title="Amplitude (Dynamics)",
+                scale=alt.Scale(range=[50, 500]),
+                legend=alt.Legend(title="Amplitude"),
+            ),
+            color=alt.Color(
+                "growth_rate:Q",
+                title="Growth Rate",
+                scale=alt.Scale(scheme="redblue", domain=[-0.1, 0.01]),
+                legend=alt.Legend(title="Stability"),
+            ),
+            tooltip=["condition", "harmonic", "amplitude", "growth_rate", "frequency"],
+        )
+        .properties(width=400, height=400, title="Koopman Spectrum as Musical Score")
     )
 
     # Add reference lines for integer harmonics (like staff lines)
-    harmonic_lines = alt.Chart(
-        pd.DataFrame({'harmonic': [0, 1, 2, 3, 4]})
-    ).mark_rule(strokeDash=[5, 5], opacity=0.3).encode(
-        y='harmonic:Q'
+    harmonic_lines = (
+        alt.Chart(pd.DataFrame({"harmonic": [0, 1, 2, 3, 4]}))
+        .mark_rule(strokeDash=[5, 5], opacity=0.3)
+        .encode(y="harmonic:Q")
     )
 
     # Add harmonic labels
-    harmonic_labels = alt.Chart(
-        pd.DataFrame({
-            'harmonic': [0, 1, 2, 3, 4],
-            'label': ['Growth', 'Fund.', '2nd', '3rd', '4th']
-        })
-    ).mark_text(align='right', dx=-10, fontSize=10).encode(
-        y='harmonic:Q',
-        text='label:N'
+    harmonic_labels = (
+        alt.Chart(pd.DataFrame({"harmonic": [0, 1, 2, 3, 4], "label": ["Growth", "Fund.", "2nd", "3rd", "4th"]}))
+        .mark_text(align="right", dx=-10, fontSize=10)
+        .encode(y="harmonic:Q", text="label:N")
     )
 
-    combined_score = (harmonic_lines + score_chart + harmonic_labels)
+    combined_score = harmonic_lines + score_chart + harmonic_labels
     combined_score
     return
 
@@ -638,35 +668,34 @@ def _(mo):
 @app.cell
 def _(all_spectra, alt, pd):
     # Create dynamics comparison chart
-    dynamics_chart = alt.Chart(all_spectra[all_spectra['harmonic'] > 0]).mark_bar().encode(
-        x=alt.X('harmonic:O', title='Harmonic'),
-        y=alt.Y('amplitude:Q', title='Amplitude'),
-        color=alt.Color('condition:N',
-                        scale=alt.Scale(domain=['Wild-Type', 'Stressed', 'Mutant'],
-                                       range=['#2ecc71', '#e74c3c', '#9b59b6'])),
-        xOffset='condition:N',
-        tooltip=['condition', 'harmonic', 'amplitude']
-    ).properties(
-        width=500,
-        height=300,
-        title='Mode Amplitudes by Condition (Musical Dynamics)'
+    dynamics_chart = (
+        alt.Chart(all_spectra[all_spectra["harmonic"] > 0])
+        .mark_bar()
+        .encode(
+            x=alt.X("harmonic:O", title="Harmonic"),
+            y=alt.Y("amplitude:Q", title="Amplitude"),
+            color=alt.Color(
+                "condition:N",
+                scale=alt.Scale(domain=["Wild-Type", "Stressed", "Mutant"], range=["#2ecc71", "#e74c3c", "#9b59b6"]),
+            ),
+            xOffset="condition:N",
+            tooltip=["condition", "harmonic", "amplitude"],
+        )
+        .properties(width=500, height=300, title="Mode Amplitudes by Condition (Musical Dynamics)")
     )
 
     # Add dynamic markings
     dynamic_markers = pd.DataFrame({
-        'amplitude': [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8],
-        'label': ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff']
+        "amplitude": [0.01, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8],
+        "label": ["ppp", "pp", "p", "mp", "mf", "f", "ff"],
     })
 
-    dynamic_lines = alt.Chart(dynamic_markers).mark_rule(
-        strokeDash=[2, 2], opacity=0.5
-    ).encode(y='amplitude:Q')
+    dynamic_lines = alt.Chart(dynamic_markers).mark_rule(strokeDash=[2, 2], opacity=0.5).encode(y="amplitude:Q")
 
-    dynamic_labels_chart = alt.Chart(dynamic_markers).mark_text(
-        align='left', dx=5, fontSize=9, color='gray'
-    ).encode(
-        y='amplitude:Q',
-        text='label:N'
+    dynamic_labels_chart = (
+        alt.Chart(dynamic_markers)
+        .mark_text(align="left", dx=5, fontSize=9, color="gray")
+        .encode(y="amplitude:Q", text="label:N")
     )
 
     (dynamics_chart + dynamic_lines + dynamic_labels_chart)
@@ -689,40 +718,42 @@ def _(alt, healthy_spectrum, mo, pd):
     # Extract mode shapes for visualization
     mode_shape_data = []
     for _i, mode in enumerate(healthy_spectrum):
-        freq = mode['frequency']
+        freq = mode["frequency"]
         fundamental_freq = 1.0 / (40.0 * 60)
         harmonic = freq / fundamental_freq if freq > 0 else 0
 
-        for obs, amp in mode['mode_shape'].items():
+        for obs, amp in mode["mode_shape"].items():
             mode_shape_data.append({
-                'harmonic': f"{harmonic:.0f}x" if harmonic > 0 else "Growth",
-                'observable': obs.replace('_', ' ').title(),
-                'participation': amp,
-                'harmonic_num': harmonic,
+                "harmonic": f"{harmonic:.0f}x" if harmonic > 0 else "Growth",
+                "observable": obs.replace("_", " ").title(),
+                "participation": amp,
+                "harmonic_num": harmonic,
             })
 
     mode_shape_df = pd.DataFrame(mode_shape_data)
 
     # Create heatmap (like an orchestration chart)
-    orchestration_chart = alt.Chart(mode_shape_df).mark_rect().encode(
-        x=alt.X('harmonic:N', title='Harmonic (Mode)', sort=['Growth', '1x', '2x', '3x', '4x']),
-        y=alt.Y('observable:N', title='Observable (Instrument)'),
-        color=alt.Color('participation:Q', title='Participation',
-                        scale=alt.Scale(scheme='viridis')),
-        tooltip=['harmonic', 'observable', alt.Tooltip('participation:Q', format='.2f')]
-    ).properties(
-        width=400,
-        height=250,
-        title='Mode Shape as Orchestration Chart'
+    orchestration_chart = (
+        alt.Chart(mode_shape_df)
+        .mark_rect()
+        .encode(
+            x=alt.X("harmonic:N", title="Harmonic (Mode)", sort=["Growth", "1x", "2x", "3x", "4x"]),
+            y=alt.Y("observable:N", title="Observable (Instrument)"),
+            color=alt.Color("participation:Q", title="Participation", scale=alt.Scale(scheme="viridis")),
+            tooltip=["harmonic", "observable", alt.Tooltip("participation:Q", format=".2f")],
+        )
+        .properties(width=400, height=250, title="Mode Shape as Orchestration Chart")
     )
 
     # Add text labels
-    orchestration_text = alt.Chart(mode_shape_df).mark_text(
-        color='white', fontSize=11
-    ).encode(
-        x=alt.X('harmonic:N', sort=['Growth', '1x', '2x', '3x', '4x']),
-        y='observable:N',
-        text=alt.Text('participation:Q', format='.2f')
+    orchestration_text = (
+        alt.Chart(mode_shape_df)
+        .mark_text(color="white", fontSize=11)
+        .encode(
+            x=alt.X("harmonic:N", sort=["Growth", "1x", "2x", "3x", "4x"]),
+            y="observable:N",
+            text=alt.Text("participation:Q", format=".2f"),
+        )
     )
 
     mo.md("""
@@ -764,8 +795,8 @@ def _(alt, healthy_spectrum, np, pd):
         fundamental_freq = 1.0 / (40.0 * 60)
 
         for _i, mode in enumerate(spectrum):
-            freq = mode['frequency']
-            growth = mode['growth_rate']
+            freq = mode["frequency"]
+            growth = mode["growth_rate"]
 
             # Eigenvalue: lambda = e^{(gamma + i*omega)*dt}
             omega = 2 * np.pi * freq
@@ -776,14 +807,14 @@ def _(alt, healthy_spectrum, np, pd):
             harmonic = freq / fundamental_freq if freq > 0 else 0
 
             rows.append({
-                'mode_idx': _i,
-                'real': eigenvalue.real,
-                'imag': eigenvalue.imag,
-                'magnitude': np.abs(eigenvalue),
-                'angle': np.angle(eigenvalue),
-                'amplitude': mode['amplitude'],
-                'harmonic': f"{harmonic:.0f}x" if harmonic > 0 else "Growth",
-                'is_stable': np.abs(eigenvalue) <= 1.0,
+                "mode_idx": _i,
+                "real": eigenvalue.real,
+                "imag": eigenvalue.imag,
+                "magnitude": np.abs(eigenvalue),
+                "angle": np.angle(eigenvalue),
+                "amplitude": mode["amplitude"],
+                "harmonic": f"{harmonic:.0f}x" if harmonic > 0 else "Growth",
+                "is_stable": np.abs(eigenvalue) <= 1.0,
             })
 
         return pd.DataFrame(rows)
@@ -792,37 +823,31 @@ def _(alt, healthy_spectrum, np, pd):
 
     # Unit circle
     theta = np.linspace(0, 2 * np.pi, 100)
-    unit_circle_df = pd.DataFrame({
-        'x': np.cos(theta),
-        'y': np.sin(theta)
-    })
+    unit_circle_df = pd.DataFrame({"x": np.cos(theta), "y": np.sin(theta)})
 
-    unit_circle = alt.Chart(unit_circle_df).mark_line(
-        strokeDash=[5, 5], color='gray', opacity=0.5
-    ).encode(x='x:Q', y='y:Q')
-
-    # Eigenvalue points
-    eigenvalue_points = alt.Chart(eigenvalue_df).mark_circle().encode(
-        x=alt.X('real:Q', title='Real Part', scale=alt.Scale(domain=[-1.5, 1.5])),
-        y=alt.Y('imag:Q', title='Imaginary Part', scale=alt.Scale(domain=[-1.5, 1.5])),
-        size=alt.Size('amplitude:Q', scale=alt.Scale(range=[50, 400]),
-                      legend=alt.Legend(title='Amplitude')),
-        color=alt.Color('harmonic:N', legend=alt.Legend(title='Mode')),
-        tooltip=['harmonic', 'real', 'imag', 'magnitude', 'amplitude']
+    unit_circle = (
+        alt.Chart(unit_circle_df).mark_line(strokeDash=[5, 5], color="gray", opacity=0.5).encode(x="x:Q", y="y:Q")
     )
 
-    eigenvalue_labels = alt.Chart(eigenvalue_df).mark_text(
-        dx=15, fontSize=10
-    ).encode(
-        x='real:Q',
-        y='imag:Q',
-        text='harmonic:N'
+    # Eigenvalue points
+    eigenvalue_points = (
+        alt.Chart(eigenvalue_df)
+        .mark_circle()
+        .encode(
+            x=alt.X("real:Q", title="Real Part", scale=alt.Scale(domain=[-1.5, 1.5])),
+            y=alt.Y("imag:Q", title="Imaginary Part", scale=alt.Scale(domain=[-1.5, 1.5])),
+            size=alt.Size("amplitude:Q", scale=alt.Scale(range=[50, 400]), legend=alt.Legend(title="Amplitude")),
+            color=alt.Color("harmonic:N", legend=alt.Legend(title="Mode")),
+            tooltip=["harmonic", "real", "imag", "magnitude", "amplitude"],
+        )
+    )
+
+    eigenvalue_labels = (
+        alt.Chart(eigenvalue_df).mark_text(dx=15, fontSize=10).encode(x="real:Q", y="imag:Q", text="harmonic:N")
     )
 
     eigenvalue_chart = (unit_circle + eigenvalue_points + eigenvalue_labels).properties(
-        width=400,
-        height=400,
-        title='Eigenvalue Spectrum in Complex Plane'
+        width=400, height=400, title="Eigenvalue Spectrum in Complex Plane"
     )
 
     eigenvalue_chart
@@ -860,10 +885,10 @@ def _(Tempo, alt, pd):
     tempo_data = []
     for tempo in Tempo:
         tempo_data.append({
-            'marking': tempo.value[0],
-            'cycle_time': tempo.value[1],
-            'description': tempo.value[2],
-            'order': list(Tempo).index(tempo),
+            "marking": tempo.value[0],
+            "cycle_time": tempo.value[1],
+            "description": tempo.value[2],
+            "order": list(Tempo).index(tempo),
         })
 
     tempo_df = pd.DataFrame(tempo_data)
@@ -871,28 +896,27 @@ def _(Tempo, alt, pd):
     # Current cell cycle marker
     current_cycle = 40  # minutes
 
-    tempo_chart = alt.Chart(tempo_df).mark_bar(opacity=0.7).encode(
-        x=alt.X('cycle_time:Q', title='Cell Cycle Time (minutes)'),
-        y=alt.Y('marking:N', title='Tempo Marking',
-                sort=alt.EncodingSortField(field='order', order='descending')),
-        color=alt.Color('cycle_time:Q', scale=alt.Scale(scheme='viridis'),
-                        legend=None),
-        tooltip=['marking', 'cycle_time', 'description']
-    ).properties(
-        width=400,
-        height=300,
-        title='Tempo Markings for Cell Cycle Duration'
+    tempo_chart = (
+        alt.Chart(tempo_df)
+        .mark_bar(opacity=0.7)
+        .encode(
+            x=alt.X("cycle_time:Q", title="Cell Cycle Time (minutes)"),
+            y=alt.Y("marking:N", title="Tempo Marking", sort=alt.EncodingSortField(field="order", order="descending")),
+            color=alt.Color("cycle_time:Q", scale=alt.Scale(scheme="viridis"), legend=None),
+            tooltip=["marking", "cycle_time", "description"],
+        )
+        .properties(width=400, height=300, title="Tempo Markings for Cell Cycle Duration")
     )
 
     # Add current tempo marker
-    current_tempo_line = alt.Chart(
-        pd.DataFrame({'x': [current_cycle]})
-    ).mark_rule(color='red', strokeWidth=2).encode(x='x:Q')
+    current_tempo_line = (
+        alt.Chart(pd.DataFrame({"x": [current_cycle]})).mark_rule(color="red", strokeWidth=2).encode(x="x:Q")
+    )
 
-    current_tempo_label = alt.Chart(
-        pd.DataFrame({'x': [current_cycle], 'label': ['Current: 40 min']})
-    ).mark_text(color='red', dx=5, dy=-10, align='left').encode(
-        x='x:Q', text='label:N'
+    current_tempo_label = (
+        alt.Chart(pd.DataFrame({"x": [current_cycle], "label": ["Current: 40 min"]}))
+        .mark_text(color="red", dx=5, dy=-10, align="left")
+        .encode(x="x:Q", text="label:N")
     )
 
     (tempo_chart + current_tempo_line + current_tempo_label)
@@ -920,15 +944,9 @@ def _(
 ):
     # Generate scores for all conditions
     scores = {
-        "Wild-Type": CellularScore.from_spectrum(
-            healthy_spectrum, observable_names, 40.0, "Wild-Type E. coli"
-        ),
-        "Stressed": CellularScore.from_spectrum(
-            stressed_spectrum, observable_names, 40.0, "Stressed E. coli"
-        ),
-        "Mutant": CellularScore.from_spectrum(
-            mutant_spectrum, observable_names, 40.0, "Mutant E. coli"
-        ),
+        "Wild-Type": CellularScore.from_spectrum(healthy_spectrum, observable_names, 40.0, "Wild-Type E. coli"),
+        "Stressed": CellularScore.from_spectrum(stressed_spectrum, observable_names, 40.0, "Stressed E. coli"),
+        "Mutant": CellularScore.from_spectrum(mutant_spectrum, observable_names, 40.0, "Mutant E. coli"),
     }
 
     mo.md(f"""
@@ -957,21 +975,22 @@ def _(
 @app.cell
 def _(all_spectra, alt):
     # Create faceted comparison
-    faceted_score = alt.Chart(all_spectra).mark_circle().encode(
-        x=alt.X('growth_rate:Q', title='Stability (Growth Rate)',
-                scale=alt.Scale(domain=[-0.15, 0.02])),
-        y=alt.Y('harmonic:Q', title='Harmonic (Pitch)',
-                scale=alt.Scale(domain=[-0.5, 5])),
-        size=alt.Size('amplitude:Q', scale=alt.Scale(range=[30, 300])),
-        color=alt.Color('amplitude:Q', scale=alt.Scale(scheme='plasma')),
-        tooltip=['harmonic', 'amplitude', 'growth_rate']
-    ).properties(
-        width=200,
-        height=300,
-    ).facet(
-        column=alt.Column('condition:N', title='Cellular Condition')
-    ).properties(
-        title='Koopman Spectra Comparison: Stability vs Pitch'
+    faceted_score = (
+        alt.Chart(all_spectra)
+        .mark_circle()
+        .encode(
+            x=alt.X("growth_rate:Q", title="Stability (Growth Rate)", scale=alt.Scale(domain=[-0.15, 0.02])),
+            y=alt.Y("harmonic:Q", title="Harmonic (Pitch)", scale=alt.Scale(domain=[-0.5, 5])),
+            size=alt.Size("amplitude:Q", scale=alt.Scale(range=[30, 300])),
+            color=alt.Color("amplitude:Q", scale=alt.Scale(scheme="plasma")),
+            tooltip=["harmonic", "amplitude", "growth_rate"],
+        )
+        .properties(
+            width=200,
+            height=300,
+        )
+        .facet(column=alt.Column("condition:N", title="Cellular Condition"))
+        .properties(title="Koopman Spectra Comparison: Stability vs Pitch")
     )
 
     faceted_score
@@ -997,14 +1016,14 @@ def _(alt, healthy_spectrum, np, pd):
         phase_data = []
         fundamental_freq = 1.0 / (40.0 * 60)
 
-        oscillatory_modes = [m for m in healthy_spectrum if m['frequency'] > 0]
+        oscillatory_modes = [m for m in healthy_spectrum if m["frequency"] > 0]
 
         for _i, mode_i in enumerate(oscillatory_modes):
             for _j, mode_j in enumerate(oscillatory_modes):
                 if _i < _j:
                     # Calculate phase difference
-                    omega_i = 2 * np.pi * mode_i['frequency']
-                    omega_j = 2 * np.pi * mode_j['frequency']
+                    omega_i = 2 * np.pi * mode_i["frequency"]
+                    omega_j = 2 * np.pi * mode_j["frequency"]
 
                     # Phase is complex argument of eigenvalue
                     phase_i = omega_i  # Simplified
@@ -1014,28 +1033,32 @@ def _(alt, healthy_spectrum, np, pd):
                     if phase_diff > np.pi:
                         phase_diff = 2 * np.pi - phase_diff
 
-                    harm_i = mode_i['frequency'] / fundamental_freq
-                    harm_j = mode_j['frequency'] / fundamental_freq
+                    harm_i = mode_i["frequency"] / fundamental_freq
+                    harm_j = mode_j["frequency"] / fundamental_freq
 
                     phase_data.append({
-                        'mode_i': f"{harm_i:.0f}x",
-                        'mode_j': f"{harm_j:.0f}x",
-                        'phase_diff': np.degrees(phase_diff),
-                        'relationship': 'In Phase' if phase_diff < 30 else ('Quadrature' if 60 < phase_diff < 120 else 'Out of Phase'),
+                        "mode_i": f"{harm_i:.0f}x",
+                        "mode_j": f"{harm_j:.0f}x",
+                        "phase_diff": np.degrees(phase_diff),
+                        "relationship": "In Phase"
+                        if phase_diff < 30
+                        else ("Quadrature" if 60 < phase_diff < 120 else "Out of Phase"),
                     })
 
         phase_df = pd.DataFrame(phase_data)
 
-        phase_chart = alt.Chart(phase_df).mark_rect().encode(
-            x=alt.X('mode_i:N', title='Mode A'),
-            y=alt.Y('mode_j:N', title='Mode B'),
-            color=alt.Color('phase_diff:Q', title='Phase Difference ()',
-                            scale=alt.Scale(scheme='viridis', domain=[0, 180])),
-            tooltip=['mode_i', 'mode_j', alt.Tooltip('phase_diff:Q', format='.1f'), 'relationship']
-        ).properties(
-            width=300,
-            height=300,
-            title='Phase Relationships Between Modes'
+        phase_chart = (
+            alt.Chart(phase_df)
+            .mark_rect()
+            .encode(
+                x=alt.X("mode_i:N", title="Mode A"),
+                y=alt.Y("mode_j:N", title="Mode B"),
+                color=alt.Color(
+                    "phase_diff:Q", title="Phase Difference ()", scale=alt.Scale(scheme="viridis", domain=[0, 180])
+                ),
+                tooltip=["mode_i", "mode_j", alt.Tooltip("phase_diff:Q", format=".1f"), "relationship"],
+            )
+            .properties(width=300, height=300, title="Phase Relationships Between Modes")
         )
 
         return phase_chart
@@ -1061,18 +1084,21 @@ def _(CellularNote, CellularScore, CellularStaff, Clef, mo):
     demo_staff = CellularStaff(clef=Clef.TREBLE)
 
     # Add notes manually
-    demo_staff.add_note(CellularNote(
-        harmonic=1.0, amplitude=0.85, growth_rate=-0.001,
-        frequency=0.000417, observable_class='transcriptome'
-    ))
-    demo_staff.add_note(CellularNote(
-        harmonic=2.0, amplitude=0.42, growth_rate=-0.003,
-        frequency=0.000834, observable_class='transcriptome'
-    ))
-    demo_staff.add_note(CellularNote(
-        harmonic=3.0, amplitude=0.18, growth_rate=-0.008,
-        frequency=0.001251, observable_class='transcriptome'
-    ))
+    demo_staff.add_note(
+        CellularNote(
+            harmonic=1.0, amplitude=0.85, growth_rate=-0.001, frequency=0.000417, observable_class="transcriptome"
+        )
+    )
+    demo_staff.add_note(
+        CellularNote(
+            harmonic=2.0, amplitude=0.42, growth_rate=-0.003, frequency=0.000834, observable_class="transcriptome"
+        )
+    )
+    demo_staff.add_note(
+        CellularNote(
+            harmonic=3.0, amplitude=0.18, growth_rate=-0.008, frequency=0.001251, observable_class="transcriptome"
+        )
+    )
 
     demo_score = CellularScore(
         title="Manual Score Construction Demo",
@@ -1195,21 +1221,21 @@ def _(mo):
 
 @app.cell
 def _():
-    from music21 import corpus 
+    from music21 import corpus
 
-    s = corpus.parse('bach/bwv65.2.xml')
+    s = corpus.parse("bach/bwv65.2.xml")
     return (s,)
 
 
 @app.cell
 def _(s):
-    s.analyze('key')
+    s.analyze("key")
     return
 
 
 @app.cell
 def _():
-    import music21 as mc 
+    import music21 as mc
 
     # mc.configure.run()
     return (mc,)
@@ -1224,6 +1250,7 @@ def _(s):
 @app.cell
 def _():
     import partitura as pt
+
     my_xml_file = pt.EXAMPLE_MUSICXML
     score = pt.load_score(my_xml_file)
     return pt, score
@@ -1244,9 +1271,8 @@ def _(part, pt):
 
 @app.cell
 def _(mc):
-
     us = mc.environment.UserSettings()
-    us['musescoreDirectPNGPath'].exists()
+    us["musescoreDirectPNGPath"].exists()
     return
 
 

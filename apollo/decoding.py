@@ -9,18 +9,18 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
+from apollo.mappings import (
+    articulation_to_growth_sign,
+    duration_to_growth_rate,
+    dynamic_to_amplitude,
+    pitch_to_frequency,
+)
 from apollo.types import (
     CellularNote,
     CellularScore,
     CellularStaff,
     LosslessMode,
     LosslessScore,
-)
-from apollo.mappings import (
-    articulation_to_growth_sign,
-    duration_to_growth_rate,
-    dynamic_to_amplitude,
-    pitch_to_frequency,
 )
 
 if TYPE_CHECKING:

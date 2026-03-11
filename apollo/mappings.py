@@ -22,7 +22,6 @@ from apollo.types import (
     Tempo,
 )
 
-
 # =============================================================================
 # Pitch <-> Frequency Mapping
 # =============================================================================
@@ -214,14 +213,14 @@ DURATION_VALUES = {
 # Growth rate thresholds for duration mapping
 # |gamma| = k / D where k = 0.01 (default scaling)
 GROWTH_RATE_THRESHOLDS = {
-    NoteValue.BREVE: 0.005,          # Extremely stable
-    NoteValue.WHOLE: 0.01,           # Very stable
-    NoteValue.HALF: 0.02,            # Stable
-    NoteValue.QUARTER: 0.04,         # Moderately stable
-    NoteValue.EIGHTH: 0.08,          # Moderate decay
-    NoteValue.SIXTEENTH: 0.16,       # Fast decay
-    NoteValue.THIRTY_SECOND: 0.32,   # Very fast decay
-    NoteValue.SIXTY_FOURTH: float('inf'),  # Transient
+    NoteValue.BREVE: 0.005,  # Extremely stable
+    NoteValue.WHOLE: 0.01,  # Very stable
+    NoteValue.HALF: 0.02,  # Stable
+    NoteValue.QUARTER: 0.04,  # Moderately stable
+    NoteValue.EIGHTH: 0.08,  # Moderate decay
+    NoteValue.SIXTEENTH: 0.16,  # Fast decay
+    NoteValue.THIRTY_SECOND: 0.32,  # Very fast decay
+    NoteValue.SIXTY_FOURTH: float("inf"),  # Transient
 }
 
 
@@ -361,6 +360,7 @@ def dynamic_to_amplitude(dynamic: Dynamic) -> float:
 # =============================================================================
 # Articulation <-> Growth Rate Sign Mapping
 # =============================================================================
+
 
 def growth_rate_to_articulation(growth_rate: float, threshold: float = 0.001) -> Articulation:
     """
@@ -530,6 +530,7 @@ def classify_observable(name: str) -> ObservableClass:
 # =============================================================================
 # Key Signature <-> Harmonic Structure Mapping
 # =============================================================================
+
 
 def harmonic_deviation_to_key(mean_deviation: float) -> KeySignature:
     """

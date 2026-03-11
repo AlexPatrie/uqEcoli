@@ -16,10 +16,10 @@ import numpy as np
 class Clef(str, Enum):
     """Musical clef representing observable class."""
 
-    TREBLE = "treble"      # Transcriptome
-    BASS = "bass"          # Proteome
-    ALTO = "alto"          # Metabolome (fluxes)
-    TENOR = "tenor"        # Exchange fluxes
+    TREBLE = "treble"  # Transcriptome
+    BASS = "bass"  # Proteome
+    ALTO = "alto"  # Metabolome (fluxes)
+    TENOR = "tenor"  # Exchange fluxes
     PERCUSSION = "percussion"  # Higher-order properties
 
 
@@ -36,83 +36,83 @@ class ObservableClass(str, Enum):
 class NoteValue(str, Enum):
     """Musical note duration values."""
 
-    BREVE = "breve"              # Double whole note (2.0)
-    WHOLE = "whole"              # 1.0
-    HALF = "half"                # 0.5
-    QUARTER = "quarter"          # 0.25
-    EIGHTH = "eighth"            # 0.125
-    SIXTEENTH = "16th"           # 0.0625
-    THIRTY_SECOND = "32nd"       # 0.03125
-    SIXTY_FOURTH = "64th"        # 0.015625
+    BREVE = "breve"  # Double whole note (2.0)
+    WHOLE = "whole"  # 1.0
+    HALF = "half"  # 0.5
+    QUARTER = "quarter"  # 0.25
+    EIGHTH = "eighth"  # 0.125
+    SIXTEENTH = "16th"  # 0.0625
+    THIRTY_SECOND = "32nd"  # 0.03125
+    SIXTY_FOURTH = "64th"  # 0.015625
 
 
 class Dynamic(str, Enum):
     """Musical dynamic markings."""
 
-    PPPPP = "ppppp"   # [0.000, 0.005]
-    PPPP = "pppp"     # [0.005, 0.010]
-    PPP = "ppp"       # [0.010, 0.025]
-    PP = "pp"         # [0.025, 0.050]
-    P = "p"           # [0.050, 0.100]
-    MP = "mp"         # [0.100, 0.200]
-    MF = "mf"         # [0.200, 0.400]
-    F = "f"           # [0.400, 0.600]
-    FF = "ff"         # [0.600, 0.800]
-    FFF = "fff"       # [0.800, 0.900]
-    FFFF = "ffff"     # [0.900, 0.950]
-    FFFFF = "fffff"   # [0.950, 1.000]
+    PPPPP = "ppppp"  # [0.000, 0.005]
+    PPPP = "pppp"  # [0.005, 0.010]
+    PPP = "ppp"  # [0.010, 0.025]
+    PP = "pp"  # [0.025, 0.050]
+    P = "p"  # [0.050, 0.100]
+    MP = "mp"  # [0.100, 0.200]
+    MF = "mf"  # [0.200, 0.400]
+    F = "f"  # [0.400, 0.600]
+    FF = "ff"  # [0.600, 0.800]
+    FFF = "fff"  # [0.800, 0.900]
+    FFFF = "ffff"  # [0.900, 0.950]
+    FFFFF = "fffff"  # [0.950, 1.000]
 
 
 class Articulation(str, Enum):
     """Musical articulation marking growth/decay sign."""
 
-    TENUTO = "tenuto"       # - : gamma approximately 0 (sustained)
-    STACCATO = "staccato"   # . : gamma < 0 (decaying/stable)
-    ACCENT = "accent"       # > : gamma > 0 (growing/unstable)
-    FERMATA = "fermata"     # U : gamma = 0 exactly (on unit circle)
-    MARCATO = "marcato"     # ^ : gamma >> 0 (strongly growing)
+    TENUTO = "tenuto"  # - : gamma approximately 0 (sustained)
+    STACCATO = "staccato"  # . : gamma < 0 (decaying/stable)
+    ACCENT = "accent"  # > : gamma > 0 (growing/unstable)
+    FERMATA = "fermata"  # U : gamma = 0 exactly (on unit circle)
+    MARCATO = "marcato"  # ^ : gamma >> 0 (strongly growing)
 
 
 class Tempo(str, Enum):
     """Musical tempo markings."""
 
-    GRAVE = "grave"           # 20-40 BPM, T_cycle: 120-60 min
-    LARGO = "largo"           # 40-60 BPM, T_cycle: 60-40 min
-    LARGHETTO = "larghetto"   # 60-66 BPM, T_cycle: 40-36 min
-    ADAGIO = "adagio"         # 66-76 BPM, T_cycle: 36-32 min
-    ANDANTE = "andante"       # 76-108 BPM, T_cycle: 32-22 min
-    MODERATO = "moderato"     # 108-120 BPM, T_cycle: 22-20 min
-    ALLEGRETTO = "allegretto" # 112-120 BPM, T_cycle: 21-20 min
-    ALLEGRO = "allegro"       # 120-156 BPM, T_cycle: 20-15 min
-    VIVACE = "vivace"         # 156-176 BPM, T_cycle: 15-14 min
-    PRESTO = "presto"         # 168-200 BPM, T_cycle: 14-12 min
+    GRAVE = "grave"  # 20-40 BPM, T_cycle: 120-60 min
+    LARGO = "largo"  # 40-60 BPM, T_cycle: 60-40 min
+    LARGHETTO = "larghetto"  # 60-66 BPM, T_cycle: 40-36 min
+    ADAGIO = "adagio"  # 66-76 BPM, T_cycle: 36-32 min
+    ANDANTE = "andante"  # 76-108 BPM, T_cycle: 32-22 min
+    MODERATO = "moderato"  # 108-120 BPM, T_cycle: 22-20 min
+    ALLEGRETTO = "allegretto"  # 112-120 BPM, T_cycle: 21-20 min
+    ALLEGRO = "allegro"  # 120-156 BPM, T_cycle: 20-15 min
+    VIVACE = "vivace"  # 156-176 BPM, T_cycle: 15-14 min
+    PRESTO = "presto"  # 168-200 BPM, T_cycle: 14-12 min
     PRESTISSIMO = "prestissimo"  # >200 BPM, T_cycle: <12 min
 
 
 class KeySignature(str, Enum):
     """Musical key signatures encoding harmonic structure."""
 
-    C_MAJOR = "C"       # No sharps/flats: perfect integer harmonics
-    G_MAJOR = "G"       # 1 sharp: harmonics ~2% high
-    D_MAJOR = "D"       # 2 sharps: harmonics ~4% high
-    A_MAJOR = "A"       # 3 sharps: harmonics ~6% high
-    E_MAJOR = "E"       # 4 sharps: harmonics ~8% high
-    F_MAJOR = "F"       # 1 flat: harmonics ~2% low
-    Bb_MAJOR = "Bb"     # 2 flats: harmonics ~4% low
-    Eb_MAJOR = "Eb"     # 3 flats: harmonics ~6% low
-    A_MINOR = "Am"      # Minor key: altered harmonic relationships
+    C_MAJOR = "C"  # No sharps/flats: perfect integer harmonics
+    G_MAJOR = "G"  # 1 sharp: harmonics ~2% high
+    D_MAJOR = "D"  # 2 sharps: harmonics ~4% high
+    A_MAJOR = "A"  # 3 sharps: harmonics ~6% high
+    E_MAJOR = "E"  # 4 sharps: harmonics ~8% high
+    F_MAJOR = "F"  # 1 flat: harmonics ~2% low
+    Bb_MAJOR = "Bb"  # 2 flats: harmonics ~4% low
+    Eb_MAJOR = "Eb"  # 3 flats: harmonics ~6% low
+    A_MINOR = "Am"  # Minor key: altered harmonic relationships
     CHROMATIC = "chromatic"  # No stable harmonic structure
 
 
 class TimeSignature(str, Enum):
     """Time signatures encoding cell cycle period."""
 
-    CUT_TIME = "2/2"    # 120 min: stationary phase
-    THREE_TWO = "3/2"   # 90 min: minimal media
-    FOUR_FOUR = "4/4"   # 60 min: standard LB (reference)
-    SIX_EIGHT = "6/8"   # 40 min: compound meter
-    FIVE_FOUR = "5/4"   # 48 min: irregular (stressed)
-    SEVEN_EIGHT = "7/8" # 34 min: complex/perturbed
+    CUT_TIME = "2/2"  # 120 min: stationary phase
+    THREE_TWO = "3/2"  # 90 min: minimal media
+    FOUR_FOUR = "4/4"  # 60 min: standard LB (reference)
+    SIX_EIGHT = "6/8"  # 40 min: compound meter
+    FIVE_FOUR = "5/4"  # 48 min: irregular (stressed)
+    SEVEN_EIGHT = "7/8"  # 34 min: complex/perturbed
 
 
 @dataclass
@@ -386,7 +386,7 @@ class LosslessScore:
             lam = mode.eigenvalue
 
             for t in range(self.duration):
-                X[t] += phi * b * (lam ** t)
+                X[t] += phi * b * (lam**t)
 
         return np.real(X)
 
@@ -395,7 +395,7 @@ class LosslessScore:
         state = np.zeros(self.n_observables, dtype=complex)
 
         for mode in self.modes:
-            state += mode.mode_shape * mode.amplitude * (mode.eigenvalue ** t)
+            state += mode.mode_shape * mode.amplitude * (mode.eigenvalue**t)
 
         return np.real(state)
 
@@ -456,5 +456,6 @@ class LosslessScore:
 
 # Type alias for external imports
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from uq.koopman import KoopmanMode, KoopmanSpectrum

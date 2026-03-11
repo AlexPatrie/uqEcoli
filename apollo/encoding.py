@@ -9,6 +9,18 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
+from apollo.mappings import (
+    amplitude_to_dynamic,
+    analyze_harmonic_structure,
+    classify_observable,
+    cycle_time_to_tempo,
+    frequency_to_harmonic_number,
+    frequency_to_midi,
+    frequency_to_pitch,
+    growth_rate_to_articulation,
+    growth_rate_to_duration,
+    observable_class_to_clef,
+)
 from apollo.types import (
     Articulation,
     CellularNote,
@@ -24,18 +36,6 @@ from apollo.types import (
     ScoreMetadata,
     Tempo,
     TimeSignature,
-)
-from apollo.mappings import (
-    amplitude_to_dynamic,
-    analyze_harmonic_structure,
-    classify_observable,
-    cycle_time_to_tempo,
-    frequency_to_harmonic_number,
-    frequency_to_midi,
-    frequency_to_pitch,
-    growth_rate_to_articulation,
-    growth_rate_to_duration,
-    observable_class_to_clef,
 )
 
 if TYPE_CHECKING:

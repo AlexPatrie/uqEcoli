@@ -16,6 +16,14 @@ tutorial4:
 tutorial-music:
 	@uv run marimo edit tutorials/music.py
 
+.PHONY: tutorial3b
+tutorial3b:
+	@uv run marimo edit ./tutorials/03b_reactive_sensitivity.py
+
+.PHONY: tutorial3c
+tutorial3c:
+	@uv run marimo edit ./tutorials/03c_reactive_sensitivity_generalized.py
+
 .PHONY: tutorial5
 tutorial5:
 	@uv run marimo edit tutorials/05_music_notation.py
@@ -34,3 +42,7 @@ check: ## Run code quality tools.
 	@uv run mypy
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
+
+.PHONY: biocompose
+biocompose:
+	@uv run marimo edit ./examples/biocompose.py

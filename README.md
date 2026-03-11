@@ -391,6 +391,45 @@ sobol = analyzer.analyze_with_sobol(
 )
 ```
 
+### Morris Screening (for High-Dimensional Problems)
+
+For parameter spaces with many parameters (>10), Morris screening provides an efficient pre-screening step to identify which parameters are influential before running detailed PCE analysis:
+
+```python
+from uq import SensitivityAnalyzer, MorrisIndices
+
+# Stage 1: Morris screening (cheap - O(n) evaluations)
+morris = analyzer.analyze_with_morris(
+    n_trajectories=20,  # More = more stable (typical: 10-50)
+    n_levels=4,         # Grid resolution (typical: 4-8)
+)
+
+# View results
+print(morris.summary())
+
+# Get parameters for detailed analysis
+important = morris.get_screening_candidates(top_n=5)
+print(f"Focus PCE analysis on: {important}")
+
+# Classification: negligible, linear, or nonlinear/interactions
+classification = morris.classify_parameters()
+```
+
+**Cost comparison** (20 parameters):
+- Morris (20 trajectories): ~420 evaluations
+- PCE (order 2): ~500-1000 evaluations
+- Sobol (Monte Carlo): ~50,000+ evaluations
+
+**Integration with tutorials**: Export screening results to the reactive tutorial format:
+
+```python
+# Convert to PARAMETER_CONFIG for tutorial 03c
+PARAMETER_CONFIG = morris.to_parameter_config(
+    parameter_bounds=param_space.parameter_bounds,
+    top_n=5,
+)
+```
+
 ### PCE Surrogate Prediction
 
 Once trained, PCE surrogates can make **instant predictions** without running simulations:

@@ -176,6 +176,155 @@ is available:
 **Note**: Direct Sobol analysis requires many more samples than PCE
 (:math:`N \\times (2d + 2)` evaluations).
 
+Morris Screening
+----------------
+
+For high-dimensional parameter spaces (>10 parameters), running detailed PCE
+or Sobol analysis on all parameters is computationally prohibitive. Morris
+screening provides an efficient **pre-screening step** to identify which
+parameters are influential.
+
+Overview
+^^^^^^^^
+
+Morris screening (Elementary Effects method) computes the change in output when
+each parameter is perturbed one at a time. Statistics of these "elementary
+effects" reveal parameter importance:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 35 50
+
+   * - Metric
+     - Formula
+     - Interpretation
+   * - μ (mu)
+     - Mean of elementary effects
+     - Overall influence (can cancel if non-monotonic)
+   * - μ* (mu_star)
+     - Mean of |elementary effects|
+     - Robust measure of influence (preferred)
+   * - σ (sigma)
+     - Std dev of elementary effects
+     - Indicates interactions or nonlinearity
+
+**Classification**:
+
+* High μ*, low σ: Linear effect (no interactions)
+* High μ*, high σ: Nonlinear effect or interactions with other params
+* Low μ*: Parameter has little influence (can be fixed)
+
+Computational Cost
+^^^^^^^^^^^^^^^^^^
+
+Morris screening requires only :math:`O(r \\times (d + 1))` evaluations,
+where :math:`r` is the number of trajectories and :math:`d` is the number
+of parameters:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 30 20
+
+   * - Method
+     - Evaluations (20 params)
+     - Evaluations (50 params)
+     - Scaling
+   * - Morris (r=20)
+     - 420
+     - 1,020
+     - O(d)
+   * - PCE (order 2)
+     - ~500
+     - ~2,600
+     - O(d²)
+   * - Sobol (MC)
+     - ~50,000
+     - ~500,000
+     - O(d²)
+
+Usage
+^^^^^
+
+.. code-block:: python
+
+   from uq import SensitivityAnalyzer, MorrisIndices
+
+   # Run Morris screening
+   morris = analyzer.analyze_with_morris(
+       n_trajectories=20,  # More = more stable (typical: 10-50)
+       n_levels=4,         # Grid resolution (typical: 4-8)
+   )
+
+   # View summary
+   print(morris.summary())
+
+   # Get most influential parameters
+   top_params = morris.get_most_influential(n=5)
+   for name, mu_star in top_params:
+       print(f"{name}: μ*={mu_star:.4f}")
+
+   # Get parameters for detailed analysis
+   important = morris.get_screening_candidates(top_n=5)
+   print(f"Focus PCE analysis on: {important}")
+
+   # Classify parameters
+   classification = morris.classify_parameters()
+   print(f"Negligible (can fix): {classification['negligible']}")
+   print(f"Linear effects: {classification['linear']}")
+   print(f"Nonlinear/interactions: {classification['nonlinear']}")
+
+Screening Workflow
+^^^^^^^^^^^^^^^^^^
+
+The recommended workflow for high-dimensional problems:
+
+.. code-block:: python
+
+   from uq import InputParameterSpace, SensitivityAnalyzer
+
+   # Stage 1: Define full parameter space
+   full_space = InputParameterSpace(
+       include_vio=True,
+       include_mecillinam=True,
+       include_knockouts=True,  # Many parameters
+   )
+
+   # Stage 2: Morris screening (cheap)
+   analyzer = SensitivityAnalyzer(full_space, wrapper)
+   morris = analyzer.analyze_with_morris(n_trajectories=20)
+
+   # Stage 3: Identify important parameters
+   important = morris.get_screening_candidates(top_n=5)
+   print(f"Important parameters: {important}")
+
+   # Stage 4: Create reduced parameter space
+   reduced_space = InputParameterSpace(
+       include_vio="vio_expression" in important,
+       include_mecillinam="mecillinam_conc" in important,
+       # ... only include important params
+   )
+
+   # Stage 5: Detailed PCE analysis on subset
+   reduced_analyzer = SensitivityAnalyzer(reduced_space, wrapper)
+   sobol, pce = reduced_analyzer.analyze_with_pce(polynomial_order=3)
+
+Integration with Tutorials
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Morris results can be exported to the reactive tutorial format:
+
+.. code-block:: python
+
+   # Convert to PARAMETER_CONFIG format for tutorial 03c
+   PARAMETER_CONFIG = morris.to_parameter_config(
+       parameter_bounds=param_space.parameter_bounds,
+       top_n=5,
+   )
+
+   # Result is a list of dicts ready for the tutorial:
+   # [{"name": "param_a", "bounds": [0, 10], "default": 5.0,
+   #   "step": 0.2, "description": "Morris: μ*=0.82 (linear)"}, ...]
+
 Interpreting Results
 --------------------
 

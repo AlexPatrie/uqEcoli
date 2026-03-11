@@ -145,14 +145,14 @@ def _(frequency_to_pitch, pitch_to_frequency):
     print("Harmonic Series (Cell Cycle Time = 1 hour)")
     print("=" * 50)
     for h, f, p in zip(_harmonics, _frequencies, _pitches):
-        print(f"Harmonic {h}×: f = {f*1e6:.2f} µHz → Pitch: {p}")
+        print(f"Harmonic {h}×: f = {f * 1e6:.2f} µHz → Pitch: {p}")
 
     # Verify roundtrip
     print("\n" + "=" * 50)
     print("Roundtrip verification:")
     for p in _pitches:
         f_recovered = pitch_to_frequency(p, _fundamental_freq)
-        print(f"  {p} → {f_recovered*1e6:.2f} µHz")
+        print(f"  {p} → {f_recovered * 1e6:.2f} µHz")
     return
 
 
@@ -169,21 +169,28 @@ def _(alt, np, pl):
         "Octave": (_midi / 12).astype(int) - 1,
     })
 
-    _chart = alt.Chart(_df.to_pandas()).mark_line(color="#2563eb").encode(
-        x=alt.X("Frequency (relative to fundamental):Q", scale=alt.Scale(type="log")),
-        y=alt.Y("MIDI Number:Q"),
-        tooltip=["Frequency (relative to fundamental)", "MIDI Number"],
-    ).properties(
-        title="Frequency → MIDI Mapping (Logarithmic)",
-        width=500,
-        height=300,
+    _chart = (
+        alt.Chart(_df.to_pandas())
+        .mark_line(color="#2563eb")
+        .encode(
+            x=alt.X("Frequency (relative to fundamental):Q", scale=alt.Scale(type="log")),
+            y=alt.Y("MIDI Number:Q"),
+            tooltip=["Frequency (relative to fundamental)", "MIDI Number"],
+        )
+        .properties(
+            title="Frequency → MIDI Mapping (Logarithmic)",
+            width=500,
+            height=300,
+        )
     )
 
     # Add horizontal lines for octaves
-    _octave_lines = alt.Chart(
-        pl.DataFrame({"y": [57, 69, 81, 93]}).to_pandas()  # A3, A4, A5, A6
-    ).mark_rule(strokeDash=[5, 5], color="gray").encode(
-        y="y:Q"
+    _octave_lines = (
+        alt.Chart(
+            pl.DataFrame({"y": [57, 69, 81, 93]}).to_pandas()  # A3, A4, A5, A6
+        )
+        .mark_rule(strokeDash=[5, 5], color="gray")
+        .encode(y="y:Q")
     )
 
     _chart + _octave_lines
@@ -234,16 +241,19 @@ def _(Dynamic, alt, amplitude_to_dynamic, dynamic_to_amplitude, np, pl):
             "Midpoint": dynamic_to_amplitude(d),
         })
 
-    _step_chart = alt.Chart(pl.DataFrame(_dynamic_data).to_pandas()).mark_bar(
-        color="#10b981"
-    ).encode(
-        x=alt.X("Dynamic:N", sort=[d.value for d in _dynamic_values]),
-        y=alt.Y("Midpoint:Q", title="Amplitude"),
-        tooltip=["Dynamic", "Midpoint"],
-    ).properties(
-        title="Dynamic Markings → Amplitude",
-        width=500,
-        height=250,
+    _step_chart = (
+        alt.Chart(pl.DataFrame(_dynamic_data).to_pandas())
+        .mark_bar(color="#10b981")
+        .encode(
+            x=alt.X("Dynamic:N", sort=[d.value for d in _dynamic_values]),
+            y=alt.Y("Midpoint:Q", title="Amplitude"),
+            tooltip=["Dynamic", "Midpoint"],
+        )
+        .properties(
+            title="Dynamic Markings → Amplitude",
+            width=500,
+            height=250,
+        )
     )
 
     _step_chart
@@ -301,19 +311,24 @@ def _(
         "Stability": ["Decaying" if g < -0.001 else "Growing" if g > 0.001 else "Stable" for g in _growth_rates],
     })
 
-    _chart = alt.Chart(_df.to_pandas()).mark_point(size=200, filled=True).encode(
-        x=alt.X("Growth Rate (γ):Q", scale=alt.Scale(domain=[-0.35, 0.35])),
-        y=alt.Y("Duration Order:Q", title="Note Duration", scale=alt.Scale(reverse=True)),
-        color=alt.Color("Stability:N", scale=alt.Scale(
-            domain=["Decaying", "Stable", "Growing"],
-            range=["#3b82f6", "#10b981", "#ef4444"]
-        )),
-        shape=alt.Shape("Articulation:N"),
-        tooltip=["Growth Rate (γ)", "Duration", "Articulation", "Stability"],
-    ).properties(
-        title="Growth Rate → Duration & Articulation",
-        width=500,
-        height=300,
+    _chart = (
+        alt.Chart(_df.to_pandas())
+        .mark_point(size=200, filled=True)
+        .encode(
+            x=alt.X("Growth Rate (γ):Q", scale=alt.Scale(domain=[-0.35, 0.35])),
+            y=alt.Y("Duration Order:Q", title="Note Duration", scale=alt.Scale(reverse=True)),
+            color=alt.Color(
+                "Stability:N",
+                scale=alt.Scale(domain=["Decaying", "Stable", "Growing"], range=["#3b82f6", "#10b981", "#ef4444"]),
+            ),
+            shape=alt.Shape("Articulation:N"),
+            tooltip=["Growth Rate (γ)", "Duration", "Articulation", "Stability"],
+        )
+        .properties(
+            title="Growth Rate → Duration & Articulation",
+            width=500,
+            height=300,
+        )
     )
 
     _chart
@@ -448,12 +463,24 @@ def _(alt, cellular_score, pl):
     # Piano Roll Visualization
     _notes_data = []
     _note_symbols = {
-        "breve": "𝅜", "whole": "𝅝", "half": "𝅗𝅥", "quarter": "♩",
-        "eighth": "♪", "16th": "𝅘𝅥𝅯", "32nd": "𝅘𝅥𝅰", "64th": "𝅘𝅥𝅱"
+        "breve": "𝅜",
+        "whole": "𝅝",
+        "half": "𝅗𝅥",
+        "quarter": "♩",
+        "eighth": "♪",
+        "16th": "𝅘𝅥𝅯",
+        "32nd": "𝅘𝅥𝅰",
+        "64th": "𝅘𝅥𝅱",
     }
     _duration_widths = {
-        "breve": 4.0, "whole": 2.0, "half": 1.0, "quarter": 0.5,
-        "eighth": 0.25, "16th": 0.125, "32nd": 0.0625, "64th": 0.03125
+        "breve": 4.0,
+        "whole": 2.0,
+        "half": 1.0,
+        "quarter": 0.5,
+        "eighth": 0.25,
+        "16th": 0.125,
+        "32nd": 0.0625,
+        "64th": 0.03125,
     }
 
     _x_pos = 0.0
@@ -479,38 +506,71 @@ def _(alt, cellular_score, pl):
     _df = pl.DataFrame(_notes_data)
 
     # Piano roll bars
-    _bars = alt.Chart(_df.to_pandas()).mark_bar(
-        cornerRadius=3,
-        height=15
-    ).encode(
-        x=alt.X("x_start:Q", title="Time (beats)"),
-        x2="x_end:Q",
-        y=alt.Y("MIDI:Q", title="Pitch (MIDI)", scale=alt.Scale(zero=False, domain=[60, 100])),
-        color=alt.Color("Dynamic:N", scale=alt.Scale(
-            domain=["ppppp", "pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "fffff"],
-            scheme="blues"
-        )),
-        opacity=alt.value(0.8),
-        tooltip=["Pitch", "Dynamic", "Duration", "Harmonic", "Amplitude"],
+    _bars = (
+        alt.Chart(_df.to_pandas())
+        .mark_bar(cornerRadius=3, height=15)
+        .encode(
+            x=alt.X("x_start:Q", title="Time (beats)"),
+            x2="x_end:Q",
+            y=alt.Y("MIDI:Q", title="Pitch (MIDI)", scale=alt.Scale(zero=False, domain=[60, 100])),
+            color=alt.Color(
+                "Dynamic:N",
+                scale=alt.Scale(
+                    domain=["ppppp", "pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "fffff"],
+                    scheme="blues",
+                ),
+            ),
+            opacity=alt.value(0.8),
+            tooltip=["Pitch", "Dynamic", "Duration", "Harmonic", "Amplitude"],
+        )
     )
 
     # Add note symbols as text
-    _symbols = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=16,
-        fontWeight="bold"
-    ).encode(
-        x="x_mid:Q",
-        y=alt.Y("MIDI:Q"),
-        text="Symbol:N",
-        color=alt.value("white"),
+    _symbols = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=16, fontWeight="bold")
+        .encode(
+            x="x_mid:Q",
+            y=alt.Y("MIDI:Q"),
+            text="Symbol:N",
+            color=alt.value("white"),
+        )
     )
 
     # Piano keyboard reference lines (white keys)
     _white_keys = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86, 88, 89, 91, 93, 95, 96]
-    _key_lines = alt.Chart(
-        pl.DataFrame({"midi": _white_keys, "note": ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5", "A5", "B5", "C6", "D6", "E6", "F6", "G6", "A6", "B6", "C7"]}).to_pandas()
-    ).mark_rule(strokeDash=[2, 2], color="#ddd").encode(
-        y="midi:Q"
+    _key_lines = (
+        alt.Chart(
+            pl.DataFrame({
+                "midi": _white_keys,
+                "note": [
+                    "C4",
+                    "D4",
+                    "E4",
+                    "F4",
+                    "G4",
+                    "A4",
+                    "B4",
+                    "C5",
+                    "D5",
+                    "E5",
+                    "F5",
+                    "G5",
+                    "A5",
+                    "B5",
+                    "C6",
+                    "D6",
+                    "E6",
+                    "F6",
+                    "G6",
+                    "A6",
+                    "B6",
+                    "C7",
+                ],
+            }).to_pandas()
+        )
+        .mark_rule(strokeDash=[2, 2], color="#ddd")
+        .encode(y="midi:Q")
     )
 
     _piano_roll = (_key_lines + _bars + _symbols).properties(
@@ -538,12 +598,16 @@ def _(mo):
 def _(alt, cellular_score, pl):
     # Staff Notation Visualization
     _staff_data = []
-    _articulation_symbols = {
-        "tenuto": "—", "staccato": "•", "accent": ">", "fermata": "𝄐", "marcato": "^"
-    }
+    _articulation_symbols = {"tenuto": "—", "staccato": "•", "accent": ">", "fermata": "𝄐", "marcato": "^"}
     _note_heads = {
-        "breve": "𝅜", "whole": "𝅝", "half": "𝅗𝅥", "quarter": "●",
-        "eighth": "●", "16th": "●", "32nd": "●", "64th": "●"
+        "breve": "𝅜",
+        "whole": "𝅝",
+        "half": "𝅗𝅥",
+        "quarter": "●",
+        "eighth": "●",
+        "16th": "●",
+        "32nd": "●",
+        "64th": "●",
     }
 
     _x = 1.0
@@ -562,70 +626,86 @@ def _(alt, cellular_score, pl):
         })
         _x += 1.5
 
-    _df = pl.DataFrame(_staff_data) if _staff_data else pl.DataFrame({"x": [], "staff_position": [], "midi": [], "pitch": [], "note_head": [], "articulation": [], "dynamic": [], "duration": []})
+    _df = (
+        pl.DataFrame(_staff_data)
+        if _staff_data
+        else pl.DataFrame({
+            "x": [],
+            "staff_position": [],
+            "midi": [],
+            "pitch": [],
+            "note_head": [],
+            "articulation": [],
+            "dynamic": [],
+            "duration": [],
+        })
+    )
 
     # Staff lines (5 lines for treble clef, centered around B4=71)
     _line_positions = [-2, -1, 0, 1, 2]  # E4, G4, B4, D5, F5
-    _staff_lines = alt.Chart(
-        pl.DataFrame({"y": _line_positions}).to_pandas()
-    ).mark_rule(color="black", strokeWidth=1).encode(
-        y="y:Q"
+    _staff_lines = (
+        alt.Chart(pl.DataFrame({"y": _line_positions}).to_pandas())
+        .mark_rule(color="black", strokeWidth=1)
+        .encode(y="y:Q")
     )
 
     # Note heads
-    _notes = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=28,
-        fontWeight="bold"
-    ).encode(
-        x=alt.X("x:Q", axis=None),
-        y=alt.Y("staff_position:Q", scale=alt.Scale(domain=[-5, 10]), axis=None),
-        text="note_head:N",
-        color=alt.value("black"),
-        tooltip=["pitch", "dynamic", "duration"],
+    _notes = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=28, fontWeight="bold")
+        .encode(
+            x=alt.X("x:Q", axis=None),
+            y=alt.Y("staff_position:Q", scale=alt.Scale(domain=[-5, 10]), axis=None),
+            text="note_head:N",
+            color=alt.value("black"),
+            tooltip=["pitch", "dynamic", "duration"],
+        )
     )
 
     # Articulation marks (above notes)
-    _artics = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=16,
-        dy=-20
-    ).encode(
-        x="x:Q",
-        y="staff_position:Q",
-        text="articulation:N",
-        color=alt.value("#666"),
+    _artics = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=16, dy=-20)
+        .encode(
+            x="x:Q",
+            y="staff_position:Q",
+            text="articulation:N",
+            color=alt.value("#666"),
+        )
     )
 
     # Dynamics (below notes)
-    _dynamics = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=12,
-        dy=25,
-        fontStyle="italic"
-    ).encode(
-        x="x:Q",
-        y="staff_position:Q",
-        text="dynamic:N",
-        color=alt.value("#2563eb"),
+    _dynamics = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=12, dy=25, fontStyle="italic")
+        .encode(
+            x="x:Q",
+            y="staff_position:Q",
+            text="dynamic:N",
+            color=alt.value("#2563eb"),
+        )
     )
 
     # Treble clef
-    _clef = alt.Chart(pl.DataFrame({"x": [0.3], "y": [0], "text": ["𝄞"]}).to_pandas()).mark_text(
-        fontSize=60,
-        fontWeight="bold"
-    ).encode(
-        x="x:Q",
-        y="y:Q",
-        text="text:N",
-        color=alt.value("black"),
+    _clef = (
+        alt.Chart(pl.DataFrame({"x": [0.3], "y": [0], "text": ["𝄞"]}).to_pandas())
+        .mark_text(fontSize=60, fontWeight="bold")
+        .encode(
+            x="x:Q",
+            y="y:Q",
+            text="text:N",
+            color=alt.value("black"),
+        )
     )
 
-    _staff_viz = alt.layer(
-        _staff_lines, _notes, _artics, _dynamics, _clef
-    ).properties(
-        title="Staff Notation: Cellular Dynamics Score",
-        width=600,
-        height=250,
-    ).configure_view(
-        strokeWidth=0
+    _staff_viz = (
+        alt.layer(_staff_lines, _notes, _artics, _dynamics, _clef)
+        .properties(
+            title="Staff Notation: Cellular Dynamics Score",
+            width=600,
+            height=250,
+        )
+        .configure_view(strokeWidth=0)
     )
 
     _staff_viz
@@ -664,51 +744,57 @@ def _(alt, cellular_score, pl):
     _df = _df.sort("harmonic_num")
 
     # Main bars
-    _bars = alt.Chart(_df.to_pandas()).mark_bar(
-        cornerRadiusTopLeft=3,
-        cornerRadiusTopRight=3,
-    ).encode(
-        x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num"), title="Harmonic"),
-        y=alt.Y("Amplitude:Q", title="Amplitude"),
-        color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="viridis"), legend=None),
-        tooltip=["Harmonic", "Pitch", "Amplitude", "Dynamic"],
+    _bars = (
+        alt.Chart(_df.to_pandas())
+        .mark_bar(
+            cornerRadiusTopLeft=3,
+            cornerRadiusTopRight=3,
+        )
+        .encode(
+            x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num"), title="Harmonic"),
+            y=alt.Y("Amplitude:Q", title="Amplitude"),
+            color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="viridis"), legend=None),
+            tooltip=["Harmonic", "Pitch", "Amplitude", "Dynamic"],
+        )
     )
 
     # Add pitch labels on top
-    _labels = alt.Chart(_df.to_pandas()).mark_text(
-        dy=-10,
-        fontSize=11,
-        fontWeight="bold"
-    ).encode(
-        x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num")),
-        y="Amplitude:Q",
-        text="Pitch:N",
-        color=alt.value("white"),
+    _labels = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(dy=-10, fontSize=11, fontWeight="bold")
+        .encode(
+            x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num")),
+            y="Amplitude:Q",
+            text="Pitch:N",
+            color=alt.value("white"),
+        )
     )
 
     # Add glow effect with additional lighter bars
-    _glow = alt.Chart(_df.to_pandas()).mark_bar(
-        opacity=0.3,
-        cornerRadiusTopLeft=5,
-        cornerRadiusTopRight=5,
-    ).encode(
-        x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num")),
-        y=alt.Y("Amplitude:Q"),
-        color=alt.value("#00ff88"),
+    _glow = (
+        alt.Chart(_df.to_pandas())
+        .mark_bar(
+            opacity=0.3,
+            cornerRadiusTopLeft=5,
+            cornerRadiusTopRight=5,
+        )
+        .encode(
+            x=alt.X("Harmonic:N", sort=alt.SortField("harmonic_num")),
+            y=alt.Y("Amplitude:Q"),
+            color=alt.value("#00ff88"),
+        )
     )
 
-    _equalizer = (_glow + _bars + _labels).properties(
-        title="Power Spectrum Equalizer",
-        width=500,
-        height=300,
-    ).configure_view(
-        fill="#1a1a2e"
-    ).configure_axis(
-        labelColor="white",
-        titleColor="white",
-        gridColor="#333"
-    ).configure_title(
-        color="white"
+    _equalizer = (
+        (_glow + _bars + _labels)
+        .properties(
+            title="Power Spectrum Equalizer",
+            width=500,
+            height=300,
+        )
+        .configure_view(fill="#1a1a2e")
+        .configure_axis(labelColor="white", titleColor="white", gridColor="#333")
+        .configure_title(color="white")
     )
 
     _equalizer
@@ -748,28 +834,27 @@ def _(alt, cellular_score, pl):
     _df = pl.DataFrame(_orch_data)
 
     # Create heatmap-style orchestration view
-    _heatmap = alt.Chart(_df.to_pandas()).mark_rect(
-        cornerRadius=4
-    ).encode(
-        x=alt.X("Mode:N", sort=alt.SortField("mode_idx"), title="Koopman Mode"),
-        y=alt.Y("Observable:N", title="Observable Class"),
-        color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="blues"), title="Amplitude"),
-        tooltip=["Observable", "Mode", "Pitch", "Dynamic", "Amplitude"],
+    _heatmap = (
+        alt.Chart(_df.to_pandas())
+        .mark_rect(cornerRadius=4)
+        .encode(
+            x=alt.X("Mode:N", sort=alt.SortField("mode_idx"), title="Koopman Mode"),
+            y=alt.Y("Observable:N", title="Observable Class"),
+            color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="blues"), title="Amplitude"),
+            tooltip=["Observable", "Mode", "Pitch", "Dynamic", "Amplitude"],
+        )
     )
 
     # Add pitch labels
-    _pitch_labels = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=11,
-        fontWeight="bold"
-    ).encode(
-        x=alt.X("Mode:N", sort=alt.SortField("mode_idx")),
-        y="Observable:N",
-        text="Pitch:N",
-        color=alt.condition(
-            alt.datum.Amplitude > 0.4,
-            alt.value("white"),
-            alt.value("black")
-        ),
+    _pitch_labels = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=11, fontWeight="bold")
+        .encode(
+            x=alt.X("Mode:N", sort=alt.SortField("mode_idx")),
+            y="Observable:N",
+            text="Pitch:N",
+            color=alt.condition(alt.datum.Amplitude > 0.4, alt.value("white"), alt.value("black")),
+        )
     )
 
     _orchestration = (_heatmap + _pitch_labels).properties(
@@ -826,61 +911,58 @@ def _(alt, cellular_score, np, pl):
     # Background circles for reference
     _circles_data = []
     for _r in [25, 50, 75, 100]:
-        for _theta in np.linspace(0, 2*np.pi, 50):
+        for _theta in np.linspace(0, 2 * np.pi, 50):
             _circles_data.append({"x": _r * np.cos(_theta), "y": _r * np.sin(_theta), "r": _r})
     _circles_df = pl.DataFrame(_circles_data)
 
-    _bg_circles = alt.Chart(_circles_df.to_pandas()).mark_line(
-        color="#ddd",
-        strokeWidth=1,
-        opacity=0.5
-    ).encode(
-        x="x:Q",
-        y="y:Q",
-        detail="r:N"
+    _bg_circles = (
+        alt.Chart(_circles_df.to_pandas())
+        .mark_line(color="#ddd", strokeWidth=1, opacity=0.5)
+        .encode(x="x:Q", y="y:Q", detail="r:N")
     )
 
     # Radial lines from center to each mode
-    _lines = alt.Chart(_df.to_pandas()).mark_rule(
-        strokeWidth=3,
-        opacity=0.7
-    ).encode(
-        x=alt.value(300),  # Center x
-        y=alt.value(200),  # Center y
-        x2=alt.X2("x:Q"),
-        y2=alt.Y2("y:Q"),
-        color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="plasma")),
+    _lines = (
+        alt.Chart(_df.to_pandas())
+        .mark_rule(strokeWidth=3, opacity=0.7)
+        .encode(
+            x=alt.value(300),  # Center x
+            y=alt.value(200),  # Center y
+            x2=alt.X2("x:Q"),
+            y2=alt.Y2("y:Q"),
+            color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="plasma")),
+        )
     )
 
     # Points at each mode
-    _points = alt.Chart(_df.to_pandas()).mark_circle(
-        size=300,
-        opacity=0.9
-    ).encode(
-        x=alt.X("x:Q", scale=alt.Scale(domain=[-120, 120]), axis=None),
-        y=alt.Y("y:Q", scale=alt.Scale(domain=[-120, 120]), axis=None),
-        color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="plasma")),
-        tooltip=["Harmonic", "Pitch", "Amplitude", "Dynamic"],
+    _points = (
+        alt.Chart(_df.to_pandas())
+        .mark_circle(size=300, opacity=0.9)
+        .encode(
+            x=alt.X("x:Q", scale=alt.Scale(domain=[-120, 120]), axis=None),
+            y=alt.Y("y:Q", scale=alt.Scale(domain=[-120, 120]), axis=None),
+            color=alt.Color("Amplitude:Q", scale=alt.Scale(scheme="plasma")),
+            tooltip=["Harmonic", "Pitch", "Amplitude", "Dynamic"],
+        )
     )
 
     # Labels
-    _labels = alt.Chart(_df.to_pandas()).mark_text(
-        fontSize=12,
-        fontWeight="bold",
-        dy=-20
-    ).encode(
-        x="x:Q",
-        y="y:Q",
-        text="Pitch:N",
-        color=alt.value("black"),
+    _labels = (
+        alt.Chart(_df.to_pandas())
+        .mark_text(fontSize=12, fontWeight="bold", dy=-20)
+        .encode(
+            x="x:Q",
+            y="y:Q",
+            text="Pitch:N",
+            color=alt.value("black"),
+        )
     )
 
     # Center label
-    _center = alt.Chart(pl.DataFrame({"x": [0], "y": [0], "text": ["f₀"]}).to_pandas()).mark_text(
-        fontSize=16,
-        fontWeight="bold"
-    ).encode(
-        x="x:Q", y="y:Q", text="text:N", color=alt.value("#666")
+    _center = (
+        alt.Chart(pl.DataFrame({"x": [0], "y": [0], "text": ["f₀"]}).to_pandas())
+        .mark_text(fontSize=16, fontWeight="bold")
+        .encode(x="x:Q", y="y:Q", text="text:N", color=alt.value("#666"))
     )
 
     _radial = (_bg_circles + _points + _labels + _center).properties(
@@ -915,17 +997,22 @@ def _(alt, cellular_score, pl):
     _df = pl.DataFrame(_notes_data)
 
     # Create visualization
-    _chart = alt.Chart(_df.to_pandas()).mark_point(size=300, filled=True).encode(
-        x=alt.X("Note Index:O", title="Mode Index"),
-        y=alt.Y("MIDI:Q", title="Pitch (MIDI)", scale=alt.Scale(zero=False)),
-        color=alt.Color("Dynamic:N", scale=alt.Scale(scheme="blues")),
-        shape=alt.Shape("Articulation:N"),
-        size=alt.Size("Amplitude:Q", scale=alt.Scale(range=[100, 500])),
-        tooltip=["Pitch", "Dynamic", "Duration", "Articulation", "Frequency", "Amplitude"],
-    ).properties(
-        title="Cellular Score Visualization",
-        width=500,
-        height=300,
+    _chart = (
+        alt.Chart(_df.to_pandas())
+        .mark_point(size=300, filled=True)
+        .encode(
+            x=alt.X("Note Index:O", title="Mode Index"),
+            y=alt.Y("MIDI:Q", title="Pitch (MIDI)", scale=alt.Scale(zero=False)),
+            color=alt.Color("Dynamic:N", scale=alt.Scale(scheme="blues")),
+            shape=alt.Shape("Articulation:N"),
+            size=alt.Size("Amplitude:Q", scale=alt.Scale(range=[100, 500])),
+            tooltip=["Pitch", "Dynamic", "Duration", "Articulation", "Frequency", "Amplitude"],
+        )
+        .properties(
+            title="Cellular Score Visualization",
+            width=500,
+            height=300,
+        )
     )
 
     _chart
@@ -989,20 +1076,21 @@ def _(alt, lossless_score, np, pl):
         "mRNA": reconstructed[:500, 1],
         "protein": reconstructed[:500, 2],
         "flux": reconstructed[:500, 3],
-    }).unpivot(
-        index="Time",
-        variable_name="Observable",
-        value_name="Value"
-    )
+    }).unpivot(index="Time", variable_name="Observable", value_name="Value")
 
-    _chart = alt.Chart(_df.to_pandas()).mark_line().encode(
-        x=alt.X("Time:Q"),
-        y=alt.Y("Value:Q"),
-        color=alt.Color("Observable:N"),
-    ).properties(
-        title="Reconstructed Time Series from Lossless Score",
-        width=600,
-        height=300,
+    _chart = (
+        alt.Chart(_df.to_pandas())
+        .mark_line()
+        .encode(
+            x=alt.X("Time:Q"),
+            y=alt.Y("Value:Q"),
+            color=alt.Color("Observable:N"),
+        )
+        .properties(
+            title="Reconstructed Time Series from Lossless Score",
+            width=600,
+            height=300,
+        )
     )
 
     _chart
@@ -1138,8 +1226,8 @@ def _():
 
 @app.cell
 def _(corpus):
-    bach = corpus.parse('bach/bwv269')
-    bach.id = 'bwv269'
+    bach = corpus.parse("bach/bwv269")
+    bach.id = "bwv269"
     bach.measures(0, 4).show()
     return (bach,)
 
@@ -1153,7 +1241,7 @@ def _(bach):
 
 @app.cell
 def _():
-    63/21
+    63 / 21
     return
 
 

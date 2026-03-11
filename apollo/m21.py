@@ -21,7 +21,6 @@ from apollo.types import (
     NoteValue,
 )
 
-
 # Mapping from our types to music21 types
 NOTE_VALUE_TO_M21 = {
     NoteValue.BREVE: "breve",
@@ -70,12 +69,10 @@ def _import_music21():
     """Import music21, raising helpful error if not installed."""
     try:
         import music21
+
         return music21
     except ImportError as e:
-        raise ImportError(
-            "music21 is required for MusicXML export. "
-            "Install with: uv sync --group music"
-        ) from e
+        raise ImportError("music21 is required for MusicXML export. Install with: uv sync --group music") from e
 
 
 def note_to_music21(note: CellularNote):

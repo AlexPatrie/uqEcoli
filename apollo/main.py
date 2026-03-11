@@ -1,9 +1,8 @@
 import numpy as np
 
+from apollo import LosslessScore, encode_spectrum, encode_spectrum_lossless
 from apollo.encoding import encode_trajectory_lossless
 from uq.koopman import ExtendedDMD, KoopmanSpectrum
-from apollo import encode_spectrum_lossless, encode_spectrum, LosslessScore
-
 
 # Run simulation: y = f(x, theta, t)
 # y = run_simulation(params)  # shape: (n_timesteps, n_observables)
@@ -30,18 +29,17 @@ def reconstruct_timeseries(score: LosslessScore) -> np.ndarray:
 
 def _encode_trajectory(y: np.ndarray, cell_cycle_time: float = 3600.0, rank: int = 10):
     return encode_trajectory_lossless(
-        X=y, observable_names=["dry_mass", "volume", "growth_rate"],
-        cell_cycle_time=cell_cycle_time, rank=rank
+        X=y, observable_names=["dry_mass", "volume", "growth_rate"], cell_cycle_time=cell_cycle_time, rank=rank
     )
 
 
 def encode_trajectory(
-        y: np.ndarray,
-        observable_names: list[str],
-        dt: float = 1.0,
-        cell_cycle_time: float | None = None,
-        rank: int | None = None,
-        energy_threshold: float = 0.99,
+    y: np.ndarray,
+    observable_names: list[str],
+    dt: float = 1.0,
+    cell_cycle_time: float | None = None,
+    rank: int | None = None,
+    energy_threshold: float = 0.99,
 ) -> LosslessScore:
     """Encode with automatic parameter selection."""
 
@@ -60,12 +58,13 @@ def encode_trajectory(
     # Auto-select rank if not provided
     if rank is None:
         from uq.koopman import DynamicModeDecomposition
+
         dmd = DynamicModeDecomposition(rank=None, dt=dt)
         dmd.fit(y)
 
         # Find rank for desired energy retention
         sv = dmd._S
-        cumulative = np.cumsum(sv ** 2) / np.sum(sv ** 2)
+        cumulative = np.cumsum(sv**2) / np.sum(sv**2)
         rank = int(np.searchsorted(cumulative, energy_threshold) + 1)
         rank = max(3, min(rank, len(y) // 4))  # Bounds
 

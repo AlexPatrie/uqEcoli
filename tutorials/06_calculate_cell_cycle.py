@@ -104,7 +104,6 @@ def _(np, pl):
 
         return X, t, observable_names
 
-
     # Generate trajectory
     # X, t, obs_names = generate_cell_trajectory(
     #     n_timesteps=200,
@@ -113,12 +112,16 @@ def _(np, pl):
     # )
 
     def load_trajectory():
-        import json 
+        import json
 
         with open("baseline_observables.json", "r") as f:
             obs = [col for col in json.load(f) if col.startswith("listener")]
         obs.append("time")
-        X = load_dataset(experiment_id="api_simulation_default", outdir_root=Path('/Users/alexanderpatrie/sms/sms-api/artifacts/sims'), observables=obs)
+        X = load_dataset(
+            experiment_id="api_simulation_default",
+            outdir_root=Path("/Users/alexanderpatrie/sms/sms-api/artifacts/sims"),
+            observables=obs,
+        )
 
         observables = []
         schema = X.collect_schema()
@@ -160,14 +163,15 @@ def _(X, alt, mo, pl, t):
 
     traj_df = pl.DataFrame(traj_data)
 
-    timeseries_chart = alt.Chart(traj_df).mark_line(strokeWidth=2).encode(
-        x=alt.X("time:Q", title="Time"),
-        y=alt.Y("value:Q", title="Normalized Value"),
-        color=alt.Color("observable:N", legend=alt.Legend(title="Observable")),
-    ).properties(
-        width=600,
-        height=300,
-        title="Input Timeseries (Normalized)"
+    timeseries_chart = (
+        alt.Chart(traj_df)
+        .mark_line(strokeWidth=2)
+        .encode(
+            x=alt.X("time:Q", title="Time"),
+            y=alt.Y("value:Q", title="Normalized Value"),
+            color=alt.Color("observable:N", legend=alt.Legend(title="Observable")),
+        )
+        .properties(width=600, height=300, title="Input Timeseries (Normalized)")
     )
 
     mo.md(f"""
@@ -209,10 +213,10 @@ def _(X, np, pl):
     # Create the Koopman cell cycle variable computer
     koopman_cc = KoopmanCellCycleVariable(
         expected_cycle_time=60.0,  # Expected cell cycle duration
-        frequency_tolerance=0.3,   # 30% tolerance for matching frequency
-        dt=1.0,                    # Timestep of data
-        use_edmd=True,             # Use Extended DMD for nonlinearity
-        observable_columns=[       # Which columns to use (must match data)
+        frequency_tolerance=0.3,  # 30% tolerance for matching frequency
+        dt=1.0,  # Timestep of data
+        use_edmd=True,  # Use Extended DMD for nonlinearity
+        observable_columns=[  # Which columns to use (must match data)
             "dry_mass",
             "cell_mass",
         ],
@@ -266,7 +270,7 @@ def _(cc_result, koopman_cc, mo):
     | Mean | {cc_result.values.mean():.4f} |
     | Std | {cc_result.values.std():.4f} |
 
-    **Method:** `{cc_result.metadata.get('method', 'unknown')}`
+    **Method:** `{cc_result.metadata.get("method", "unknown")}`
 
     {mode_info}
     """)
@@ -283,23 +287,25 @@ def _(alt, cc_result, mo, pl, t):
         "theta": theta,
     })
 
-    theta_chart = alt.Chart(cc_df).mark_line(
-        strokeWidth=2,
-        color="#e74c3c"
-    ).encode(
-        x=alt.X("time:Q", title="Time"),
-        y=alt.Y("theta:Q", title="Cell Cycle Variable (theta)", scale=alt.Scale(domain=[0, 1])),
-    ).properties(
-        width=600,
-        height=250,
-        title="Cell Cycle Variable Over Time"
+    theta_chart = (
+        alt.Chart(cc_df)
+        .mark_line(strokeWidth=2, color="#e74c3c")
+        .encode(
+            x=alt.X("time:Q", title="Time"),
+            y=alt.Y("theta:Q", title="Cell Cycle Variable (theta)", scale=alt.Scale(domain=[0, 1])),
+        )
+        .properties(width=600, height=250, title="Cell Cycle Variable Over Time")
     )
 
     # Add horizontal lines at 0, 0.5, 1
-    hlines = alt.Chart(pl.DataFrame({"y": [0.0, 0.5, 1.0]})).mark_rule(
-        strokeDash=[5, 5],
-        opacity=0.3,
-    ).encode(y="y:Q")
+    hlines = (
+        alt.Chart(pl.DataFrame({"y": [0.0, 0.5, 1.0]}))
+        .mark_rule(
+            strokeDash=[5, 5],
+            opacity=0.3,
+        )
+        .encode(y="y:Q")
+    )
 
     mo.md("""
     ### Cell Cycle Variable (theta)
@@ -325,16 +331,14 @@ def _(alt, cc_result, mo, pl):
     # Histogram of cell cycle variable
     theta_hist_df = pl.DataFrame({"theta": cc_result.values})
 
-    theta_hist = alt.Chart(theta_hist_df).mark_bar(
-        opacity=0.7,
-        color="#3498db"
-    ).encode(
-        x=alt.X("theta:Q", bin=alt.Bin(maxbins=20), title="Cell Cycle Variable (theta)"),
-        y=alt.Y("count():Q", title="Count"),
-    ).properties(
-        width=500,
-        height=250,
-        title="Distribution of Cell Cycle Variable"
+    theta_hist = (
+        alt.Chart(theta_hist_df)
+        .mark_bar(opacity=0.7, color="#3498db")
+        .encode(
+            x=alt.X("theta:Q", bin=alt.Bin(maxbins=20), title="Cell Cycle Variable (theta)"),
+            y=alt.Y("count():Q", title="Count"),
+        )
+        .properties(width=500, height=250, title="Distribution of Cell Cycle Variable")
     )
 
     mo.md("""
@@ -377,13 +381,14 @@ def _(alt, cc_result, mo, pl):
     # Count per stage
     stage_counts = stage_df.group_by("stage").agg(pl.count().alias("count")).sort("stage")
 
-    stage_bar = alt.Chart(stage_counts).mark_bar(color="#2ecc71").encode(
-        x=alt.X("stage:O", title="Cell Cycle Stage"),
-        y=alt.Y("count:Q", title="Count"),
-    ).properties(
-        width=500,
-        height=250,
-        title=f"Data Points per Cell Cycle Stage (n_bins={n_bins})"
+    stage_bar = (
+        alt.Chart(stage_counts)
+        .mark_bar(color="#2ecc71")
+        .encode(
+            x=alt.X("stage:O", title="Cell Cycle Stage"),
+            y=alt.Y("count:Q", title="Count"),
+        )
+        .properties(width=500, height=250, title=f"Data Points per Cell Cycle Stage (n_bins={n_bins})")
     )
 
     mo.md(f"""
@@ -433,11 +438,15 @@ def _(alt, koopman_cc, mo, mode, np, pl):
             "y": np.sin(theta_circle),
         })
 
-        unit_circle = alt.Chart(circle_df).mark_line(
-            strokeDash=[5, 5],
-            color="gray",
-            opacity=0.5,
-        ).encode(x="x:Q", y="y:Q")
+        unit_circle = (
+            alt.Chart(circle_df)
+            .mark_line(
+                strokeDash=[5, 5],
+                color="gray",
+                opacity=0.5,
+            )
+            .encode(x="x:Q", y="y:Q")
+        )
 
         eig_df = pl.DataFrame({
             "real": [eigenvalue.real],
@@ -445,30 +454,36 @@ def _(alt, koopman_cc, mo, mode, np, pl):
             "magnitude": [np.abs(eigenvalue)],
         })
 
-        eig_point = alt.Chart(eig_df).mark_point(
-            size=300,
-            color="#e74c3c",
-            filled=True,
-        ).encode(
-            x=alt.X("real:Q", title="Real", scale=alt.Scale(domain=[-1.5, 1.5])),
-            y=alt.Y("imag:Q", title="Imaginary", scale=alt.Scale(domain=[-1.5, 1.5])),
-            tooltip=["real", "imag", "magnitude"],
+        eig_point = (
+            alt.Chart(eig_df)
+            .mark_point(
+                size=300,
+                color="#e74c3c",
+                filled=True,
+            )
+            .encode(
+                x=alt.X("real:Q", title="Real", scale=alt.Scale(domain=[-1.5, 1.5])),
+                y=alt.Y("imag:Q", title="Imaginary", scale=alt.Scale(domain=[-1.5, 1.5])),
+                tooltip=["real", "imag", "magnitude"],
+            )
         )
 
-        eig_label = alt.Chart(eig_df).mark_text(
-            dx=15,
-            dy=-10,
-            fontSize=12,
-        ).encode(
-            x="real:Q",
-            y="imag:Q",
-            text=alt.value("Cell Cycle Mode"),
+        eig_label = (
+            alt.Chart(eig_df)
+            .mark_text(
+                dx=15,
+                dy=-10,
+                fontSize=12,
+            )
+            .encode(
+                x="real:Q",
+                y="imag:Q",
+                text=alt.value("Cell Cycle Mode"),
+            )
         )
 
         eigenvalue_chart = (unit_circle + eig_point + eig_label).properties(
-            width=350,
-            height=350,
-            title="Cell Cycle Mode Eigenvalue"
+            width=350, height=350, title="Cell Cycle Mode Eigenvalue"
         )
 
         display_chart = eigenvalue_chart

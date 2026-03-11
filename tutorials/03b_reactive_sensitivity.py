@@ -75,8 +75,8 @@ def _(np):
     # Define parameter space bounds
     PARAM_NAMES = ["vio_expression", "vio_trl_eff", "mecillinam_conc"]
     PARAM_BOUNDS = np.array([
-        [0.5, 5.0],   # vio_expression
-        [0.5, 2.0],   # vio_trl_eff
+        [0.5, 5.0],  # vio_expression
+        [0.5, 2.0],  # vio_trl_eff
         [0.0, 10.0],  # mecillinam_concentration
     ])
 
@@ -99,12 +99,12 @@ def _(np):
     # Coefficients chosen to show clear parameter effects
     # Higher coefficient = more influence on output
     coefficients = np.array([
-        1.5,   # Constant (baseline output)
-        0.8,   # x1 linear (strong effect)
-        0.3,   # x2 linear (medium effect)
-        -0.15, # x3 linear (negative effect - mecillinam reduces output)
-        0.2,   # x1 quadratic (nonlinear)
-        0.1,   # x2 quadratic
+        1.5,  # Constant (baseline output)
+        0.8,  # x1 linear (strong effect)
+        0.3,  # x2 linear (medium effect)
+        -0.15,  # x3 linear (negative effect - mecillinam reduces output)
+        0.2,  # x1 quadratic (nonlinear)
+        0.1,  # x2 quadratic
         0.15,  # x1*x2 interaction
         -0.1,  # x1*x3 interaction (mecillinam dampens vio effect)
     ])
@@ -237,47 +237,63 @@ def _(
     # BUILD FIGURE
     # =====================================================================
     ts_fig = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         row_heights=[0.7, 0.3],
-        subplot_titles=['Output Timeseries (drag sliders to see changes)', 'Difference from Baseline'],
+        subplot_titles=["Output Timeseries (drag sliders to see changes)", "Difference from Baseline"],
         vertical_spacing=0.12,
     )
 
     # Main timeseries plot
-    ts_fig.add_trace(go.Scatter(
-        x=_t, y=_default_ts,
-        name='Baseline (default params)',
-        line=dict(color='rgba(100, 100, 100, 0.5)', width=1, dash='dot'),
-    ), row=1, col=1)
+    ts_fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_default_ts,
+            name="Baseline (default params)",
+            line=dict(color="rgba(100, 100, 100, 0.5)", width=1, dash="dot"),
+        ),
+        row=1,
+        col=1,
+    )
 
-    ts_fig.add_trace(go.Scatter(
-        x=_t, y=_timeseries,
-        name='Current (your params)',
-        line=dict(color='cyan', width=2),
-        fill='tonexty',
-        fillcolor='rgba(0, 255, 255, 0.1)',
-    ), row=1, col=1)
+    ts_fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_timeseries,
+            name="Current (your params)",
+            line=dict(color="cyan", width=2),
+            fill="tonexty",
+            fillcolor="rgba(0, 255, 255, 0.1)",
+        ),
+        row=1,
+        col=1,
+    )
 
     # Difference plot
     _diff = _timeseries - _default_ts
-    ts_fig.add_trace(go.Scatter(
-        x=_t, y=_diff,
-        name='Difference',
-        line=dict(color='magenta', width=1),
-        fill='tozeroy',
-        fillcolor='rgba(255, 0, 255, 0.2)',
-    ), row=2, col=1)
+    ts_fig.add_trace(
+        go.Scatter(
+            x=_t,
+            y=_diff,
+            name="Difference",
+            line=dict(color="magenta", width=1),
+            fill="tozeroy",
+            fillcolor="rgba(255, 0, 255, 0.2)",
+        ),
+        row=2,
+        col=1,
+    )
 
     # Add zero line to difference plot
     ts_fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1)
 
-    ts_fig.update_xaxes(title='Time (s)', row=2, col=1)
-    ts_fig.update_yaxes(title='Observable Value', row=1, col=1)
-    ts_fig.update_yaxes(title='Diff from baseline', row=2, col=1)
+    ts_fig.update_xaxes(title="Time (s)", row=2, col=1)
+    ts_fig.update_yaxes(title="Observable Value", row=1, col=1)
+    ts_fig.update_yaxes(title="Diff from baseline", row=2, col=1)
 
     ts_fig.update_layout(
         height=550,
-        template='plotly_dark',
+        template="plotly_dark",
         showlegend=True,
         legend=dict(x=0.02, y=0.98),
         margin=dict(t=40, b=40),
@@ -303,14 +319,18 @@ def _(
 
 **Timeseries stats:**
 - Final value: `{_timeseries[-1]:.4f}`
-- Net growth: `{(_growth_rate - _damping)*1000:.2f}‰/step`
+- Net growth: `{(_growth_rate - _damping) * 1000:.2f}‰/step`
         """),
     ])
 
-    mo.hstack([
-        _slider_panel,
-        ts_fig,
-    ], widths=[1, 3], gap=2)
+    mo.hstack(
+        [
+            _slider_panel,
+            ts_fig,
+        ],
+        widths=[1, 3],
+        gap=2,
+    )
     return
 
 

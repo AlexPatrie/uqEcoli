@@ -79,6 +79,261 @@ class SobolIndices:
         return [(self.parameter_names[i], indices[i]) for i in sorted_idx]
 
 
+@dataclass
+class MorrisIndices:
+    """
+    Container for Morris screening results (elementary effects).
+
+    Morris screening is a computationally efficient method for identifying
+    the most influential parameters. It requires O(n) model evaluations
+    (vs O(n²) for Sobol), making it ideal for screening before detailed GSA.
+
+    Interpretation:
+        - mu (μ): Mean elementary effect - overall influence (can cancel if non-monotonic)
+        - mu_star (μ*): Mean of |elementary effect| - robust measure of influence
+        - sigma (σ): Std dev of elementary effects - indicates interactions/nonlinearity
+
+    Classification:
+        - High μ*, low σ: Linear effect (no interactions)
+        - High μ*, high σ: Nonlinear effect or interactions with other params
+        - Low μ*: Parameter has little influence
+
+    Attributes:
+        mu: Mean elementary effects, shape (n_params,)
+        mu_star: Mean absolute elementary effects, shape (n_params,)
+        sigma: Standard deviation of elementary effects, shape (n_params,)
+        parameter_names: Names of the input parameters
+        elementary_effects: Raw elementary effects, shape (n_trajectories, n_params)
+        n_trajectories: Number of Morris trajectories used
+        n_levels: Number of grid levels used
+    """
+
+    mu: np.ndarray
+    mu_star: np.ndarray
+    sigma: np.ndarray
+    parameter_names: list[str] = field(default_factory=list)
+    elementary_effects: Optional[np.ndarray] = None
+    n_trajectories: int = 0
+    n_levels: int = 4
+
+    def get_most_influential(self, n: int = 5) -> list[tuple[str, float]]:
+        """
+        Get the most influential parameters based on μ* (mu_star).
+
+        μ* is preferred over μ because it handles non-monotonic effects
+        where positive and negative effects might cancel out.
+
+        Args:
+            n: Number of top parameters to return
+
+        Returns:
+            List of (parameter_name, mu_star_value) tuples, sorted by influence
+        """
+        sorted_idx = np.argsort(self.mu_star)[::-1][:n]
+        return [(self.parameter_names[i], float(self.mu_star[i])) for i in sorted_idx]
+
+    def get_screening_candidates(
+        self,
+        mu_star_threshold: Optional[float] = None,
+        top_n: Optional[int] = None,
+    ) -> list[str]:
+        """
+        Get parameters that pass the screening threshold.
+
+        Use this to identify which parameters to include in detailed
+        PCE/Sobol analysis.
+
+        Args:
+            mu_star_threshold: Minimum μ* value to be considered influential.
+                              If None, uses 10% of max μ* as threshold.
+            top_n: Alternatively, just return the top N parameters.
+
+        Returns:
+            List of parameter names that pass screening
+        """
+        if top_n is not None:
+            sorted_idx = np.argsort(self.mu_star)[::-1][:top_n]
+            return [self.parameter_names[i] for i in sorted_idx]
+
+        if mu_star_threshold is None:
+            mu_star_threshold = 0.1 * np.max(self.mu_star)
+
+        passing_idx = np.where(self.mu_star >= mu_star_threshold)[0]
+        # Sort by influence
+        passing_idx = passing_idx[np.argsort(self.mu_star[passing_idx])[::-1]]
+        return [self.parameter_names[i] for i in passing_idx]
+
+    def classify_parameters(self) -> dict[str, list[str]]:
+        """
+        Classify parameters into categories based on Morris indices.
+
+        Returns:
+            Dictionary with keys:
+                - 'negligible': Low influence (can likely be fixed)
+                - 'linear': High influence, low interactions
+                - 'nonlinear': High influence, significant interactions/nonlinearity
+        """
+        # Normalize to [0, 1] for classification
+        mu_star_norm = self.mu_star / (np.max(self.mu_star) + 1e-10)
+        sigma_norm = self.sigma / (np.max(self.sigma) + 1e-10)
+
+        negligible = []
+        linear = []
+        nonlinear = []
+
+        for i, name in enumerate(self.parameter_names):
+            if mu_star_norm[i] < 0.1:
+                negligible.append(name)
+            elif sigma_norm[i] < 0.5:
+                linear.append(name)
+            else:
+                nonlinear.append(name)
+
+        return {
+            "negligible": negligible,
+            "linear": linear,
+            "nonlinear": nonlinear,
+        }
+
+    def summary(self) -> str:
+        """Generate a human-readable summary of Morris screening results."""
+        lines = [
+            "Morris Screening Results",
+            "=" * 50,
+            f"Trajectories: {self.n_trajectories}, Levels: {self.n_levels}",
+            "",
+            f"{'Parameter':<25} {'μ*':>10} {'σ':>10} {'μ':>10}",
+            "-" * 55,
+        ]
+
+        # Sort by mu_star descending
+        sorted_idx = np.argsort(self.mu_star)[::-1]
+        for i in sorted_idx:
+            lines.append(
+                f"{self.parameter_names[i]:<25} {self.mu_star[i]:>10.4f} {self.sigma[i]:>10.4f} {self.mu[i]:>10.4f}"
+            )
+
+        classification = self.classify_parameters()
+        lines.extend([
+            "",
+            "Classification:",
+            f"  Negligible: {classification['negligible']}",
+            f"  Linear effects: {classification['linear']}",
+            f"  Nonlinear/interactions: {classification['nonlinear']}",
+        ])
+
+        return "\n".join(lines)
+
+    def to_parameter_config(
+        self,
+        parameter_bounds: Optional[list[tuple[float, float]]] = None,
+        top_n: Optional[int] = None,
+        mu_star_threshold: Optional[float] = None,
+        include_descriptions: bool = True,
+    ) -> list[dict]:
+        """
+        Convert screening results to PARAMETER_CONFIG format for tutorials.
+
+        This bridges the gap between Morris screening and the reactive
+        sensitivity tutorial (03c_reactive_sensitivity_generalized.py),
+        allowing you to automatically populate PARAMETER_CONFIG with
+        the most influential parameters identified by screening.
+
+        Args:
+            parameter_bounds: List of (min, max) bounds for each parameter.
+                             If None, uses [0, 1] for all parameters.
+                             Can also pass InputParameterSpace.parameter_bounds.
+            top_n: Select top N most influential parameters.
+            mu_star_threshold: Alternatively, select params above this μ* threshold.
+                              If neither is specified, uses top_n=5.
+            include_descriptions: Whether to include Morris stats in descriptions.
+
+        Returns:
+            List of parameter config dicts compatible with tutorial format:
+            [{"name": str, "bounds": [min, max], "default": float,
+              "step": float, "description": str}, ...]
+
+        Example:
+            >>> # After Morris screening
+            >>> morris = analyzer.analyze_with_morris(n_trajectories=20)
+            >>>
+            >>> # Convert to tutorial format
+            >>> PARAMETER_CONFIG = morris.to_parameter_config(
+            ...     parameter_bounds=param_space.parameter_bounds,
+            ...     top_n=5,
+            ... )
+            >>>
+            >>> # Now use in reactive sensitivity tutorial
+            >>> # (copy to 03c_reactive_sensitivity_generalized.py)
+        """
+        # Determine which parameters to include
+        if top_n is None and mu_star_threshold is None:
+            top_n = min(5, len(self.parameter_names))
+
+        selected_names = self.get_screening_candidates(
+            top_n=top_n,
+            mu_star_threshold=mu_star_threshold,
+        )
+
+        # Build parameter config
+        config = []
+        for i, name in enumerate(self.parameter_names):
+            if name not in selected_names:
+                continue
+
+            # Get bounds
+            if parameter_bounds is not None:
+                bounds = list(parameter_bounds[i])
+            else:
+                bounds = [0.0, 1.0]
+
+            # Calculate default (midpoint) and step
+            default = (bounds[0] + bounds[1]) / 2
+            step = (bounds[1] - bounds[0]) / 50  # 50 steps across range
+
+            # Round step to nice value
+            if step > 0:
+                magnitude = 10 ** np.floor(np.log10(step))
+                normalized = step / magnitude
+                if normalized < 1.5:
+                    nice_step = 1
+                elif normalized < 3.5:
+                    nice_step = 2
+                elif normalized < 7.5:
+                    nice_step = 5
+                else:
+                    nice_step = 10
+                step = nice_step * magnitude
+
+            # Build description
+            if include_descriptions:
+                classification = self.classify_parameters()
+                if name in classification["linear"]:
+                    effect_type = "linear effect"
+                elif name in classification["nonlinear"]:
+                    effect_type = "nonlinear/interactions"
+                else:
+                    effect_type = "low influence"
+
+                description = f"Morris screening: μ*={self.mu_star[i]:.4f}, σ={self.sigma[i]:.4f} ({effect_type})"
+            else:
+                description = ""
+
+            config.append({
+                "name": name,
+                "bounds": bounds,
+                "default": default,
+                "step": step,
+                "description": description,
+            })
+
+        # Sort by mu_star (most influential first)
+        name_to_mu_star = {name: self.mu_star[i] for i, name in enumerate(self.parameter_names)}
+        config.sort(key=lambda x: name_to_mu_star.get(x["name"], 0), reverse=True)
+
+        return config
+
+
 def _legendre_polynomial(x: np.ndarray, order: int) -> np.ndarray:
     """
     Evaluate Legendre polynomial of given order at points x.
@@ -101,7 +356,7 @@ def _legendre_polynomial(x: np.ndarray, order: int) -> np.ndarray:
         return x.copy()
     else:
         p_prev2 = np.ones_like(x)  # P_0
-        p_prev1 = x.copy()          # P_1
+        p_prev1 = x.copy()  # P_1
         for n in range(2, order + 1):
             p_curr = ((2 * n - 1) * x * p_prev1 - (n - 1) * p_prev2) / n
             p_prev2 = p_prev1
@@ -222,9 +477,7 @@ class PCESurrogate:
                 order = int(self.multi_indices[term_idx, param_idx])
                 if order > 0:
                     # Multiply by univariate polynomial
-                    basis_matrix[:, term_idx] *= poly_func(
-                        X_norm[:, param_idx], order
-                    )
+                    basis_matrix[:, term_idx] *= poly_func(X_norm[:, param_idx], order)
 
         return basis_matrix
 
@@ -253,9 +506,7 @@ class PCESurrogate:
 
         # Validate input dimension
         if X.shape[1] != self.input_dim:
-            raise ValueError(
-                f"Input has {X.shape[1]} features, expected {self.input_dim}"
-            )
+            raise ValueError(f"Input has {X.shape[1]} features, expected {self.input_dim}")
 
         # Normalize inputs
         X_norm = self._normalize_inputs(X)
@@ -276,9 +527,7 @@ class PCESurrogate:
 
         return predictions
 
-    def predict_with_uncertainty(
-        self, X: np.ndarray, return_std: bool = True
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def predict_with_uncertainty(self, X: np.ndarray, return_std: bool = True) -> tuple[np.ndarray, np.ndarray]:
         """
         Predict outputs with uncertainty estimate.
 
@@ -566,6 +815,200 @@ class SensitivityAnalyzer:
         )
 
         return result
+
+    def analyze_with_morris(
+        self,
+        n_trajectories: int = 10,
+        n_levels: int = 4,
+        seed: Optional[int] = None,
+    ) -> MorrisIndices:
+        """
+        Perform Morris screening for efficient parameter importance ranking.
+
+        Morris screening (Elementary Effects method) is computationally cheap
+        compared to Sobol analysis, requiring only O(n_trajectories * (n_params + 1))
+        model evaluations. Use this for initial screening to identify which
+        parameters to include in detailed PCE/Sobol analysis.
+
+        The method works by computing "elementary effects" - the change in output
+        when one parameter is perturbed while others are held fixed. Statistics
+        of these effects (mean, std) reveal parameter importance and interactions.
+
+        Args:
+            n_trajectories: Number of Morris trajectories. More trajectories give
+                           more stable estimates but require more evaluations.
+                           Typical values: 10-50. Total evaluations = n_trajectories * (n_params + 1).
+            n_levels: Number of grid levels for the parameter space. Higher values
+                     give finer resolution but may miss local effects. Typical: 4-8.
+            seed: Random seed for reproducibility.
+
+        Returns:
+            MorrisIndices containing μ, μ*, σ for each parameter
+
+        Example:
+            >>> # Screen 20 parameters with only ~200 evaluations
+            >>> morris = analyzer.analyze_with_morris(n_trajectories=10)
+            >>> print(morris.summary())
+            >>>
+            >>> # Get top 5 most influential parameters for detailed analysis
+            >>> important_params = morris.get_screening_candidates(top_n=5)
+            >>> print(f"Focus detailed analysis on: {important_params}")
+
+        References:
+            Morris, M.D. (1991). "Factorial Sampling Plans for Preliminary
+            Computational Experiments". Technometrics, 33(2), 161-174.
+        """
+        # Try UQPy first (preferred)
+        try:
+            return self._analyze_morris_uqpy(n_trajectories, n_levels, seed)
+        except ImportError:
+            pass
+
+        # Fallback to manual implementation
+        return self._analyze_morris_manual(n_trajectories, n_levels, seed)
+
+    def _analyze_morris_uqpy(
+        self,
+        n_trajectories: int,
+        n_levels: int,
+        seed: Optional[int],
+    ) -> MorrisIndices:
+        """Morris screening using UQPy's MorrisSensitivity."""
+        try:
+            from UQpy.distributions import JointIndependent, Uniform
+            from UQpy.sensitivity import MorrisSensitivity
+        except ImportError:
+            raise ImportError("UQPy is required for Morris sensitivity analysis. Install it with: pip install UQpy")
+
+        # Create distributions for each parameter
+        distributions = []
+        for lb, ub in self.parameter_space.parameter_bounds:
+            distributions.append(Uniform(loc=lb, scale=ub - lb))
+
+        joint_dist = JointIndependent(marginals=distributions)
+
+        # Create model function
+        def model_func(X: np.ndarray) -> np.ndarray:
+            if self.wrapper is not None:
+                return self.wrapper.evaluate_batch(X)
+            elif self.samples is not None and self.outputs is not None:
+                # For precomputed data, we need to interpolate or raise error
+                raise ValueError(
+                    "Morris analysis requires a wrapper to evaluate new points. "
+                    "Precomputed samples/outputs cannot be used."
+                )
+            else:
+                raise ValueError("Wrapper required for Morris analysis")
+
+        # Set random state if provided
+        if seed is not None:
+            np.random.seed(seed)
+
+        # Run Morris analysis
+        morris = MorrisSensitivity(
+            runmodel_object=model_func,
+            distributions=joint_dist,
+            n_trajectories=n_trajectories,
+            n_levels=n_levels,
+        )
+
+        # Extract results
+        # UQPy returns elementary_effects of shape (n_trajectories, n_params)
+        elementary_effects = np.array(morris.elementary_effects)
+
+        # Compute statistics
+        mu = np.mean(elementary_effects, axis=0)
+        mu_star = np.mean(np.abs(elementary_effects), axis=0)
+        sigma = np.std(elementary_effects, axis=0)
+
+        return MorrisIndices(
+            mu=mu,
+            mu_star=mu_star,
+            sigma=sigma,
+            parameter_names=self.parameter_space.parameter_names,
+            elementary_effects=elementary_effects,
+            n_trajectories=n_trajectories,
+            n_levels=n_levels,
+        )
+
+    def _analyze_morris_manual(
+        self,
+        n_trajectories: int,
+        n_levels: int,
+        seed: Optional[int],
+    ) -> MorrisIndices:
+        """
+        Manual implementation of Morris screening.
+
+        Used as fallback when UQPy is not available.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        n_params = self.parameter_space.n_parameters
+        bounds = np.array(self.parameter_space.parameter_bounds)
+        lb, ub = bounds[:, 0], bounds[:, 1]
+
+        # Grid step size
+        delta = n_levels / (2 * (n_levels - 1))
+
+        # Generate Morris trajectories
+        elementary_effects = np.zeros((n_trajectories, n_params))
+
+        for traj in range(n_trajectories):
+            # Random starting point on grid
+            x_base = np.random.randint(0, n_levels - 1, n_params) / (n_levels - 1)
+
+            # Random permutation of parameters
+            perm = np.random.permutation(n_params)
+
+            # Build trajectory: start point + n_params perturbations
+            trajectory = np.zeros((n_params + 1, n_params))
+            trajectory[0] = x_base.copy()
+
+            for i, param_idx in enumerate(perm):
+                trajectory[i + 1] = trajectory[i].copy()
+                # Perturb this parameter by +/- delta
+                if trajectory[i, param_idx] + delta <= 1.0:
+                    trajectory[i + 1, param_idx] += delta
+                else:
+                    trajectory[i + 1, param_idx] -= delta
+
+            # Scale to actual parameter bounds
+            trajectory_scaled = lb + trajectory * (ub - lb)
+
+            # Evaluate model at all trajectory points
+            if self.wrapper is not None:
+                outputs = self.wrapper.evaluate_batch(trajectory_scaled)
+            else:
+                raise ValueError("Wrapper required for Morris analysis")
+
+            # Ensure outputs is 1D for single-output case
+            if outputs.ndim > 1:
+                outputs = outputs[:, 0]
+
+            # Compute elementary effects
+            for i, param_idx in enumerate(perm):
+                dy = outputs[i + 1] - outputs[i]
+                dx = trajectory[i + 1, param_idx] - trajectory[i, param_idx]
+                # Scale by parameter range
+                param_range = ub[param_idx] - lb[param_idx]
+                elementary_effects[traj, param_idx] = dy / (dx * param_range) if dx != 0 else 0
+
+        # Compute statistics
+        mu = np.mean(elementary_effects, axis=0)
+        mu_star = np.mean(np.abs(elementary_effects), axis=0)
+        sigma = np.std(elementary_effects, axis=0)
+
+        return MorrisIndices(
+            mu=mu,
+            mu_star=mu_star,
+            sigma=sigma,
+            parameter_names=self.parameter_space.parameter_names,
+            elementary_effects=elementary_effects,
+            n_trajectories=n_trajectories,
+            n_levels=n_levels,
+        )
 
     def _get_samples_and_outputs(
         self,
