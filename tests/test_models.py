@@ -330,8 +330,8 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_to_surrogate(self):
         """to_surrogate should return valid PCESurrogate."""
-        from uq.models import PCEFitResult
         from uq import PCESurrogate
+        from uq.models import PCEFitResult
 
         coeffs = np.array([1.0, 0.5])
         indices = np.array([[0, 0], [1, 0]])

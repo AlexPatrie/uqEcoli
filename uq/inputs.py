@@ -305,6 +305,7 @@ def load_dataset(
     experiment_id: str,
     outdir_root: Path | None = None,
     observables: list[str] | None = None,
+    include_metadata: bool = True,
 ) -> polars.DataFrame:
     """
     Load simulation dataset from parquet files.
@@ -314,6 +315,8 @@ def load_dataset(
         outdir_root: Root directory for simulation outputs. Defaults to
                      {repo_root}/api_integration/sims
         observables: Optional list of column names to select
+        include_metadata: If True, include hive partition columns (variant, lineage_seed,
+                         generation, agent_id) from the directory structure
 
     Returns:
         Polars DataFrame with the simulation data
@@ -323,14 +326,25 @@ def load_dataset(
 
     base_path = Path(outdir_root) / experiment_id / "history" / f"experiment_id={experiment_id}"
 
-    # Scan nested parquet files (variant/lineage_seed/generation/agent_id/*.pq)
-    lf = polars.scan_parquet(str(base_path))
+    # Scan nested parquet files with hive partitioning to extract metadata columns
+    # (variant, lineage_seed, generation, agent_id) from directory structure
+    lf = polars.scan_parquet(str(base_path / "**/*.pq"), hive_partitioning=include_metadata)
+
     if observables is not None:
-        # Filter to only existing columns
+        # Filter to only existing columns, but always include metadata if requested
         available = lf.collect_schema().names()
         valid_observables = [col for col in observables if col in available]
+
+        # Add metadata columns if they exist and include_metadata is True
+        if include_metadata:
+            metadata_cols = ["variant", "lineage_seed", "generation", "agent_id"]
+            for col in metadata_cols:
+                if col in available and col not in valid_observables:
+                    valid_observables.append(col)
+
         if valid_observables:
             lf = lf.select(valid_observables)
+
     return lf.collect()
 
 

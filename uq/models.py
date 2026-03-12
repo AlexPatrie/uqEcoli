@@ -9,10 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 
-from uq import PCESurrogate
-
 if TYPE_CHECKING:
-    pass
+    from uq.sensitivity import PCESurrogate
 
 
 class MediaCondition(str, Enum):
@@ -478,8 +476,10 @@ class PCEFitResult(BaseClass):
         n_nonzero = np.sum(np.abs(self.coefficients) > 1e-10)
         self.sparsity = 1.0 - (n_nonzero / len(self.coefficients))
 
-    def to_surrogate(self) -> PCESurrogate:
+    def to_surrogate(self) -> "PCESurrogate":
         """Convert fit result to a PCESurrogate for prediction."""
+        from uq.sensitivity import PCESurrogate
+
         return PCESurrogate(
             coefficients=self.coefficients,
             multi_indices=self.multi_indices,

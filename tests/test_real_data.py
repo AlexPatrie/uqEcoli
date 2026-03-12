@@ -67,13 +67,12 @@ class TestRealDataLoading:
     @pytest.mark.real_data
     def test_load_dataset_function(self):
         """uq.inputs.load_dataset should load real simulation data."""
-        from tests.conftest import _get_repo_root, _load_real_dataset_safe
+        from tests.conftest import REAL_DATA_OUTDIR, _load_real_dataset_safe
 
         log_header("LOADING REAL SIMULATION DATA")
 
         # Check if data directory exists
-        repo_root = _get_repo_root()
-        data_path = repo_root / "api_integration/sims/api_simulation_default"
+        data_path = REAL_DATA_OUTDIR / "api_simulation_default"
         log_info(f"Looking for data at: {data_path}")
 
         if not data_path.exists():

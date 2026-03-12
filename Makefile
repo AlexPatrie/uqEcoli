@@ -6,7 +6,7 @@ documentation:
 
 .PHONY: test
 test:
-	@uv run pytest uq/tests/ -v -s
+	@uv run pytest ./tests/ -v -s
 
 .PHONY: tutorial4
 tutorial4:

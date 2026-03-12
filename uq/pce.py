@@ -54,8 +54,7 @@ from numpy.polynomial.legendre import legval
 from scipy.linalg import lstsq
 from scipy.stats import qmc
 
-from uq import InputParameterSpaceVecoli, PCESurrogate, SensitivityAnalyzer
-from uq.inputs import InputParameterSpace
+from uq.inputs import InputParameterSpace, InputParameterSpaceVecoli
 from uq.models import (
     Parameter,
     PCEConfig,
@@ -65,15 +64,57 @@ from uq.models import (
     PCESolverConfig,
     PCESurrogateConfig,
 )
+from uq.sensitivity import PCESurrogate, SensitivityAnalyzer
+
+
+class FunctionWrapper:
+    """Simple wrapper that adapts a callable to the wrapper interface expected by SensitivityAnalyzer."""
+
+    def __init__(self, f: Callable[[np.ndarray], float | np.ndarray]):
+        """
+        Args:
+            f: A function that takes a 1D parameter array and returns a scalar or array output.
+        """
+        self.f = f
+
+    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+        """
+        Evaluate the function for a batch of input samples.
+
+        Args:
+            X: Input parameter array of shape (n_samples, n_parameters)
+
+        Returns:
+            Output array of shape (n_samples,) or (n_samples, n_outputs)
+        """
+        results = []
+        for x in X:
+            result = self.f(x)
+            results.append(result)
+        return np.array(results)
 
 
 def prescreen_parameters(
-    full_space: InputParameterSpace, config: PCEParameterSelectionConfig | None = None
+    full_space: InputParameterSpace,
+    config: PCEParameterSelectionConfig | None = None,
+    f: Callable[[np.ndarray], float | np.ndarray] | None = None,
 ) -> list[Parameter]:
     """
+    Prescreen parameters using Morris sensitivity analysis.
+
+    Args:
+        full_space: The full input parameter space to screen.
+        config: Configuration for prescreening (n_trajectories, n_top).
+        f: Optional function to evaluate during Morris screening. If not provided,
+           Morris analysis cannot be performed and will raise an error.
+
+    Returns:
+        List of the most influential parameters as Parameter objects.
+
     Prescreening attrs related to morris: n_trajectories, n_top (num selections)
     """
-    analyzer = SensitivityAnalyzer(full_space)
+    wrapper = FunctionWrapper(f) if f is not None else None
+    analyzer = SensitivityAnalyzer(full_space, wrapper=wrapper)
     conf = config or PCEParameterSelectionConfig()
     screening = analyzer.analyze_with_morris(n_trajectories=conf.n_trajectories)
     return screening.to_parameter_config(parameter_bounds=full_space.parameter_bounds, top_n=conf.n_top)
@@ -563,7 +604,7 @@ def generate_surrogate(
             p: alias for `polynomial_order` - consistent with literature.
     """
     # prescreen to find most relevant params
-    selected = prescreen_parameters(full_space=space, config=prescreening_config)
+    selected = prescreen_parameters(full_space=space, config=prescreening_config, f=f)
     n_params = len(selected)
     if kwargs.get("n_top") is None:
         kwargs["n_top"] = min(20, max(3, int(math.ceil(math.sqrt(n_params) * 1.5))))  # noqa: RUF046

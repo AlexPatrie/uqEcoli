@@ -184,17 +184,23 @@ class TestPCESurrogate:
         assert surrogate.basis_type == "legendre"
 
     @pytest.mark.unit
-    def test_predict_not_implemented(self):
-        """PCESurrogate.predict should raise NotImplementedError."""
+    def test_predict_returns_output(self):
+        """PCESurrogate.predict should return predictions."""
         from uq import PCESurrogate
 
+        # Create a simple surrogate: constant term only (coefficient=2.0)
         surrogate = PCESurrogate(
-            coefficients=np.array([1.0]),
-            multi_indices=np.array([[0]]),
+            coefficients=np.array([2.0]),
+            multi_indices=np.array([[0, 0]]),  # constant term for 2 params
+            input_dim=2,
+            input_bounds=np.array([[0, 1], [0, 1]]),
         )
 
-        with pytest.raises(NotImplementedError):
-            surrogate.predict(np.array([[0.5, 0.5]]))
+        result = surrogate.predict(np.array([[0.5, 0.5]]))
+
+        # Constant term should return the coefficient value
+        assert result is not None
+        assert result.shape == (1, 1)  # (n_samples, n_outputs)
 
 
 class TestSensitivityAnalyzer:

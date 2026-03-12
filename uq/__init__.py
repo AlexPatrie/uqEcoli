@@ -148,7 +148,16 @@ from uq.koopman import (
 )
 
 # Data models
-from uq.models import CellCyclePhase, CellCycleVariable, PCEFitResult, PCESurrogateConfig, UQInputParameters
+from uq.models import (
+    CellCyclePhase,
+    CellCycleVariable,
+    GeneKnockoutParams,
+    MecillinamParams,
+    PCEFitResult,
+    PCESurrogateConfig,
+    UQInputParameters,
+    VioPathwayParams,
+)
 
 # Output variable extraction
 from uq.outputs import (
@@ -193,8 +202,11 @@ from uq.wrappers import (
 
 __all__ = [
     # Input parameters
+    "GeneKnockoutParams",
     "InputParameterSpaceVecoli",
+    "MecillinamParams",
     "UQInputParameters",
+    "VioPathwayParams",
     "get_available_columns",
     "load_dataset",
     # Output extraction

@@ -53,12 +53,16 @@ def _get_repo_root() -> Path:
     return Path.cwd()
 
 
+# Default path for real simulation data
+REAL_DATA_OUTDIR = Path("/Users/alexanderpatrie/sms/sms-api/artifacts/sims")
+
+
 def _load_real_dataset_safe(
     experiment_id: str = "api_simulation_default",
     max_files: int | None = None,
 ) -> pl.DataFrame | None:
     """
-    Load real simulation data safely, handling schema mismatches.
+    Load real simulation data using uq.inputs.load_dataset.
 
     Args:
         experiment_id: Experiment identifier
@@ -67,62 +71,62 @@ def _load_real_dataset_safe(
     Returns:
         DataFrame or None if data not available
     """
+    from uq.inputs import load_dataset
+
     repo_root = _get_repo_root()
-    base_path = repo_root / "api_integration/sims" / experiment_id / "history" / f"experiment_id={experiment_id}"
+    observables_file = repo_root / "baseline_observables.json"
 
-    if not base_path.exists():
+    # Check if data directory exists
+    if not REAL_DATA_OUTDIR.exists():
         return None
 
-    # Find parquet files
-    files = sorted(glob.glob(str(base_path / "**/*.pq"), recursive=True))
-    if not files:
+    try:
+        # Load observables from JSON
+        if observables_file.exists():
+            with open(observables_file) as f:
+                obs = [col for col in json.load(f) if col.startswith("listener")]
+            obs.append("time")
+        else:
+            # Fallback to standard columns
+            obs = REAL_DATA_COLUMNS
+
+        # Load dataset using uq.inputs.load_dataset
+        df = load_dataset(
+            experiment_id=experiment_id,
+            outdir_root=REAL_DATA_OUTDIR,
+            observables=obs,
+        )
+
+        # Handle both DataFrame and LazyFrame
+        if hasattr(df, "collect"):
+            df = df.collect()
+
+        # Filter to Float64 columns only (numeric observables)
+        schema = df.schema
+        float_observables = []
+        for obs_i in obs:
+            if obs_i in schema:
+                coltype = schema[obs_i]
+                if coltype == pl.Float64:
+                    float_observables.append(obs_i)
+
+        # Ensure we have required columns (including all metadata from hive partitioning)
+        required = ["time", "lineage_seed", "generation", "variant", "agent_id"]
+        for col in required:
+            if col in schema and col not in float_observables:
+                float_observables.append(col)
+
+        df = df.select([c for c in float_observables if c in schema])
+
+        if len(df) == 0:
+            return None
+
+        return df
+
+    except Exception as e:
+        # Log the error for debugging but don't fail
+        print(f"Warning: Could not load real data: {e}")
         return None
-
-    if max_files:
-        files = files[:max_files]
-
-    # Load files individually and concatenate
-    dfs = []
-    for f in files:
-        try:
-            # Extract metadata from path
-            parts = Path(f).parts
-            variant = None
-            lineage_seed = None
-            generation = None
-            agent_id = None
-
-            for part in parts:
-                if part.startswith("variant="):
-                    variant = int(part.split("=")[1])
-                elif part.startswith("lineage_seed="):
-                    lineage_seed = int(part.split("=")[1])
-                elif part.startswith("generation="):
-                    generation = int(part.split("=")[1])
-                elif part.startswith("agent_id="):
-                    agent_id = part.split("=")[1]
-
-            # Read only needed columns
-            df = pl.read_parquet(f, columns=REAL_DATA_COLUMNS)
-
-            # Add metadata columns
-            df = df.with_columns([
-                pl.lit(variant).alias("variant"),
-                pl.lit(lineage_seed).alias("lineage_seed"),
-                pl.lit(generation).alias("generation"),
-                pl.lit(agent_id).alias("agent_id"),
-                pl.lit(experiment_id).alias("experiment_id"),
-            ])
-
-            dfs.append(df)
-        except Exception:
-            # Skip files with schema issues
-            continue
-
-    if not dfs:
-        return None
-
-    return pl.concat(dfs)
 
 
 @pytest.fixture(scope="session")

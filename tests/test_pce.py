@@ -24,9 +24,9 @@ class TestGenerateMultiIndices:
         from uq.pce import generate_multi_indices
 
         test_cases = [
-            (3, 2, 10),   # C(5,2) = 10
-            (5, 2, 21),   # C(7,2) = 21
-            (3, 3, 20),   # C(6,3) = 20
+            (3, 2, 10),  # C(5,2) = 10
+            (5, 2, 21),  # C(7,2) = 21
+            (3, 3, 20),  # C(6,3) = 20
             (10, 2, 66),  # C(12,2) = 66
         ]
 
@@ -124,12 +124,12 @@ class TestFitPCECoefficients:
 
         result = fit_pce_coefficients(X, Y, polynomial_order=2)
 
-        assert hasattr(result, 'coefficients')
-        assert hasattr(result, 'multi_indices')
-        assert hasattr(result, 'r_squared')
-        assert hasattr(result, 'polynomial_order')
-        assert hasattr(result, 'n_params')
-        assert hasattr(result, 'method')
+        assert hasattr(result, "coefficients")
+        assert hasattr(result, "multi_indices")
+        assert hasattr(result, "r_squared")
+        assert hasattr(result, "polynomial_order")
+        assert hasattr(result, "n_params")
+        assert hasattr(result, "method")
 
     @pytest.mark.unit
     def test_coefficient_count_matches_terms(self, rng):
@@ -188,8 +188,8 @@ class TestFitPCECoefficients:
     @pytest.mark.unit
     def test_to_surrogate_method(self, rng):
         """to_surrogate should return a PCESurrogate."""
-        from uq.pce import fit_pce_coefficients
         from uq import PCESurrogate
+        from uq.pce import fit_pce_coefficients
 
         X = rng.uniform(-1, 1, (50, 2))
         Y = X[:, 0] + X[:, 1]
@@ -220,13 +220,13 @@ class TestCreateSamples:
     @pytest.mark.unit
     def test_output_shape(self):
         """Should return array of shape (N, n_params)."""
-        from uq.pce import create_samples
         from uq.models import Parameter
+        from uq.pce import create_samples
 
         params = [
-            Parameter(name="p1", bounds=[0, 1]),
-            Parameter(name="p2", bounds=[0, 2]),
-            Parameter(name="p3", bounds=[0, 3]),
+            Parameter(name="p1", bounds=[0, 1], default=0.5, step=0.1, description=""),
+            Parameter(name="p2", bounds=[0, 2], default=1.0, step=0.1, description=""),
+            Parameter(name="p3", bounds=[0, 3], default=1.5, step=0.1, description=""),
         ]
 
         X = create_samples(N=50, selected=params)
@@ -236,12 +236,12 @@ class TestCreateSamples:
     @pytest.mark.unit
     def test_samples_within_bounds(self):
         """All samples should be within parameter bounds."""
-        from uq.pce import create_samples
         from uq.models import Parameter
+        from uq.pce import create_samples
 
         params = [
-            Parameter(name="p1", bounds=[0.5, 2.0]),
-            Parameter(name="p2", bounds=[-1.0, 1.0]),
+            Parameter(name="p1", bounds=[0.5, 2.0], default=1.0, step=0.1, description=""),
+            Parameter(name="p2", bounds=[-1.0, 1.0], default=0.0, step=0.1, description=""),
         ]
 
         X = create_samples(N=100, selected=params)
@@ -252,10 +252,10 @@ class TestCreateSamples:
     @pytest.mark.unit
     def test_lhs_stratification(self):
         """LHS should provide better coverage than random."""
-        from uq.pce import create_samples
         from uq.models import Parameter
+        from uq.pce import create_samples
 
-        params = [Parameter(name="p1", bounds=[0, 1])]
+        params = [Parameter(name="p1", bounds=[0, 1], default=0.5, step=0.1, description="")]
 
         X = create_samples(N=10, selected=params)
 
@@ -291,6 +291,7 @@ class TestProcessSamples:
 
         # Stochastic function: mean + small noise
         call_count = [0]
+
         def f(x):
             call_count[0] += 1
             return x[0] + rng.normal(0, 0.01)
@@ -310,6 +311,7 @@ class TestProcessSamples:
         X = np.array([[1.0], [2.0]])
 
         call_counts = [0]
+
         def f(x):
             call_counts[0] += 1
             return x[0]  # Deterministic = zero noise
@@ -342,7 +344,7 @@ class TestProcessSamples:
         X = np.array([[1.0]])
         f = lambda x: x[0]
 
-        with pytest.raises(ValueError, match="not a valid method"):
+        with pytest.raises(ValueError, match="Not a valid method"):
             process_samples(X, f, method="invalid")
 
 
@@ -354,7 +356,7 @@ class TestPCEConfig:
         """PCESurrogateConfig should auto-calculate polynomial order."""
         from uq.models import Parameter, PCESurrogateConfig
 
-        params = [Parameter(name=f"p{i}", bounds=[0, 1]) for i in range(5)]
+        params = [Parameter(name=f"p{i}", bounds=[0, 1], default=0.5, step=0.1, description="") for i in range(5)]
 
         # 100 samples, 5 params: should determine max p
         config = PCESurrogateConfig(parameters=params, n_samples=100)
@@ -367,7 +369,7 @@ class TestPCEConfig:
         """PCESurrogateConfig should warn on insufficient samples."""
         from uq.models import Parameter, PCESurrogateConfig
 
-        params = [Parameter(name=f"p{i}", bounds=[0, 1]) for i in range(5)]
+        params = [Parameter(name=f"p{i}", bounds=[0, 1], default=0.5, step=0.1, description="") for i in range(5)]
 
         # Very few samples for 5 params
         with pytest.warns(UserWarning):
@@ -376,10 +378,10 @@ class TestPCEConfig:
     @pytest.mark.unit
     def test_get_pce_config(self):
         """get_pce_config should create valid PCEConfig."""
-        from uq.pce import get_pce_config
         from uq.models import Parameter, PCEConfig
+        from uq.pce import get_pce_config
 
-        params = [Parameter(name="p1", bounds=[0, 1])]
+        params = [Parameter(name="p1", bounds=[0, 1], default=0.5, step=0.1, description="")]
 
         config = get_pce_config(prescreened=params, sample_size=50)
 
@@ -391,7 +393,7 @@ class TestPCEConfig:
         """Config should have n, N, p aliases."""
         from uq.models import Parameter, PCESurrogateConfig
 
-        params = [Parameter(name=f"p{i}", bounds=[0, 1]) for i in range(3)]
+        params = [Parameter(name=f"p{i}", bounds=[0, 1], default=0.5, step=0.1, description="") for i in range(3)]
         config = PCESurrogateConfig(parameters=params, n_samples=50, polynomial_order=2)
 
         assert config.n == 3  # n_params
@@ -405,8 +407,8 @@ class TestGenerateSurrogate:
     @pytest.mark.unit
     def test_end_to_end_simple_function(self, input_parameter_space):
         """Should create working surrogate for simple function."""
-        from uq.pce import generate_surrogate
         from uq import PCESurrogate
+        from uq.pce import generate_surrogate
 
         # Simple linear function
         def f(x):
@@ -466,7 +468,8 @@ class TestSparseMethods:
         Y = X[:, 0]  # Only depends on first parameter
 
         result = fit_pce_coefficients(
-            X, Y,
+            X,
+            Y,
             polynomial_order=2,
             method="lasso",
             lasso_alpha=0.1,
@@ -486,7 +489,8 @@ class TestSparseMethods:
         Y = X[:, 0] + 0.5 * X[:, 1]
 
         result = fit_pce_coefficients(
-            X, Y,
+            X,
+            Y,
             polynomial_order=2,
             method="omp",
             omp_n_nonzero=3,

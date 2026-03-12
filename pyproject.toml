@@ -163,7 +163,9 @@ ignore = [
     "RUF022",
     "C401",
     "B018",
-    "C408"
+    "C408",
+    "E731",
+    "RUF003"
 ]
 exclude = [".venv/*", "docs/*", "tutorials/*", "examples/*"]
 
