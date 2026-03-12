@@ -343,6 +343,40 @@ def _(FULL_PARAM_BOUNDS, morris_results):
 
 
 # =============================================================================
+# STEP 4b: VARIANCE DECOMPOSITION
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Step 4b: Variance Decomposition
+
+    In the full RFC006 pipeline, after aggregation with strategies 1-3,
+    variance decomposition reveals *where* uncertainty comes from:
+    generation effects, stochastic seeding, or intrinsic cell-cycle dynamics.
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    # Synthetic variance decomposition (in practice, from Aggregator)
+    variance_decomposition = {
+        "total_variance": np.array([1.0, 0.8, 0.5]),
+        "between_generation_variance": np.array([0.5, 0.3, 0.2]),
+        "between_seed_variance": np.array([0.3, 0.3, 0.1]),
+        "generation_fraction": np.array([0.5, 0.375, 0.4]),
+        "seed_fraction": np.array([0.3, 0.375, 0.2]),
+    }
+
+    for i, name in enumerate(["transcriptome", "proteome", "fluxes"]):
+        gen = variance_decomposition["generation_fraction"][i]
+        seed = variance_decomposition["seed_fraction"][i]
+        residual = 1 - gen - seed
+        print(f"{name:15s}  generation={gen:.0%}  seed={seed:.0%}  residual(CC)={residual:.0%}")
+    return (variance_decomposition,)
+
+
+# =============================================================================
 # STEP 5: REACTIVE EXPLORATION WITH SLIDERS
 # =============================================================================
 @app.cell

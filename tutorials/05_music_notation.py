@@ -1200,6 +1200,71 @@ def _(mo):
 @app.cell
 def _(mo):
     mo.md(r"""
+    ## Part 11: UQ Pipeline → Musical Score (Layer 2)
+
+    The existing tutorial covers Layer 1: encoding individual Koopman modes as notes.
+    The `apollo.uq_score` module provides Layer 2: encoding the *entire UQ pipeline output*
+    (Sobol indices, variance decomposition, per-stage sensitivity) as a musical score.
+
+    This is not metaphor — PCE coefficients are a spectral decomposition (orthogonal polynomial basis),
+    and Sobol indices partition variance exactly as a power spectrum partitions energy.
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    from apollo.uq_score import encode_sensitivity
+
+    # Synthetic Sobol indices for 5 parameters
+    param_names = ["vio_expression", "mecA_kcat", "ppGpp_hill_n", "ftsZ_threshold", "murG_expression"]
+    sobol_first = np.array([0.35, 0.12, 0.06, 0.03, 0.01])
+    sobol_total = np.array([0.42, 0.15, 0.08, 0.035, 0.015])
+
+    # Synthetic variance decomposition
+    variance_decomp = {
+        "generation_fraction": np.array([0.60]),
+        "seed_fraction": np.array([0.30]),
+    }
+
+    score = encode_sensitivity(
+        sobol_first_order=sobol_first,
+        sobol_total_order=sobol_total,
+        parameter_names=param_names,
+        variance_decomposition=variance_decomp,
+        cell_cycle_time=3600.0,
+        n_cell_cycle_bins=10,
+        output_name="listeners__mass__dry_mass",
+    )
+
+    print(score.to_ascii())
+    return (score,)
+
+
+@app.cell
+def _(score):
+    print(score.read_aloud())
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Layer 1 vs Layer 2
+
+    | Layer | Input | Output | Granularity |
+    |-------|-------|--------|-------------|
+    | Layer 1 | Koopman eigenvalues | Individual notes | One mode = one note |
+    | Layer 2 | Sobol indices + variance decomp | Full score | Entire pipeline = one score |
+
+    Both share `apollo.types` and `apollo.mappings` primitives (Dynamic, Tempo, etc.).
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
     ## Conclusion
 
     The **music** package provides a novel way to represent and visualize

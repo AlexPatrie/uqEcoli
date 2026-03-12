@@ -30,7 +30,7 @@ simulation outputs that:
 Built-in Variables
 ^^^^^^^^^^^^^^^^^^
 
-The framework provides three built-in implementations:
+The framework provides five built-in implementations:
 
 **Mass-Based** (default)
 
@@ -68,6 +68,39 @@ Tracks DNA mass as a proxy for replication progress:
 
    cc_var = CellAngleCellCycleVariable()
    # Approximates established "cell angle" approach from literature
+
+**Koopman Eigenfunction Phase** (recommended)
+
+Uses Dynamic Mode Decomposition to identify the cell cycle oscillation and
+extract the eigenfunction phase as θ ∈ [0, 1]. Data-driven, no mechanistic
+assumptions.
+
+.. code-block:: python
+
+   from uq import KoopmanCellCycleVariable
+
+   cc_var = KoopmanCellCycleVariable(expected_cycle_time=3600.0)
+   # Automatically finds cell cycle mode via DMD
+
+**GSA-Informed** (RFC006-compliant)
+
+Uses variance decomposition from strategies 1–3 to identify observables with
+high residual variance (cell-cycle-related), then feeds those into Koopman DMD.
+This closes the feedback loop required by RFC006 §3.
+
+.. code-block:: python
+
+   from uq import GSAInformedCellCycleVariable
+
+   gsa_cc = GSAInformedCellCycleVariable(
+       aggregated_uniform=agg_uniform,
+       aggregated_by_gen=agg_by_gen,
+       aggregated_by_seed=agg_by_seed,
+       observable_names=observable_names,
+       expected_cycle_time=3600.0,
+   )
+   cc_var = gsa_cc.compute(trajectory_data)
+   print(f"Selected observables: {gsa_cc.selected_observables}")
 
 Using the Cell Cycle Aggregator
 -------------------------------
@@ -343,9 +376,10 @@ Best Practices
 Future Directions
 -----------------
 
-The specific choice of cell cycle variable for CD2 evaluation will be determined
-through a separate RFC process involving input from all subteams. The framework
-is designed to easily accommodate new cell cycle variable definitions.
+The consensus RFC (Activity 6) will determine the recommended default cell cycle
+variable for CD2 evaluation. The framework already supports extensibility via
+``register_cell_cycle_variable()``, so new definitions can be added without
+modifying core code.
 
 See Also
 --------

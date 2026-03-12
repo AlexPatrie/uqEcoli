@@ -2,26 +2,59 @@
 
 A comprehensive framework for tracking prediction confidence in vEcoli whole-cell simulations, implementing **Milestone 08.4.2** (extensibility) and laying groundwork for **Milestone 10.2.3** (population-level perturbation analysis).
 
+## The 7-Step Pipeline
+
+The UQ framework follows a 7-step workflow specified by **RFC006** (`readmes/RFC006.md`):
+
+```
+  Parameter Space ──► Load Data ──► Aggregate (4 strategies) ──► Variance Decomposition
+                                                                        │
+  Sobol Indices ◄── PCE Surrogate ◄── Morris Screening ◄───────────────┘
+       │
+       ▼
+  GSA-informed cell cycle variable ──► Per-stage sensitivity (feedback loop)
+```
+
+| Step | Function | Output |
+|------|----------|--------|
+| 1 | `InputParameterSpaceVecoli()` | Parameter space with bounds |
+| 2 | `load_dataset()` | DataFrame of simulation outputs |
+| 3a-c | `aggregate_uniformly/by_generation/by_seed()` | AggregatedOutput per strategy |
+| 3d | `calculate_cell_cycle()` | CellCycleResult |
+| 4 | `compute_variance_decomposition()` | Generation/seed/residual fractions |
+| 5 | `prescreen_parameters()` (Morris) | Top K influential parameters |
+| 6 | `generate_surrogate()` | PCESurrogate (instant predictions) |
+| 7 | Sobol from PCE coefficients | SobolIndices (parameter rankings) |
+
+See [`uq/PIPELINE.md`](uq/PIPELINE.md) for the full workflow diagram, RFC006 traceability, and requirements checklist.
+
 ## RFC006 Compliance
 
-This package implements the UQ framework specified in **RFC006** (`readmes/RFC006.md`). The test suite provides explicit verification that all milestone requirements are satisfied.
+This package implements the UQ framework specified in **RFC006** (`readmes/RFC006.md`). The test suite provides explicit verification via `pytest tests/test_milestone_084_2.py -v`.
 
-### Verified Requirements
+### Status: 14 of 17 requirements complete
 
-| Requirement | Description | Test Coverage |
-|-------------|-------------|---------------|
-| **R1** | Uniform aggregation (baseline) | `test_milestone_084_2.py::TestRequirement1_UniformAggregation` |
-| **R2** | Stratified by lineage seed (exogenous variance) | `test_milestone_084_2.py::TestRequirement2_LineageSeedStratification` |
-| **R3** | Stratified by generation (convergence) | `test_milestone_084_2.py::TestRequirement3_GenerationStratification` |
-| **R4** | Stratified by cell cycle (phenotypic) | `test_milestone_084_2.py::TestRequirement4_CellCycleStratification` |
-| **R5** | Single-cell to bulk mapping | `test_milestone_084_2.py::TestRequirement5_SingleCellToBulkMapping` |
-| **R6** | Population-level analysis foundation | `test_milestone_084_2.py::TestRequirement6_PopulationLevelAnalysis` |
-| **R7** | PCE surrogate method | `test_milestone_084_2.py::TestRequirement7_PCESurrogateMethod` |
-| **R8** | Sobol sensitivity indices | `test_milestone_084_2.py::TestRequirement8_SobolIndices` |
-| **R9** | UQPy/PyTUQ library support | `test_milestone_084_2.py::TestRequirement9_LibrarySupport` |
-| **R10** | Scientific input parameters | `test_milestone_084_2.py::TestRequirement10_ScientificInputs` |
+**Phase 1 (MS-08.4.2)** — All software requirements met:
+- [x] UQ framework for tracking prediction confidence
+- [x] Four aggregation strategies (uniform, by generation, by seed, by cell cycle)
+- [x] Variance decomposition across strategies
+- [x] Scientific input variables (vio, mecillinam, knockouts)
+- [x] Output extraction (transcriptome, proteome, fluxes, properties)
+- [x] Input→output wrapper functions (UQPy/PyTUQ compatible)
+- [x] PCE surrogate method with Sobol indices
+- [x] Morris screening for high-dimensional parameter spaces
+- [x] Parametrized extraction, aggregation, and method selection (RFC006 §4 steps A, B, C)
+- [x] Bulk-to-single-cell mapping via aggregation + decomposition
+- [x] Population-level perturbation analysis foundation (Milestone 10)
+- [ ] **Apply pipeline to real use cases and produce report** (Activity 5 — framework ready, awaiting execution)
 
-Run `pytest tests/test_milestone_084_2.py -v` to verify compliance.
+**Phase 2 (CD2 / Milestone 10)** — Software complete, consensus pending:
+- [x] Cell cycle stratification with 5 variable implementations (mass, DNA, cell angle, Koopman, GSA-informed)
+- [x] GSA→cell cycle feedback loop (`GSAInformedCellCycleVariable`)
+- [ ] **Write consensus RFC on cell cycle variable choice** (Activity 6)
+- [ ] **Implement consensus approach with per-stage GSA** (Activity 7 — depends on Activity 6)
+
+The shared technical blocker for the remaining items is `PCESurrogate.compute_sobol_indices()` — analytical Sobol computation from PCE coefficients. See [`uq/PIPELINE.md` § What's Still Missing](uq/PIPELINE.md) for detailed gap analysis.
 
 ## Development Environment
 
@@ -54,8 +87,9 @@ uv run marimo run tutorials/01_introduction.py
 | **03_sensitivity_analysis.py** | PCE and Sobol indices | Surrogate models, sensitivity ranking, multi-output analysis |
 | **03b_reactive_sensitivity.py** | **Reactive parameter exploration** | Real-time parameter → output timeseries visualization |
 | **04_cell_cycle_and_koopman.py** | Advanced analysis | **Koopman cell cycle variable**, DMD, spectral mode visualization |
-| **05_music_notation.py** | Musical notation for Koopman | Cellular scores, orchestration charts, spectral-to-music mapping |
-| **06_calculate_cell_cycle.py** | Cell cycle computation | Compute cell cycle variable from timeseries |
+| **05_music_notation.py** | Musical notation for cellular dynamics | Koopman → notes (Layer 1), UQ pipeline → score (Layer 2) |
+| **06_calculate_cell_cycle.py** | Cell cycle computation | Koopman, GSA-informed, cell cycle variable from timeseries |
+| **07_full_workflow.py** | **Complete sensitivity workflow** | Morris screening → PCE → variance decomposition → reactive exploration |
 
 ## Project Structure
 
@@ -65,27 +99,35 @@ uqEcoli/
 │   ├── __init__.py             # Public API exports
 │   ├── inputs.py               # Input parameters (VioPathway, Mecillinam, Knockouts)
 │   ├── outputs.py              # Output extraction (Transcriptome, Proteome, Fluxes)
-│   ├── aggregation.py          # Four aggregation strategies
-│   ├── sensitivity.py          # PCE-based global sensitivity analysis + PCESurrogate.predict()
-│   ├── cell_cycle.py           # Cell cycle stratification (Phase 2)
+│   ├── aggregation.py          # Four aggregation strategies + variance decomposition
+│   ├── sensitivity.py          # Sobol/Morris sensitivity analysis + PCESurrogate
+│   ├── pce.py                  # PCE math: fitting, basis generation, surrogate construction
+│   ├── cell_cycle.py           # Cell cycle stratification (5 implementations)
 │   ├── wrappers.py             # UQPy/PyTUQ wrapper functions
-│   └── koopman.py              # Koopman spectral analysis
-├── apollo/                     # Musical notation for Koopman spectra
+│   ├── koopman.py              # Koopman spectral analysis (DMD)
+│   ├── pipeline.py             # Pipeline orchestrator (WIP)
+│   ├── cli.py                  # CLI entry point (WIP)
+│   ├── io.py                   # Serialization for dataclasses with numpy arrays
+│   ├── models.py               # Core dataclasses (Parameter, PCEConfig, etc.)
+│   └── PIPELINE.md             # Full workflow diagram + RFC006 requirements checklist
+├── apollo/                     # Musical notation for cellular dynamics
 │   ├── types.py                # CellularScore, CellularNote, LosslessScore
 │   ├── mappings.py             # Bijective frequency↔pitch, amplitude↔dynamics
 │   ├── encoding.py             # Spectrum → Score encoding
 │   ├── decoding.py             # Score → Spectrum reconstruction
-│   └── m21.py                  # music21 integration (MusicXML export)
-├── examples/                   # Interactive examples
-│   └── biocompose.py           # Interactive spectrum analyzer with EQ sliders
+│   ├── m21.py                  # music21 integration (MusicXML export)
+│   ├── uq_score.py             # UQ pipeline → musical score (Layer 2)
+│   └── README.md               # Apollo documentation (Layer 1 + Layer 2)
 ├── tutorials/                  # Interactive marimo notebooks
 │   ├── 01_introduction.py      # Getting started
 │   ├── 02_aggregation_strategies.py  # Aggregation and variance
 │   ├── 03_sensitivity_analysis.py    # PCE and Sobol
 │   ├── 03b_reactive_sensitivity.py   # Reactive parameter → timeseries
+│   ├── 03c_reactive_sensitivity_generalized.py  # Generalized reactive exploration
 │   ├── 04_cell_cycle_and_koopman.py  # Advanced analysis
-│   ├── 05_music_notation.py    # Apollo musical encoding
-│   └── 06_calculate_cell_cycle.py    # Cell cycle computation
+│   ├── 05_music_notation.py    # Apollo musical encoding (Layer 1 + Layer 2)
+│   ├── 06_calculate_cell_cycle.py    # Cell cycle computation + GSA-informed
+│   └── 07_full_workflow.py     # Morris → PCE → reactive exploration
 ├── tests/                      # Test suite
 │   ├── conftest.py             # Fixtures (synthetic + real data)
 │   ├── test_milestone_084_2.py # Explicit RFC006 compliance tests
@@ -94,10 +136,12 @@ uqEcoli/
 │   ├── test_sensitivity.py     # Sensitivity analysis tests
 │   ├── test_cell_cycle.py      # Cell cycle variable tests
 │   ├── test_e2e.py             # End-to-end workflow tests
+│   ├── test_real_data.py       # Full pipeline tests with real data
 │   └── test_koopman.py         # Koopman analysis tests
 ├── readmes/                    # Documentation
 │   ├── RFC006.md               # Authoritative specification
-│   └── CONTEXT.md              # Claude context document
+│   └── CONTEXT.md              # Detailed context document
+├── docs/                       # Sphinx documentation
 ├── pyproject.toml              # Package configuration
 └── README.md                   # This file
 ```
@@ -1194,6 +1238,32 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
   │ 7    │ (from PCE coefficients)            │ PCEFitResult               │ SobolIndices                │
   └──────┴────────────────────────────────────┴────────────────────────────┴─────────────────────────────┘
 
+## Apollo: Musical Notation for Cellular Dynamics
+
+The `apollo/` package encodes computational biology results as Western musical scores. It operates at two levels:
+
+**Layer 1 — Koopman Mode → Note**: Maps individual DMD eigenvalues to individual musical notes. Frequency → pitch, amplitude → dynamic, growth rate → duration. Bijective (lossless round-trip possible).
+
+**Layer 2 — UQ Pipeline → Score** (`apollo/uq_score.py`): Maps the *entire* sensitivity analysis output into a musical score. Sobol indices → dynamics (pp–ff), variance decomposition → registral balance (bass/tenor/treble), cell cycle stages → beats, PCE surrogate → the score itself.
+
+This is not metaphor — PCE coefficients are a spectral decomposition in an orthogonal polynomial basis, and Sobol indices partition variance exactly as a power spectrum partitions energy. See [`apollo/README.md`](apollo/README.md) for the full structural correspondence table.
+
+```python
+from apollo.uq_score import encode_sensitivity
+
+score = encode_sensitivity(
+    sobol_first_order=sobol.first_order,
+    sobol_total_order=sobol.total_order,
+    parameter_names=param_space.parameter_names,
+    variance_decomposition=decomp,
+    cell_cycle_time=3600.0,
+    output_name="listeners__mass__dry_mass",
+)
+
+print(score.to_ascii())    # ASCII-rendered score
+print(score.read_aloud())  # Natural language "program notes"
+```
+
 ## API Reference
 
 ### Core Classes
@@ -1211,6 +1281,10 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 | `SimulationWrapper` | `uq.wrappers` | Runs simulations for sensitivity analysis |
 | `PrecomputedWrapper` | `uq.wrappers` | Uses existing simulation results |
 | `SensitivityAnalyzer` | `uq.sensitivity` | PCE and Sobol sensitivity analysis |
+| `PCESurrogate` | `uq.sensitivity` | Trained surrogate for instant predictions |
+| `MorrisIndices` | `uq.sensitivity` | Morris screening results |
+| `SobolIndices` | `uq.sensitivity` | Sobol sensitivity index results |
+| `SensitivityScore` | `apollo.uq_score` | UQ analysis encoded as musical score |
 | `DynamicModeDecomposition` | `uq.koopman` | Standard DMD for Koopman spectral analysis |
 | `ExtendedDMD` | `uq.koopman` | EDMD with dictionary functions |
 | `KoopmanSensitivityAnalyzer` | `uq.koopman` | Spectral sensitivity analysis |
@@ -1228,7 +1302,11 @@ print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 | `create_uqpy_model` | `uq.wrappers` | Create UQPy-compatible model |
 | `create_pytuq_model` | `uq.wrappers` | Create PyTUQ-compatible model |
 | `register_cell_cycle_variable` | `uq.cell_cycle` | Register custom cell cycle variable |
+| `generate_surrogate` | `uq.pce` | End-to-end Morris → PCE → surrogate pipeline |
+| `fit_pce_coefficients` | `uq.pce` | Fit PCE coefficients with LS/LASSO/OMP |
+| `calculate_cell_cycle` | `uq.cell_cycle` | Convenience function: compute CC variable + bin + stats |
 | `extract_koopman_features` | `uq.koopman` | Extract spectral features from trajectories |
+| `encode_sensitivity` | `apollo.uq_score` | Encode UQ pipeline output as musical score |
 
 ## Testing
 

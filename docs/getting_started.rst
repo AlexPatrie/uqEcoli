@@ -42,9 +42,9 @@ Input parameters define the experimental conditions being varied:
 
 .. code-block:: python
 
-   from uq import InputParameterSpace
+   from uq import InputParameterSpaceVecoli
 
-   param_space = InputParameterSpace(
+   param_space = InputParameterSpaceVecoli(
        include_vio=True,
        include_mecillinam=True,
        vio_expression_bounds=(0.0, 5.0),
@@ -98,6 +98,18 @@ PCE (Polynomial Chaos Expansion) surrogate method for computing Sobol indices:
 
    analyzer = SensitivityAnalyzer(param_space, wrapper)
    sobol, pce = analyzer.analyze_with_pce(polynomial_order=3)
+
+Morris Screening
+^^^^^^^^^^^^^^^^
+
+For high-dimensional parameter spaces, Morris screening provides an efficient pre-screening step:
+
+.. code-block:: python
+
+   from uq import SensitivityAnalyzer
+
+   morris = analyzer.analyze_with_morris(n_trajectories=20)
+   top_params = morris.get_screening_candidates(top_n=5)
 
 Your First Analysis
 -------------------
@@ -175,3 +187,4 @@ Next Steps
 * Explore :doc:`sensitivity_analysis` methods
 * Try the :doc:`tutorials/basic_sensitivity` tutorial
 * See the :doc:`api/inputs` API reference
+* See :doc:`../uq/PIPELINE` for the complete 7-step workflow

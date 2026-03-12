@@ -58,7 +58,7 @@ The package implements all requirements specified in RFC006:
      - ``sensitivity.py``
    * - 5
      - Apply to representative simulations
-     - Pending
+     - Pending — framework ready, needs real data application and report
      - Framework ready
 
 **Phase 2 (CD2/Milestone 10)**
@@ -73,11 +73,11 @@ The package implements all requirements specified in RFC006:
      - Module
    * - 6
      - Cell cycle stratification strategy
-     - Framework Complete
+     - Software Complete — consensus RFC not yet written
      - ``cell_cycle.py``
    * - 7
      - Cell cycle variable analysis
-     - Framework Complete
+     - Software Complete — depends on consensus RFC
      - ``cell_cycle.py``
 
 Four Aggregation Strategies
@@ -89,6 +89,17 @@ As specified in RFC006 Section 1:
 2. **By Generation**: Stratified by cell generation
 3. **By Lineage Seed**: Stratified by stochastic seed
 4. **By Cell Cycle**: Stratified by cell cycle stage
+
+GSA → Cell Cycle Feedback Loop
+-------------------------------
+
+Variance decomposition from strategies 1–3 (Uniform, By Generation, By Lineage
+Seed) selects observables for Koopman DMD cell cycle mode extraction. Observables
+with high residual variance — variance not explained by input parameters — are
+candidates for cell-cycle-related dynamics. The ``GSAInformedCellCycleVariable``
+class implements this feedback loop: it takes aggregated sensitivity results,
+identifies observables whose variance is dominated by cell cycle effects, and
+feeds those observables into Koopman DMD to extract cell cycle modes.
 
 Architecture
 ------------
@@ -121,12 +132,24 @@ dynamics using Dynamic Mode Decomposition (DMD). This enables:
 
 See :doc:`koopman` for details.
 
+Apollo Package
+--------------
+
+The Apollo package provides sonification of UQ results:
+
+* **Layer 1**: Koopman modes → musical notes (existing ``apollo/`` module)
+* **Layer 2**: UQ pipeline outputs → musical score (``uq_score.py``) — maps
+  Sobol indices, variance decomposition, and per-stage sensitivity to Western
+  musical notation
+
 Key Documents
 -------------
 
 * ``uq/RFC006.md`` - Authoritative specification
 * ``uq/RFC006_VERIFICATION.md`` - Compliance analysis
-* ``uq/CONTEXT.md`` - Claude context document
+* ``uq/PIPELINE.md`` - Complete 7-step UQ workflow
+* ``apollo/README.md`` - Apollo sonification package
+* ``readmes/CONTEXT.md`` - Claude context document
 
 Future Directions
 -----------------
