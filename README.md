@@ -1021,6 +1021,179 @@ print(f"Generation explains {100*decomp['generation_fraction'].mean():.1f}% of v
 print(f"Seed explains {100*decomp['seed_fraction'].mean():.1f}% of variance")
 ```
 
+## Full RFC006-proposed workflow:
+
+### Given just experiment_id, outdir_root, and parameter space definition:
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                        RFC006 FULL UQ WORKFLOW                              │
+  │                                                                             │
+  │  Inputs: experiment_id, outdir_root, parameter_config                       │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 1: Define Parameter Space                                             │
+  │  ─────────────────────────────────                                          │
+  │  • Create InputParameterSpaceVecoli(vio, mecillinam, knockouts)             │
+  │  • Define bounds for each parameter                                         │
+  │  • Output: parameter_space with n parameters                                │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 2: Load Simulation Data                                               │
+  │  ────────────────────────────                                               │
+  │  • load_dataset(experiment_id, outdir_root)                                 │
+  │  • Extract output variables (dry_mass, growth, fluxes, etc.)                │
+  │  • Output: DataFrame with N data points                                     │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 3: Apply Aggregation Strategies 1-3                                   │
+  │  ────────────────────────────────────────                                   │
+  │                                                                             │
+  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
+  │  │ Strategy 1      │  │ Strategy 2      │  │ Strategy 3      │              │
+  │  │ UNIFORM         │  │ BY GENERATION   │  │ BY LINEAGE SEED │              │
+  │  │                 │  │                 │  │                 │              │
+  │  │ aggregate_      │  │ aggregate_      │  │ aggregate_      │              │
+  │  │ uniformly()     │  │ by_generation() │  │ by_seed()       │              │
+  │  │                 │  │                 │  │                 │              │
+  │  │ → mean, std     │  │ → per-gen stats │  │ → per-seed stats│              │
+  │  │   across ALL    │  │   (convergence) │  │   (exogenous    │              │
+  │  │   cells/times   │  │                 │  │    variance)    │              │
+  │  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘              │
+  │           │                    │                    │                       │
+  │           └────────────────────┼────────────────────┘                       │
+  │                                ▼                                            │
+  │                    AggregatedOutput × 3                                     │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 3b: Cell Cycle Stratification (Strategy 4)                            │
+  │  ───────────────────────────────────────────────                            │
+  │                                                                             │
+  │  • calculate_cell_cycle(experiment_id, outdir_root)                         │
+  │      │                                                                      │
+  │      ├─► Compute cell cycle variable (mass-based, DNA, Koopman, etc.)       │
+  │      ├─► Normalize to [0, 1]                                                │
+  │      ├─► Bin into N stages                                                  │
+  │      └─► Compute per-stage statistics                                       │
+  │                                                                             │
+  │  • Output: CellCycleResult with stage_stats, phenotypic_variation_cv        │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 4: Variance Decomposition                                             │
+  │  ──────────────────────────────                                             │
+  │                                                                             │
+  │  • compute_variance_decomposition(agg_uniform, agg_by_gen, agg_by_seed)     │
+  │                                                                             │
+  │  • Deconvolve uncertainty types:                                            │
+  │      ├─► generation_fraction (convergence to steady-state)                  │
+  │      ├─► seed_fraction (exogenous/stochastic variance)                      │
+  │      └─► residual_fraction (cell-cycle-related variance)                    │
+  │                                                                             │
+  │  • Output: variance fractions per observable                                │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 5: Morris Screening (O(n) - cheap)                                    │
+  │  ───────────────────────────────────────                                    │
+  │                                                                             │
+  │  • prescreen_parameters(parameter_space, f, n_trajectories=20)              │
+  │                                                                             │
+  │  • Compute elementary effects for each parameter                            │
+  │  • Rank by μ* (mean absolute effect)                                        │
+  │  • Select top K influential parameters                                      │
+  │                                                                             │
+  │  • Output: MorrisIndices, selected_parameters (reduced from n → K)          │
+  │                                                                             │
+  │  ┌─────────────────┐         ┌─────────────────┐                            │
+  │  │  n parameters   │  ────►  │  K parameters   │  (K << n)                  │
+  │  │  (10-100+)      │         │  (3-10)         │                            │
+  │  └─────────────────┘         └─────────────────┘                            │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 6: PCE Surrogate Fitting                                              │
+  │  ─────────────────────────────                                              │
+  │                                                                             │
+  │  6a. Generate LHS Samples                                                   │
+  │      • create_samples(N=sample_size, selected=K_parameters)                 │
+  │      • X shape: (N, K)                                                      │
+  │                                                                             │
+  │  6b. Evaluate Model at Sample Points                                        │
+  │      • process_samples(X, f, min_reps, max_reps)                            │
+  │      • Handle stochastic outputs with adaptive replicates                   │
+  │      • Y shape: (N,) or (N, n_outputs)                                      │
+  │                                                                             │
+  │  6c. Fit PCE Coefficients                                                   │
+  │      • fit_pce_coefficients(X, Y, polynomial_order, method)                 │
+  │      • Methods: least_squares, lasso, omp                                   │
+  │      • Output: PCEFitResult with coefficients, R², sparsity                 │
+  │                                                                             │
+  │  6d. Create Surrogate                                                       │
+  │      • pce_result.to_surrogate()                                            │
+  │      • Output: PCESurrogate (instant predictions)                           │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  STEP 7: Sobol Sensitivity Analysis                                         │
+  │  ──────────────────────────────────                                         │
+  │                                                                             │
+  │  • Compute from PCE coefficients:                                           │
+  │      ├─► First-order indices S_i (main effects)                             │
+  │      ├─► Total-order indices ST_i (includes interactions)                   │
+  │      └─► Second-order indices S_ij (pairwise interactions)                  │
+  │                                                                             │
+  │  • Output: SobolIndices with parameter rankings                             │
+  └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │  OUTPUTS                                                                    │
+  │  ───────                                                                    │
+  │                                                                             │
+  │  • PCESurrogate: Instant predictions for any parameter combination          │
+  │  • SobolIndices: Which parameters matter most                               │
+  │  • VarianceDecomposition: Sources of uncertainty                            │
+  │  • CellCycleResult: Phenotypic variation across cell cycle                  │
+  │  • MorrisIndices: Parameter screening results                               │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  Summary of Steps:
+  ┌──────┬────────────────────────────────────┬────────────────────────────┬─────────────────────────────┐
+  │ Step │              Function              │           Input            │           Output            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 1    │ InputParameterSpaceVecoli()        │ bounds, flags              │ parameter_space             │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 2    │ load_dataset()                     │ experiment_id, outdir_root │ DataFrame                   │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3a   │ aggregate_uniformly()              │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3b   │ aggregate_by_generation()          │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3c   │ aggregate_by_seed()                │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3d   │ calculate_cell_cycle()             │ experiment_id, outdir_root │ CellCycleResult             │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 4    │ compute_variance_decomposition()   │ 3 AggregatedOutputs        │ variance fractions          │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 5    │ prescreen_parameters()             │ parameter_space, f         │ MorrisIndices, top K params │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 6    │ generate_surrogate() or manual PCE │ K params, f                │ PCESurrogate                │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 7    │ (from PCE coefficients)            │ PCEFitResult               │ SobolIndices                │
+  └──────┴────────────────────────────────────┴────────────────────────────┴─────────────────────────────┘
+
 ## API Reference
 
 ### Core Classes
