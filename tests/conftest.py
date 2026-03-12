@@ -607,6 +607,80 @@ def real_trajectory(real_simulation_dataframe) -> np.ndarray:
 
 
 # =============================================================================
+# PCE Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def pce_parameters():
+    """Sample Parameter list for PCE testing."""
+    from uq.models import Parameter
+
+    return [
+        Parameter(name="p1", bounds=(0.0, 1.0), default=0.5, step=0.1, description="Parameter 1"),
+        Parameter(name="p2", bounds=(0.0, 2.0), default=1.0, step=0.2, description="Parameter 2"),
+        Parameter(name="p3", bounds=(-1.0, 1.0), default=0.0, step=0.1, description="Parameter 3"),
+    ]
+
+
+@pytest.fixture
+def pce_sample_data(rng):
+    """Generate sample X, Y data for PCE fitting."""
+    n_samples = 100
+    n_params = 3
+
+    X = rng.uniform(-1, 1, (n_samples, n_params))
+    # Known function: y = 1 + 2*x1 + 0.5*x2^2 + 0.1*x1*x3
+    Y = 1 + 2 * X[:, 0] + 0.5 * X[:, 1] ** 2 + 0.1 * X[:, 0] * X[:, 2]
+
+    return X, Y
+
+
+@pytest.fixture
+def pce_surrogate_config(pce_parameters):
+    """Sample PCESurrogateConfig for testing."""
+    from uq.models import PCESurrogateConfig
+
+    return PCESurrogateConfig(
+        parameters=pce_parameters,
+        n_samples=100,
+        polynomial_order=2,
+    )
+
+
+@pytest.fixture
+def pce_fit_result(pce_sample_data):
+    """Pre-fitted PCE result for testing."""
+    from uq.pce import fit_pce_coefficients
+
+    X, Y = pce_sample_data
+    bounds = np.array([[-1, 1], [-1, 1], [-1, 1]])
+
+    return fit_pce_coefficients(X, Y, polynomial_order=2, bounds=bounds)
+
+
+@pytest.fixture
+def simple_stochastic_function(rng):
+    """Simple stochastic function for testing."""
+
+    def f(x):
+        # Mean = sum of inputs, with small noise
+        return np.sum(x) + rng.normal(0, 0.01)
+
+    return f
+
+
+@pytest.fixture
+def deterministic_function():
+    """Simple deterministic function for testing."""
+
+    def f(x):
+        return x[0] + 0.5 * x[1] + 0.25 * x[2]
+
+    return f
+
+
+# =============================================================================
 # Markers for Test Categories
 # =============================================================================
 
@@ -618,3 +692,4 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "unit: marks unit tests")
     config.addinivalue_line("markers", "slow: marks tests that take a long time to run")
     config.addinivalue_line("markers", "real_data: marks tests that use real simulation data")
+    config.addinivalue_line("markers", "pce: marks tests related to PCE functionality")

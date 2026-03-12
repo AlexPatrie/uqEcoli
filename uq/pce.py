@@ -547,7 +547,9 @@ def generate_surrogate(
 
         `solver (PCESolverConfig)`:
             basis_type: Polynomial basis type: 'legendre' (uniform inputs) or 'hermite' (Gaussian).;
-            method: Fitting method: - 'least_squares': Standard least squares (default) - 'lasso': L1-regularized (sparse) via sklearn - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn;
+            method: Fitting method: - 'least_squares': Standard least squares (default)
+                - 'lasso': L1-regularized (sparse) via sklearn
+                - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn;
             lasso_alpha: Regularization strength for LASSO (only used if method='lasso').;
             omp_n_nonzero: Number of non-zero coefficients for OMP. If None, uses n_terms // 4.
 
@@ -564,7 +566,7 @@ def generate_surrogate(
     selected = prescreen_parameters(full_space=space, config=prescreening_config)
     n_params = len(selected)
     if kwargs.get("n_top") is None:
-        kwargs["n_top"] = min(20, max(3, int(math.ceil(math.sqrt(n_params) * 1.5))))
+        kwargs["n_top"] = min(20, max(3, int(math.ceil(math.sqrt(n_params) * 1.5))))  # noqa: RUF046
 
     # extract/set up/configure for PCE
     config: PCEConfig = get_pce_config(prescreened=selected, sample_size=sample_size, **kwargs)

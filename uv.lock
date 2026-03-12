@@ -5264,6 +5264,7 @@ name = "uqecoli"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "duckdb" },
     { name = "plotly" },
     { name = "polars" },
     { name = "pydmd" },
@@ -5305,6 +5306,7 @@ music = [
 
 [package.metadata]
 requires-dist = [
+    { name = "duckdb", specifier = ">=1.5.0" },
     { name = "plotly" },
     { name = "polars" },
     { name = "pydmd" },
