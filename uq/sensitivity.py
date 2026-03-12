@@ -12,12 +12,14 @@ The implementation supports both UQPy and PyTUQ libraries for:
 
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy
 from uq.inputs import InputParameterSpaceVecoli
+from uq.io import DataclassIO
 from uq.models import Parameter
 from uq.wrappers import PrecomputedWrapper, SimulationWrapper, WrapperConfig
 
@@ -416,6 +418,13 @@ class PCESurrogate:
     output_dim: int = 0
     r_squared: float = 0.0
     input_bounds: Optional[np.ndarray] = None
+
+    def export(self, path: str | Path):
+        return DataclassIO.save(instance=self, path=path)
+
+    @classmethod
+    def from_export(cls, path: str | Path) -> "PCESurrogate":
+        return DataclassIO.load(path=path, _class=PCESurrogate)
 
     def _normalize_inputs(self, X: np.ndarray) -> np.ndarray:
         """

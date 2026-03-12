@@ -551,23 +551,31 @@ def process_samples(
 def generate_pce_surrogate(
     full_space: InputParameterSpace,
     sample_size: int,
-    f,
-    config: PrescreeningConfig | None = None,
+    f: Callable[[np.ndarray], np.ndarray],
+    prescreening_config: PrescreeningConfig | None = None,
     basis_type: Literal["legendre", "hermite"] = "legendre",
     target_cv: float = 0.05,
     min_reps: int = 3,
     max_reps: int = 20,
 ) -> PCESurrogate:
     """
-    Generate a PCE surrogate with synthetic coefficients (for demos/testing).
+    Generate a PCE surrogate. You can use it like:
+            ```
+            surrogate = generate_pce_surrogate(...)
+            Y_pred = surrogate.predict(X_new)
+            ```
 
-    For real usage, use fit_pce_coefficients() with actual simulation data.
-
-    surrogate = generate_pce_surrogate(...)
-    Y_pred = surrogate.predict(X_new)
+    :param f: stochastic timeseries generator (think of this as the simulation func)
+    :param full_space:
+    :param sample_size: number of perturbations (as afforded by your computational env/budget).
+    :param prescreening_config:
+    :param basis_type: One of "legendre", "hermite". Defaults to legendre.
+    :param target_cv: target coefficient of variation (std/mean)
+    :param min_reps: floor for n replicates (noise level accounting)
+    :param max_reps: ceiling for n replicates (noise level accounting)
     """
     # prescreen to find most relevant params
-    selected = prescreen_parameters(full_space=full_space, config=config)
+    selected = prescreen_parameters(full_space=full_space, config=prescreening_config)
 
     # extract/set up/configure for PCE
     pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
@@ -589,7 +597,8 @@ def generate_pce_surrogate(
     print(f"  - Bounds: {full_space.parameter_bounds}")
     print(f"  - Defaults: {param_defaults}")
     print(f"  - Polynomial order: {pce_config.p}")
-    print(f"  - Number of PCE terms: {len(coeffs)}")
+    print(f"  - Number of PCE terms: {len(fitting.coefficients)}")
+
     return pce
 
 

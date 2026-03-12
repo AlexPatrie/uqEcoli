@@ -12,6 +12,7 @@ dependencies = [
     "pytuq",
     "ray[data,train,tune]",
     "salib",
+    "scipy-stubs~=1.17.1",
     "sobol",
     "typer",
     "uqpy",
