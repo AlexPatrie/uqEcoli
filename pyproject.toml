@@ -16,6 +16,7 @@ dependencies = [
     "scipy-stubs~=1.17.1",
     "sobol",
     "typer",
+    "setuptools<81",
     "uqpy",
     "vecoli",
     "vl-convert-python",

@@ -88,7 +88,6 @@ import numpy as np
 from apollo.mappings import cycle_time_to_tempo
 from apollo.types import Dynamic, Tempo
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Types
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -133,10 +132,10 @@ class InteractionQuality(str, Enum):
     Mapped to consonance/dissonance in the harmonic sense.
     """
 
-    UNISON = "unison"            # interaction_strength < 0.05: pure solo effect
-    CONSONANT = "consonant"      # 0.05 - 0.20: mild cooperative interactions
-    DISSONANT = "dissonant"      # 0.20 - 0.50: moderate cross-parameter coupling
-    CLUSTER = "cluster"          # > 0.50: dominated by interactions, not solo
+    UNISON = "unison"  # interaction_strength < 0.05: pure solo effect
+    CONSONANT = "consonant"  # 0.05 - 0.20: mild cooperative interactions
+    DISSONANT = "dissonant"  # 0.20 - 0.50: moderate cross-parameter coupling
+    CLUSTER = "cluster"  # > 0.50: dominated by interactions, not solo
 
 
 class VarianceRegister(str, Enum):
@@ -148,9 +147,9 @@ class VarianceRegister(str, Enum):
     high frequencies (treble) = fast-moving, cycle-scale variation.
     """
 
-    BASS = "bass"              # Generation variance (slow convergence effect)
-    TENOR = "tenor"            # Seed variance (stochastic, between-lineage)
-    TREBLE = "treble"          # Residual variance (cell-cycle-related, within-cell)
+    BASS = "bass"  # Generation variance (slow convergence effect)
+    TENOR = "tenor"  # Seed variance (stochastic, between-lineage)
+    TREBLE = "treble"  # Residual variance (cell-cycle-related, within-cell)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -170,17 +169,17 @@ class ParameterVoice:
     instrument: Instrument
 
     # Sensitivity (how loud this voice is)
-    first_order_sobol: float       # S_i: solo contribution
-    total_order_sobol: float       # S_T: total contribution including interactions
-    dynamic: Dynamic               # Derived from S_T
+    first_order_sobol: float  # S_i: solo contribution
+    total_order_sobol: float  # S_T: total contribution including interactions
+    dynamic: Dynamic  # Derived from S_T
 
     # Interaction character
-    interaction_strength: float    # (S_T - S_i) / S_T if S_T > 0
+    interaction_strength: float  # (S_T - S_i) / S_T if S_T > 0
     interaction_quality: InteractionQuality
 
     # Morris screening (if available)
     mu_star: Optional[float] = None  # Mean absolute elementary effect
-    passed_audition: bool = True     # Whether Morris selected this parameter
+    passed_audition: bool = True  # Whether Morris selected this parameter
 
     def __str__(self) -> str:
         audit = " (auditioned)" if self.passed_audition else " (cut)"
@@ -201,9 +200,9 @@ class VarianceVoicing:
     convergence effects, not from stochastic or cell-cycle variation.
     """
 
-    generation_fraction: float     # Bass register share
-    seed_fraction: float           # Tenor register share
-    residual_fraction: float       # Treble register share (= 1 - gen - seed)
+    generation_fraction: float  # Bass register share
+    seed_fraction: float  # Tenor register share
+    residual_fraction: float  # Treble register share (= 1 - gen - seed)
 
     dominant_register: VarianceRegister = field(init=False)
     balance_description: str = field(init=False)
@@ -240,7 +239,7 @@ class BeatSensitivity:
     """
 
     stage_index: int
-    stage_label: str               # e.g., "B period", "C period", "beat 3/10"
+    stage_label: str  # e.g., "B period", "C period", "beat 3/10"
     parameter_dynamics: dict[str, Dynamic]  # param_name → dynamic at this beat
 
     def loudest_voice(self) -> Optional[str]:
@@ -278,14 +277,14 @@ class SensitivityScore:
     # Temporal structure
     tempo: Tempo
     tempo_bpm: int
-    cell_cycle_time: float         # seconds
-    n_beats: int                   # cell cycle bins = beats per measure
+    cell_cycle_time: float  # seconds
+    n_beats: int  # cell cycle bins = beats per measure
 
     # Per-beat dynamics (optional, from per-stage Sobol)
     beat_sensitivities: list[BeatSensitivity] = field(default_factory=list)
 
     # Metadata
-    output_name: str = ""          # Which output observable this score describes
+    output_name: str = ""  # Which output observable this score describes
 
     def soloists(self) -> list[ParameterVoice]:
         """Voices with S_T >= 0.1 (forte or louder)."""
@@ -316,9 +315,15 @@ class SensitivityScore:
         # Variance voicing
         lines.append("")
         lines.append("  VOICING (variance decomposition):")
-        lines.append(f"    Bass (generation):   {'█' * _bar(self.variance_voicing.generation_fraction)} {self.variance_voicing.generation_fraction:.0%}")
-        lines.append(f"    Tenor (seed):        {'█' * _bar(self.variance_voicing.seed_fraction)} {self.variance_voicing.seed_fraction:.0%}")
-        lines.append(f"    Treble (cell cycle): {'█' * _bar(self.variance_voicing.residual_fraction)} {self.variance_voicing.residual_fraction:.0%}")
+        lines.append(
+            f"    Bass (generation):   {'█' * _bar(self.variance_voicing.generation_fraction)} {self.variance_voicing.generation_fraction:.0%}"
+        )
+        lines.append(
+            f"    Tenor (seed):        {'█' * _bar(self.variance_voicing.seed_fraction)} {self.variance_voicing.seed_fraction:.0%}"
+        )
+        lines.append(
+            f"    Treble (cell cycle): {'█' * _bar(self.variance_voicing.residual_fraction)} {self.variance_voicing.residual_fraction:.0%}"
+        )
         lines.append(f"    → {self.variance_voicing.balance_description}")
 
         # Voices (sorted by S_T, loudest first)
@@ -405,12 +410,15 @@ class SensitivityScore:
             )
         else:
             paragraphs.append(
-                "No single parameter dominates — the output is shaped by "
-                "many small, roughly equal contributions."
+                "No single parameter dominates — the output is shaped by many small, roughly equal contributions."
             )
 
         # Interactions
-        dissonant = [v for v in self.voices if v.interaction_quality in (InteractionQuality.DISSONANT, InteractionQuality.CLUSTER)]
+        dissonant = [
+            v
+            for v in self.voices
+            if v.interaction_quality in (InteractionQuality.DISSONANT, InteractionQuality.CLUSTER)
+        ]
         if dissonant:
             names = [v.name for v in dissonant]
             paragraphs.append(
@@ -440,8 +448,7 @@ class SensitivityScore:
 
             for param in param_names:
                 dynamics_across_beats = [
-                    dynamic_order.index(b.parameter_dynamics.get(param, Dynamic.PPP))
-                    for b in self.beat_sensitivities
+                    dynamic_order.index(b.parameter_dynamics.get(param, Dynamic.PPP)) for b in self.beat_sensitivities
                 ]
                 if max(dynamics_across_beats) - min(dynamics_across_beats) >= 3:
                     loud_beats = [
@@ -610,11 +617,7 @@ def encode_sensitivity(
             interaction_strength=interaction,
             interaction_quality=_interaction_quality(s_i, s_t),
             mu_star=float(morris_mu_star[i]) if morris_mu_star is not None else None,
-            passed_audition=(
-                parameter_names[i] in morris_selected
-                if morris_selected is not None
-                else True
-            ),
+            passed_audition=(parameter_names[i] in morris_selected if morris_selected is not None else True),
         )
         voices.append(voice)
 

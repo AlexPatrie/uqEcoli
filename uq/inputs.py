@@ -10,6 +10,7 @@ These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libra
 """
 
 import abc
+import pprint
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -17,6 +18,11 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, override
 
 import numpy as np
 import polars
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from uq.models import UQInputParameters
 
@@ -24,10 +30,14 @@ if TYPE_CHECKING:
     pass
 
 
+console = Console()
+
+
 class InputParameterSpace(abc.ABC):
     parameter_names: list[str]
     parameter_bounds: list[tuple[float, float]]
     parameter_types: list[Literal["continuous", "discrete", "categorical"]]
+    experiment_id: str | None
     """
     Defines the parameter space for UQ sensitivity analysis.
 
@@ -46,11 +56,14 @@ class InputParameterSpace(abc.ABC):
         parameter_names: list[str] | None = None,
         parameter_bounds: list[tuple[float, float]] | None = None,
         parameter_types: list[Literal["continuous", "discrete", "categorical"]] | None = None,
+        experiment_id: str | None = None,
         **kwargs,
     ) -> None:
         self.parameter_names = parameter_names or []
         self.parameter_bounds = parameter_bounds or []
         self.parameter_types = parameter_types or []
+        self.experiment_id = experiment_id
+
         self.implementation_init(*args, **kwargs)
 
     def implementation_init(self, *args, **kwargs) -> None:
@@ -125,11 +138,66 @@ class InputParameterSpace(abc.ABC):
         bounds = self.bounds_array
         return bounds[:, 0], bounds[:, 1]
 
+    @property
+    def parameters(self) -> dict[str, dict[list[float], str]]:
+        params = {}
+        # TODO: enable ragged shape, for now symmetry required for construction
+        if all(
+            list(
+                map(
+                    lambda c: len(c) > 0 and len(c) == len(self.parameter_names),
+                    [self.parameter_bounds, self.parameter_names, self.parameter_types],
+                )
+            )
+        ):
+            for i, name in enumerate(self.parameter_names):
+                params[name] = {"bounds": self.parameter_bounds[i], "type": self.parameter_types[i]}
+        return params
+
+    def __repr__(self) -> str:
+        self.show()
+        return f"<ParameterSpace '{self.experiment_id}' n={self.n_parameters}>"
+
+    def show(self):
+        # Neon 90s header
+        title = Text()
+        title.append("⚡ ", style="bold yellow")
+        title.append("INPUT PARAMETER SPACE", style="bold magenta")
+        title.append("  //  ", style="dim cyan")
+        title.append(self.experiment_id, style="bold cyan")
+
+        # Parameter table
+        table = Table(
+            box=box.SIMPLE_HEAVY,
+            show_header=True,
+            header_style="bold magenta",
+            border_style="cyan",
+            pad_edge=False,
+        )
+        table.add_column("PARAM", style="bold yellow", no_wrap=True)
+        table.add_column("VALUE", style="bright_white")
+        table.add_column("TYPE", style="dim cyan")
+
+        for name, val in self.parameters.items():
+            table.add_row(name, str(val), type(val).__name__)
+
+        panel = Panel(
+            table,
+            title=title,
+            subtitle=Text(f"n = {self.n_parameters} parameters", style="bold green"),
+            border_style="magenta",
+            box=box.DOUBLE_EDGE,
+            padding=(0, 1),
+        )
+
+        console.print(panel)
+
 
 class InputParameterSpaceVecoli(InputParameterSpace):
     parameter_names: list[str]
     parameter_bounds: list[tuple[float, float]]
     parameter_types: list[Literal["continuous", "discrete", "categorical"]]
+
     """
     Defines the parameter space for UQ sensitivity analysis.
 
@@ -140,45 +208,33 @@ class InputParameterSpaceVecoli(InputParameterSpace):
         parameter_names: Names of the parameters being varied
         parameter_bounds: Lower and upper bounds for each parameter
         parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
-    """
 
-    def __init__(
-        self,
+    Kwargs:
         vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
         vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
         mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
         include_vio: bool = True,
         include_mecillinam: bool = True,
         knockout_genes: Optional[list[str]] = None,
-    ):
-        """
-        Initialize the input parameter space.
+    """
 
-        Args:
-            vio_expression_bounds: (min, max) bounds for vio expression factor
-            vio_trl_eff_bounds: (min, max) bounds for vio translation efficiency
-            mecillinam_conc_bounds: (min, max) bounds for mecillinam concentration
-            include_vio: Whether to include vio parameters in the space
-            include_mecillinam: Whether to include mecillinam parameters
-            knockout_genes: List of genes that can be knocked out (discrete parameter)
-        """
-        self.parameter_names = []
-        self.parameter_bounds = []
-        self.parameter_types = []
-
-        if include_vio:
+    def implementation_init(self, *args, **kwargs) -> None:
+        if kwargs.get("include_vio"):
             self.parameter_names.extend(["vio_expression", "vio_trl_eff"])
-            self.parameter_bounds.extend([vio_expression_bounds, vio_trl_eff_bounds])
+            self.parameter_bounds.extend([
+                kwargs.get("vio_expression_bounds", (0.0, 5.0)),
+                kwargs.get("vio_trl_eff_bounds", (0.0, 2.0)),
+            ])
             self.parameter_types.extend(["continuous", "continuous"])
 
-        if include_mecillinam:
+        if kwargs.get("include_mecillinam"):
             self.parameter_names.append("mecillinam_concentration")
-            self.parameter_bounds.append(mecillinam_conc_bounds)
+            self.parameter_bounds.append(kwargs.get("mecillinam_conc_bounds", (0.0, 10.0)))
             self.parameter_types.append("continuous")
 
-        self.knockout_genes = knockout_genes or []
-        self._include_vio = include_vio
-        self._include_mecillinam = include_mecillinam
+        self.knockout_genes = kwargs.get("knockout_genes", [])
+        self._include_vio = kwargs.get("include_vio", False)
+        self._include_mecillinam = kwargs.get("include_mecillinam", False)
 
     @property
     def n_parameters(self) -> int:
