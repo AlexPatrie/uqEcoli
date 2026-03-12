@@ -483,15 +483,72 @@ def create_samples(N: int, selected: list[Parameter]) -> np.ndarray:
     return qmc.scale(X_unit, bounds[:, 0], bounds[:, 1])
 
 
-def process_samples(X: np.ndarray):
-    pass
+def process_samples_simple(X: np.ndarray, f: Callable[[np.ndarray], np.ndarray], n_replicates: int = 5):
+    """
+    Why median over mean:
+      - Robust to outliers / rare extreme realizations
+      - Better for heavy-tailed noise
+      - Works well even if noise is small (converges to mean)
+
+    :param X: array of samples (perturbation combos of selected attributes of x) with shape (n_samples, n_params)
+    :param f: stochastic timeseries generator (think of this as the simulation func)
+    :param n_replicates: noise level for which stochasticity is accounted.
+    """
+    return np.array([np.median([f(x) for _ in range(n_replicates)]) for x in X])
+
+
+def process_samples_adaptive(
+    X: np.ndarray, f: Callable[[np.ndarray], np.ndarray], target_cv: float = 0.05, min_reps=3, max_reps=20
+) -> np.ndarray:
+    """
+    Adaptively choose replicates based on noise level.
+
+    :param X: array of samples (perturbation combos of selected attributes of x) with shape (n_samples, n_params)
+    :param f: stochastic timeseries generator (think of this as the simulation func)
+    :param target_cv: target coefficient of variation (std/mean)
+    :param min_reps: floor for n replicates (noise level accounting)
+    :param max_reps: ceiling for n replicates (noise level accounting)
+    """
+    Y = np.zeros(len(X))
+
+    for i, x in enumerate(X):
+        reps = []
+        for r in range(max_reps):
+            reps.append(f(x))
+            if r >= min_reps - 1:
+                cv = np.std(reps) / (np.abs(np.mean(reps)) + 1e-10)
+                if cv < target_cv:
+                    break
+        Y[i] = np.median(reps)
+
+    return Y
+
+
+def process_samples(
+    X: np.ndarray, f: Callable[[np.ndarray], np.ndarray], method: Literal["simple", "adaptive"] = "adaptive", **kwargs
+) -> np.ndarray:
+    """
+    :param X: array of samples (perturbation combos of selected attributes of x) with shape (n_samples, n_params)
+    :param f: stochastic timeseries generator (think of this as the simulation func)
+    **kwargs: if using method='adaptive', kwargs are target_cv: float = 0.05, min_reps=3, max_reps=20, if method='simple', kwargs are n_replicates
+    """
+    processor = (
+        process_samples_adaptive if method == "adaptive" else process_samples_simple if method == "simple" else None
+    )
+    if processor is None:
+        raise ValueError(f"Not a valid method type. Expected one of adaptive;simple, got: {method}")
+    return processor(X, f, **kwargs)
 
 
 def generate_pce_surrogate(
     full_space: InputParameterSpace,
     sample_size: int,
+    f,
     config: PrescreeningConfig | None = None,
     basis_type: Literal["legendre", "hermite"] = "legendre",
+    target_cv: float = 0.05,
+    min_reps: int = 3,
+    max_reps: int = 20,
 ) -> PCESurrogate:
     """
     Generate a PCE surrogate with synthetic coefficients (for demos/testing).
@@ -501,7 +558,9 @@ def generate_pce_surrogate(
     selected = prescreen_parameters(full_space=full_space, config=config)
     pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
 
+    # generate sample_size perturbations/combos of selected (X) and run them through f (Y)
     X = create_samples(N=sample_size, selected=selected)
+    Y = process_samples(X=X, f=f, target_cv=target_cv, min_reps=min_reps, max_reps=max_reps)
     coeffs = fit_pce_coefficients(multi_indices)
     param_bounds = np.array([p.bounds for p in selected])
     param_defaults = np.array([
