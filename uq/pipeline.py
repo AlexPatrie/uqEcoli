@@ -2,8 +2,8 @@
 Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-  │  OUTPUTS                                                                    │
-  │  ───────                                                                    │
+  │  PIPELINE OUTPUTS                                                           │
+  │  ────────────────                                                           │
   │                                                                             │
   │  • PCESurrogate: Instant predictions for any parameter combination          │
   │  • SobolIndices: Which parameters matter most                               │
@@ -38,6 +38,7 @@ Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
   └──────┴────────────────────────────────────┴────────────────────────────┴─────────────────────────────┘
 """
 
+# TODO: Implement the above!!! THEN update tutorials/docs!!!
 import math
 import warnings
 from dataclasses import dataclass, field
@@ -80,7 +81,50 @@ def cell_cycle():
     return result
 
 
-def pipeline(
+def create_surrogate(
     full_space: InputParameterSpace, f: Callable, sample_size: int, config: PCEParameterSelectionConfig | None = None
 ):
-    pce = generate_surrogate(space=full_space, f=f, sample_size=sample_size, config=config)
+    surrogate = generate_surrogate(space=full_space, generator=f, sample_size=sample_size, config=config)
+
+
+"""
+┌─────────────────────────────────────────────────────────────────────────────┐
+  │  PIPELINE OUTPUTS                                                           │
+  │  ────────────────                                                           │
+  │                                                                             │
+  │  • PCESurrogate: Instant predictions for any parameter combination          │
+  │  • SobolIndices: Which parameters matter most                               │
+  │  • VarianceDecomposition: Sources of uncertainty                            │
+  │  • CellCycleResult: Phenotypic variation across cell cycle                  │
+  │  • MorrisIndices: Parameter screening results                               │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────┬────────────────────────────────────┬────────────────────────────┬─────────────────────────────┐
+  │ Step │              Function              │           Input            │           Output            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 1    │ InputParameterSpaceVecoli()        │ bounds, flags              │ parameter_space             │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 2    │ load_dataset()                     │ experiment_id, outdir_root │ DataFrame                   │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3a   │ aggregate_uniformly()              │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3b   │ aggregate_by_generation()          │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3c   │ aggregate_by_seed()                │ DataFrame                  │ AggregatedOutput            │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 3d   │ calculate_cell_cycle()             │ experiment_id, outdir_root │ CellCycleResult             │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 4    │ compute_variance_decomposition()   │ 3 AggregatedOutputs        │ variance fractions          │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 5    │ prescreen_parameters()             │ parameter_space, f         │ MorrisIndices, top K params │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 6    │ generate_surrogate() or manual PCE │ K params, f                │ PCESurrogate                │
+  ├──────┼────────────────────────────────────┼────────────────────────────┼─────────────────────────────┤
+  │ 7    │ (from PCE coefficients)            │ PCEFitResult               │ SobolIndices                │
+  └──────┴────────────────────────────────────┴────────────────────────────┴──────────────────────────
+
+"""
+
+
+class Pipeline:
+    pce: PCESurrogate

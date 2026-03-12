@@ -416,7 +416,7 @@ class TestGenerateSurrogate:
 
         surrogate = generate_surrogate(
             space=input_parameter_space,
-            f=f,
+            generator=f,
             sample_size=50,
             min_reps=1,
             max_reps=1,  # Deterministic function
@@ -435,7 +435,7 @@ class TestGenerateSurrogate:
 
         surrogate = generate_surrogate(
             space=input_parameter_space,
-            f=f,
+            generator=f,
             sample_size=50,
             min_reps=1,
             max_reps=1,

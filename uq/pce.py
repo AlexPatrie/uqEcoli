@@ -554,7 +554,7 @@ def process_samples(
 
 def generate_surrogate(
     space: InputParameterSpace,
-    f: Callable[[np.ndarray], np.ndarray],
+    generator: Callable[[np.ndarray], np.ndarray],
     sample_size: int,
     prescreening_config: PCEParameterSelectionConfig | None = None,
     **kwargs,
@@ -573,7 +573,7 @@ def generate_surrogate(
             Y_pred = surrogate.predict(X_new)
             ```
     :param space: (InputParameterSpace) Descriptive definition of input parameter space.
-    :param f: (Callable) stochastic timeseries generator (think of this as the simulation func)
+    :param generator: (Callable) stochastic timeseries generator (think of this as the simulation func)
     :param sample_size: number of perturbations (as afforded by your computational env/budget).
     :param prescreening_config:
     :param kwargs: Flat definition of kwargs consisting of atomic items from:
@@ -604,7 +604,7 @@ def generate_surrogate(
             p: alias for `polynomial_order` - consistent with literature.
     """
     # prescreen to find most relevant params
-    selected = prescreen_parameters(full_space=space, config=prescreening_config, f=f)
+    selected = prescreen_parameters(full_space=space, config=prescreening_config, f=generator)
     n_params = len(selected)
     if kwargs.get("n_top") is None:
         kwargs["n_top"] = min(20, max(3, int(math.ceil(math.sqrt(n_params) * 1.5))))  # noqa: RUF046
@@ -621,7 +621,7 @@ def generate_surrogate(
     X = create_samples(N=sample_size, selected=selected)
     Y = process_samples(
         X=X,
-        f=f,
+        f=generator,
         target_cv=config.preprocessing.target_cv,
         min_reps=config.preprocessing.min_reps,
         max_reps=config.preprocessing.max_reps,
