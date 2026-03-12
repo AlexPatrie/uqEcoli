@@ -44,12 +44,13 @@ import math
 import warnings
 from dataclasses import dataclass, field
 from itertools import combinations_with_replacement
-from typing import Literal
+from typing import Any, Callable, Literal
 
 import numpy as np
 from numpy.polynomial.hermite_e import hermeval
 from numpy.polynomial.legendre import legval
 from scipy.linalg import lstsq
+from scipy.stats import qmc
 
 from uq import InputParameterSpaceVecoli, PCESurrogate, SensitivityAnalyzer
 from uq.inputs import InputParameterSpace
@@ -449,10 +450,48 @@ def get_pce_config(
     return PCESurrogateConfig(parameters=prescreened, n_samples=sample_size, polynomial_order=pce_poly_order)
 
 
+def create_samples(N: int, selected: list[Parameter]) -> np.ndarray:
+    """
+    Generate N perturbations/combinations of selected using Latin Hypercube Sampling.
+
+    Why LHS is better:
+
+      1. Stratified — divides each dimension into N equal bins, one sample per bin
+      2. No gaps — guarantees coverage across full range
+      3. Efficient — better accuracy with same N vs random
+      4. Standard — widely used in UQ, well-understood properties
+
+      ---
+      Rule of thumb:
+      ┌───────────────┬────────────────────────────────┐
+      │ Sample budget │            Strategy            │
+      ├───────────────┼────────────────────────────────┤
+      │ N < 50        │ Sobol sequence (best coverage) │
+      ├───────────────┼────────────────────────────────┤
+      │ N ≥ 50        │ LHS (good balance)             │
+      ├───────────────┼────────────────────────────────┤
+      │ Don't care    │ Random uniform (simplest)      │
+      └───────────────┴────────────────────────────────┘
+      For PCE fitting, LHS is the pragmatic default.
+    """
+    # Generate LHS samples in [0, 1]^n
+    n = len(selected)
+    sampler = qmc.LatinHypercube(d=n)
+    X_unit = sampler.random(n=N)
+    # Scale to parameter bounds
+    bounds = np.array([p.bounds for p in selected])
+    return qmc.scale(X_unit, bounds[:, 0], bounds[:, 1])
+
+
+def process_samples(X: np.ndarray):
+    pass
+
+
 def generate_pce_surrogate(
     full_space: InputParameterSpace,
     sample_size: int,
     config: PrescreeningConfig | None = None,
+    basis_type: Literal["legendre", "hermite"] = "legendre",
 ) -> PCESurrogate:
     """
     Generate a PCE surrogate with synthetic coefficients (for demos/testing).
@@ -461,55 +500,32 @@ def generate_pce_surrogate(
     """
     selected = prescreen_parameters(full_space=full_space, config=config)
     pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
-    multi_indices = generate_multi_indices(n_params=pce_config.n, max_order=pce_config.p)
-    coeffs = generate_synthetic_coefficients(multi_indices)
+
+    X = create_samples(N=sample_size, selected=selected)
+    coeffs = fit_pce_coefficients(multi_indices)
     param_bounds = np.array([p.bounds for p in selected])
-    return PCESurrogate(
+    param_defaults = np.array([
+        p.get("default", (p["bounds"][0] + p["bounds"][1]) / 2)
+        for p in [param.model_dump() for param in pce_config.parameters]
+    ])
+    pce = PCESurrogate(
         coefficients=coeffs,
         multi_indices=multi_indices,
-        basis_type="legendre",
+        basis_type=basis_type,
         polynomial_order=pce_config.p,
         input_dim=pce_config.n,
         output_dim=1,
         r_squared=0.95,
         input_bounds=param_bounds,
     )
+    print("PCE Surrogate created from config:")
+    print(f"  - Parameters: {full_space.parameter_names}")
+    print(f"  - Bounds: {full_space.parameter_bounds}")
+    print(f"  - Defaults: {param_defaults}")
+    print(f"  - Polynomial order: {pce_config.p}")
+    print(f"  - Number of PCE terms: {len(coeffs)}")
+    return pce
 
 
 def pipeline(full_space: InputParameterSpace, sample_size: int, config: PrescreeningConfig | None = None):
-    surrogate = generate_pce_surrogate(full_space=full_space, sample_size=sample_size, config=config)
-
-
-PARAMETER_CONFIG = [
-    {
-        "name": "expression_factor",
-        "bounds": [0.5, 5.0],
-        "default": 2.75,
-        "step": 0.1,
-        "description": "Gene expression multiplier (1.0 = baseline)",
-    },
-    {
-        "name": "translation_efficiency",
-        "bounds": [0.5, 2.0],
-        "default": 1.25,
-        "step": 0.05,
-        "description": "Translation efficiency factor",
-    },
-    {
-        "name": "inhibitor_conc",
-        "bounds": [0.0, 10.0],
-        "default": 5.0,
-        "step": 0.5,
-        "description": "Inhibitor concentration (reduces output)",
-    },
-]
-# -------------------------------------------------------------------------
-# PCE Configuration
-# -------------------------------------------------------------------------
-PCE_ORDER = 2  # Polynomial order for the surrogate (1, 2, or 3 recommended)
-
-# -------------------------------------------------------------------------
-# Timeseries Configuration
-# -------------------------------------------------------------------------
-TIMESERIES_LENGTH = 1000  # Number of timesteps
-RANDOM_SEED = 42  # For reproducible noise
+    pce = generate_pce_surrogate(full_space=full_space, sample_size=sample_size, config=config)
