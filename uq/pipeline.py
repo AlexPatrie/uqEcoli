@@ -25,10 +25,10 @@ from uq.models import (
     PCESolverConfig,
     PCESurrogateConfig,
 )
-from uq.pce import generate_pce_surrogate
+from uq.pce import generate_surrogate
 
 
 def pipeline(
     full_space: InputParameterSpace, f: Callable, sample_size: int, config: PCEParameterSelectionConfig | None = None
 ):
-    pce = generate_pce_surrogate(space=full_space, f=f, sample_size=sample_size, config=config)
+    pce = generate_surrogate(space=full_space, f=f, sample_size=sample_size, config=config)

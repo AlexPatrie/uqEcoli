@@ -511,7 +511,7 @@ def process_samples(
     return processor(X, f, **kwargs)
 
 
-def generate_pce_surrogate(
+def generate_surrogate(
     space: InputParameterSpace,
     f: Callable[[np.ndarray], np.ndarray],
     sample_size: int,
@@ -562,6 +562,9 @@ def generate_pce_surrogate(
     """
     # prescreen to find most relevant params
     selected = prescreen_parameters(full_space=space, config=prescreening_config)
+    n_params = len(selected)
+    if kwargs.get("n_top") is None:
+        kwargs["n_top"] = min(20, max(3, int(math.ceil(math.sqrt(n_params) * 1.5))))
 
     # extract/set up/configure for PCE
     config: PCEConfig = get_pce_config(prescreened=selected, sample_size=sample_size, **kwargs)
@@ -601,4 +604,3 @@ def generate_pce_surrogate(
     print(f"  - Number of PCE terms: {len(fitting.coefficients)}")
 
     return pce
-
