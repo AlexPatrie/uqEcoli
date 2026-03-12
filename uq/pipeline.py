@@ -555,18 +555,24 @@ def generate_pce_surrogate(
 
     For real usage, use fit_pce_coefficients() with actual simulation data.
     """
+    # prescreen to find most relevant params
     selected = prescreen_parameters(full_space=full_space, config=config)
-    pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
 
-    # generate sample_size perturbations/combos of selected (X) and run them through f (Y)
-    X = create_samples(N=sample_size, selected=selected)
-    Y = process_samples(X=X, f=f, target_cv=target_cv, min_reps=min_reps, max_reps=max_reps)
-    coeffs = fit_pce_coefficients(multi_indices)
+    # extract/set up/configure for PCE
+    pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
     param_bounds = np.array([p.bounds for p in selected])
     param_defaults = np.array([
         p.get("default", (p["bounds"][0] + p["bounds"][1]) / 2)
         for p in [param.model_dump() for param in pce_config.parameters]
     ])
+
+    # generate sample_size perturbations/combos of selected (X) and run them through f (Y)
+    X = create_samples(N=sample_size, selected=selected)
+    Y = process_samples(X=X, f=f, target_cv=target_cv, min_reps=min_reps, max_reps=max_reps)
+
+    # generate pce coeffs from fitting
+    coeffs = fit_pce_coefficients(multi_indices)
+
     pce = PCESurrogate(
         coefficients=coeffs,
         multi_indices=multi_indices,
