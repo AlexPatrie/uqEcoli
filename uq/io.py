@@ -1,14 +1,18 @@
 import json
-import numpy as np
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
-from typing import get_origin, get_args
+from typing import get_args, get_origin
+
+import numpy as np
 
 
 class DataclassIO:
     @classmethod
     def save(cls, instance, path: str | Path):
-        """Save any dataclass with numpy arrays to disk."""
+        """Save any dataclass with numpy arrays to disk.
+        :param instance: @dataclass-decorated instance
+        :param path: destination to which a dir of artifacts will be saved.
+        """
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         arrays = {}
@@ -37,7 +41,7 @@ class DataclassIO:
         """Load a dataclass from disk."""
         path = Path(path)
         # Load primitives
-        with open(path / "metadata.json", "r") as f:
+        with open(path / "metadata.json") as f:
             data = json.load(f)
         # Load arrays
         for npy_file in path.glob("*.npy"):

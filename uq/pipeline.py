@@ -56,15 +56,25 @@ from scipy.stats import qmc
 
 from uq import InputParameterSpaceVecoli, PCESurrogate, SensitivityAnalyzer
 from uq.inputs import InputParameterSpace
-from uq.models import Parameter, PrescreeningConfig
+from uq.models import (
+    Parameter,
+    PCEConfig,
+    PCEFitResult,
+    PCEParameterSelectionConfig,
+    PCEPreprocessingConfig,
+    PCESolverConfig,
+    PCESurrogateConfig,
+)
 
 
-def prescreen_parameters(full_space: InputParameterSpace, config: PrescreeningConfig | None = None) -> list[Parameter]:
+def prescreen_parameters(
+    full_space: InputParameterSpace, config: PCEParameterSelectionConfig | None = None
+) -> list[Parameter]:
     """
     Prescreening attrs related to morris: n_trajectories, n_top (num selections)
     """
     analyzer = SensitivityAnalyzer(full_space)
-    conf = config or PrescreeningConfig()
+    conf = config or PCEParameterSelectionConfig()
     screening = analyzer.analyze_with_morris(n_trajectories=conf.n_trajectories)
     return screening.to_parameter_config(parameter_bounds=full_space.parameter_bounds, top_n=conf.n_top)
 
@@ -76,7 +86,7 @@ def prescreen_parameters_vecoli(
     include_vio: bool = True,
     include_mecillinam: bool = True,
     knockout_genes: list[str] | None = None,
-    prescreen_config: PrescreeningConfig | None = None,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
 ):
     """
     Prescreening attrs related to morris: n_trajectories, n_top (num selections)
@@ -90,59 +100,6 @@ def prescreen_parameters_vecoli(
         knockout_genes=knockout_genes,
     )
     return prescreen_parameters(full_space=full_space, config=prescreen_config)
-
-
-@dataclass
-class PCESurrogateConfig:
-    parameters: list[Parameter]  # selected in prescreening
-    n_samples: int  # samples that can be afforded by fixed compute budget/resources
-    polynomial_order: int | None = None
-
-    @property
-    def n(self) -> int:
-        # n selected params from prescreen
-        return len(self.parameters)
-
-    @property
-    def N(self) -> int:
-        # alias for n_samples
-        # # Given a parameterized function f(x) = y with n input parameters, the sample
-        # size N (number of input configurations evaluated) must satisfy N ≥ 2 * C(n+p, p),
-        # where p is the chosen polynomial order.
-        return self.n_samples
-
-    @property
-    def p(self) -> int:
-        # alias for poly order
-        return self.polynomial_order
-
-    def __post_init__(self):
-        if self.polynomial_order is None:
-            self.polynomial_order = self._calculate_p()
-        if not self._validate_sample_size():
-            warnings.warn(
-                f"WARNING: Given n_parameters and polynomial order, "
-                f"n_samples is too small with a value of {self.n_samples}"
-            )
-
-    def _calculate_p(self) -> int:
-        n = self.n
-        N = self.n_samples
-        p = 1
-        while 2 * math.comb(n + p + 1, p + 1) <= N:
-            p += 1
-        print(f"SUGGESTED POLYNOMIAL ORDER: {p}")
-        return p
-
-    def _validate_sample_size(self) -> int:
-        """
-        For PCE, given timeseries generator f(x) = y:
-
-        :param n: number of selected attributes of x
-        :param p: polynomial order
-        :return: 2C(n+p, p) where C is the binomial coefficient function
-        """
-        return self.n_samples >= (2 * math.comb((self.n_samples + self.polynomial_order), self.polynomial_order))
 
 
 def generate_multi_indices(n_params: int, max_order: int) -> np.ndarray:
@@ -229,39 +186,6 @@ def _build_basis_matrix(
                 basis_matrix[:, t] *= univariate[:, p, order]
 
     return basis_matrix
-
-
-@dataclass
-class PCEFitResult:
-    """Result of fitting PCE coefficients from data."""
-
-    coefficients: np.ndarray
-    multi_indices: np.ndarray
-    basis_type: str
-    polynomial_order: int
-    n_params: int
-    r_squared: float
-    n_samples: int
-    method: str
-    input_bounds: np.ndarray | None = None
-    sparsity: float = field(init=False)
-
-    def __post_init__(self):
-        n_nonzero = np.sum(np.abs(self.coefficients) > 1e-10)
-        self.sparsity = 1.0 - (n_nonzero / len(self.coefficients))
-
-    def to_surrogate(self) -> PCESurrogate:
-        """Convert fit result to a PCESurrogate for prediction."""
-        return PCESurrogate(
-            coefficients=self.coefficients,
-            multi_indices=self.multi_indices,
-            basis_type=self.basis_type,
-            polynomial_order=self.polynomial_order,
-            input_dim=self.n_params,
-            output_dim=1,
-            r_squared=self.r_squared,
-            input_bounds=self.input_bounds,
-        )
 
 
 def fit_pce_coefficients(
@@ -449,10 +373,48 @@ def compute_slider_step(bounds: list[float], n_steps: int = 50) -> float:
     return nice_step * magnitude
 
 
-def get_pce_config(
-    prescreened: list[Parameter], sample_size: int, pce_poly_order: int | None = None
-) -> PCESurrogateConfig:
-    return PCESurrogateConfig(parameters=prescreened, n_samples=sample_size, polynomial_order=pce_poly_order)
+# def get_pce_config(
+#     prescreened: list[Parameter], sample_size: int, pce_poly_order: int | None = None
+# ) -> PCESurrogateConfig:
+#     return PCESurrogateConfig(parameters=prescreened, n_samples=sample_size, polynomial_order=pce_poly_order)
+
+
+def get_pce_config(prescreened: list[Parameter], sample_size: int, **kwargs) -> PCEConfig:
+    """
+    :param prescreened: selected params from prescreening phase (Morris)
+    :param sample_size: number of samples/perturbations/variations of `prescreened` to create.
+    :param kwargs: Dict whose outermost keys are: selection, preprocessing, solver, and surrogate, and
+        whose values correspond to kwargs accepted by that relevant PCE config. See `PCEConfig` for
+        full details.
+    """
+    selection, preproc, solver, surrogate = {}, {}, {}, {}
+    for keyword in kwargs:
+        if keyword in ["n_trajectories", "n_top"]:
+            selection[keyword] = kwargs[keyword]
+        elif keyword in ["target_cv", "min_reps", "max_reps"]:
+            preproc[keyword] = kwargs[keyword]
+        elif keyword in ["basis_type", "method", "lasso_alpha", "omp_n_nonzero"]:
+            solver[keyword] = kwargs[keyword]
+        elif keyword in ["polynomial_order", "p"]:
+            surrogate["polynomial_order"] = kwargs[keyword]
+    return PCEConfig(
+        selection=PCEParameterSelectionConfig(**selection),
+        preprocessing=PCEPreprocessingConfig(**preproc),
+        solver=PCESolverConfig(**solver),
+        surrogate=PCESurrogateConfig(parameters=prescreened, n_samples=sample_size, **surrogate),
+    )
+
+
+# def get_pce_config(
+#     prescreened: list[Parameter],
+#     sample_size: int,
+#     pce_poly_order: int | None = None
+# ) -> PCEConfig:
+#     PCEConfig(
+#         selection=PCEParameterSelectionConfig(),
+#
+#     )
+#     return PCESurrogateConfig(parameters=prescreened, n_samples=sample_size, polynomial_order=pce_poly_order)
 
 
 def create_samples(N: int, selected: list[Parameter]) -> np.ndarray:
@@ -549,58 +511,96 @@ def process_samples(
 
 
 def generate_pce_surrogate(
-    full_space: InputParameterSpace,
-    sample_size: int,
+    space: InputParameterSpace,
     f: Callable[[np.ndarray], np.ndarray],
-    prescreening_config: PrescreeningConfig | None = None,
-    basis_type: Literal["legendre", "hermite"] = "legendre",
-    target_cv: float = 0.05,
-    min_reps: int = 3,
-    max_reps: int = 20,
+    sample_size: int,
+    prescreening_config: PCEParameterSelectionConfig | None = None,
+    **kwargs,
+    # basis_type: Literal["legendre", "hermite"] = "legendre",
+    # method: Literal["least_squares", "lasso", "omp"] = "least_squares",
+    # lasso_alpha: float = 0.01,
+    # omp_n_nonzero: int | None = None,
+    # target_cv: float = 0.05,
+    # min_reps: int = 3,
+    # max_reps: int = 20,
 ) -> PCESurrogate:
     """
-    Generate a PCE surrogate. You can use it like:
+    Generate a PCE surrogate. You can then use it like:
             ```
             surrogate = generate_pce_surrogate(...)
             Y_pred = surrogate.predict(X_new)
             ```
-
-    :param f: stochastic timeseries generator (think of this as the simulation func)
-    :param full_space:
+    :param space: (InputParameterSpace) Descriptive definition of input parameter space.
+    :param f: (Callable) stochastic timeseries generator (think of this as the simulation func)
     :param sample_size: number of perturbations (as afforded by your computational env/budget).
     :param prescreening_config:
-    :param basis_type: One of "legendre", "hermite". Defaults to legendre.
-    :param target_cv: target coefficient of variation (std/mean)
-    :param min_reps: floor for n replicates (noise level accounting)
-    :param max_reps: ceiling for n replicates (noise level accounting)
+    :param kwargs: Flat definition of kwargs consisting of atomic items from:
+        `>> selection (PCEParameterSelectionConfig)`:
+            n_trajectories:;
+            n_top: number of most relevant parameters to return
+
+        `>> preprocessing (PCEPreprocessingConfig)`:
+            target_cv: target coefficient of variation (std/mean);
+            min_reps: floor for n replicates (noise level accounting);
+            max_reps: ceiling for n replicates (noise level accounting)
+
+        `solver (PCESolverConfig)`:
+            basis_type: Polynomial basis type: 'legendre' (uniform inputs) or 'hermite' (Gaussian).;
+            method: Fitting method: - 'least_squares': Standard least squares (default) - 'lasso': L1-regularized (sparse) via sklearn - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn;
+            lasso_alpha: Regularization strength for LASSO (only used if method='lasso').;
+            omp_n_nonzero: Number of non-zero coefficients for OMP. If None, uses n_terms // 4.
+
+        `surrogate (PCESurrogateConfig)`:
+            parameters: (`list[Parameter]`) parameters selected and returned from prescreening.;
+            n_samples: (`int`) Number of samples(perturbations/combos of vals for selected attributes of x), as
+                afforded by fixed compute budget/resources.;
+            polynomial_order: (`int | None`) polynomial order used in calculation of n pce terms. Defaults to 2.
+            n: len(parameters) convenience attr.;
+            N: alias for `n_samples` - consistent with literature.;
+            p: alias for `polynomial_order` - consistent with literature.
     """
     # prescreen to find most relevant params
-    selected = prescreen_parameters(full_space=full_space, config=prescreening_config)
+    selected = prescreen_parameters(full_space=space, config=prescreening_config)
 
     # extract/set up/configure for PCE
-    pce_config = get_pce_config(prescreened=selected, sample_size=sample_size)
+    config: PCEConfig = get_pce_config(prescreened=selected, sample_size=sample_size, **kwargs)
     param_bounds = np.array([p.bounds for p in selected])
     param_defaults = np.array([
         p.get("default", (p["bounds"][0] + p["bounds"][1]) / 2)
-        for p in [param.model_dump() for param in pce_config.parameters]
+        for p in [param.model_dump() for param in config.surrogate.parameters]
     ])
 
     # generate sample_size perturbations/combos of selected (X) and run them through f (Y)
     X = create_samples(N=sample_size, selected=selected)
-    Y = process_samples(X=X, f=f, target_cv=target_cv, min_reps=min_reps, max_reps=max_reps)
+    Y = process_samples(
+        X=X,
+        f=f,
+        target_cv=config.preprocessing.target_cv,
+        min_reps=config.preprocessing.min_reps,
+        max_reps=config.preprocessing.max_reps,
+    )
 
     # generate pce coeffs from fitting
-    fitting = fit_pce_coefficients(multi_indices)
+    fitting = fit_pce_coefficients(
+        X=X,
+        Y=Y,
+        polynomial_order=config.surrogate.p,
+        bounds=param_bounds,
+        basis_type=config.solver.basis_type,
+        method=config.solver.method,
+        lasso_alpha=config.solver.lasso_alpha,
+        omp_n_nonzero=config.solver.omp_n_nonzero,
+    )
     pce = fitting.to_surrogate()
     print("PCE Surrogate created from config:")
-    print(f"  - Parameters: {full_space.parameter_names}")
-    print(f"  - Bounds: {full_space.parameter_bounds}")
+    print(f"  - Parameters: {space.parameter_names}")
+    print(f"  - Bounds: {space.parameter_bounds}")
     print(f"  - Defaults: {param_defaults}")
-    print(f"  - Polynomial order: {pce_config.p}")
+    print(f"  - Polynomial order: {config.surrogate.p}")
     print(f"  - Number of PCE terms: {len(fitting.coefficients)}")
 
     return pce
 
 
-def pipeline(full_space: InputParameterSpace, sample_size: int, config: PrescreeningConfig | None = None):
-    pce = generate_pce_surrogate(full_space=full_space, sample_size=sample_size, config=config)
+def pipeline(full_space: InputParameterSpace, sample_size: int, config: PCEParameterSelectionConfig | None = None):
+    pce = generate_pce_surrogate(space=full_space, sample_size=sample_size, config=config)
