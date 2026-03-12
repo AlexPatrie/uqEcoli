@@ -1,0 +1,39 @@
+{
+  "seed": 0,
+  "generations": 8,
+  "variants": {
+    "new_gene_internal_shift_variable_strength": [
+      {
+        "condition": "basal",
+        "induction_gen": 1,
+        "exp_trl_eff": {
+          "exp": 4.006072333063383,
+          "trl_eff": 0.56057828617236
+        },
+        "rel_adj": {
+          "rel_exp_adj_list": [
+            1.0
+          ],
+          "rel_trl_eff_adj_list": [
+            1.0
+          ]
+        }
+      }
+    ],
+    "mecillinam_timeline": [
+      {
+        "times": [
+          0.0
+        ],
+        "concentrations": [
+          7.836477366818439
+        ],
+        "knockouts": []
+      }
+    ]
+  },
+  "sim_data_path": "/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle",
+  "emitter": "parquet",
+  "out_dir": "uq_outputs/53f0011034cdf18fda16a7d2f446f1e1",
+  "experiment_id": "53f0011034cdf18fda16a7d2f446f1e1"
+}

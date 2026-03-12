@@ -130,6 +130,7 @@ select = [
     "TRY",
 ]
 ignore = [
+    "UP007",
     # "DEP001",
     "A001",
     "A002",

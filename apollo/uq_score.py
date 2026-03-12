@@ -316,13 +316,16 @@ class SensitivityScore:
         lines.append("")
         lines.append("  VOICING (variance decomposition):")
         lines.append(
-            f"    Bass (generation):   {'█' * _bar(self.variance_voicing.generation_fraction)} {self.variance_voicing.generation_fraction:.0%}"
+            f"    Bass (generation):   {'█' * _bar(self.variance_voicing.generation_fraction)} "
+            f"{self.variance_voicing.generation_fraction:.0%}"
         )
         lines.append(
-            f"    Tenor (seed):        {'█' * _bar(self.variance_voicing.seed_fraction)} {self.variance_voicing.seed_fraction:.0%}"
+            f"    Tenor (seed):        {'█' * _bar(self.variance_voicing.seed_fraction)} "
+            f"{self.variance_voicing.seed_fraction:.0%}"
         )
         lines.append(
-            f"    Treble (cell cycle): {'█' * _bar(self.variance_voicing.residual_fraction)} {self.variance_voicing.residual_fraction:.0%}"
+            f"    Treble (cell cycle): {'█' * _bar(self.variance_voicing.residual_fraction)} "
+            f"{self.variance_voicing.residual_fraction:.0%}"
         )
         lines.append(f"    → {self.variance_voicing.balance_description}")
 

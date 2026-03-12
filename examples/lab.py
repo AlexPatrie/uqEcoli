@@ -31,11 +31,7 @@ def _(mo):
 
 @app.cell
 def _(exp_id):
-    from uq import (
-        InputParameterSpaceVecoli,
-        SensitivityAnalyzer,
-        AggregationStrategy,
-    )
+    from uq import InputParameterSpaceVecoli, SensitivityAnalyzer, AggregationStrategy, SimulationWrapper, WrapperConfig
 
     class x:
         timesteps = 1111
@@ -49,7 +45,13 @@ def _(exp_id):
 
     param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True, experiment_id=exp_id.value)
     param_space.show()
-    analyzer = SensitivityAnalyzer(param_space, wrapper=f)
+    wrapper = SimulationWrapper(
+        parameter_space=param_space,
+        config=WrapperConfig(
+            sim_data_path="/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle"
+        ),
+    )
+    analyzer = SensitivityAnalyzer(param_space, wrapper=wrapper)
     sobol_indices, pce_surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100)
     # Track prediction confidence: surrogate predicts with R² quality metric
     print(f"Surrogate R²: {pce_surrogate.r_squared}")
