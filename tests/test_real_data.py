@@ -725,13 +725,41 @@ class TestRFC006FullWorkflow:
         assert len(real_aggregated_by_seed.groups) >= 1
         log_success(f"Strategy 3 (By Lineage Seed): {len(real_aggregated_by_seed.groups)} groups")
 
-        # Strategy 4: Stratified by cell cycle stage
-        df_renamed = df.rename({"listeners__mass__growth": "listeners__fba_results__growth"})
-        cc_computer = MassBasedCellCycleVariable()
-        cc_var = cc_computer.compute(df_renamed)
-        cc_stages = cc_var.to_stage_bins(n_bins=10)
-        n_stages_with_data = len(np.unique(cc_stages))
-        log_success(f"Strategy 4 (By Cell Cycle): {n_stages_with_data} stages with data")
+        # Strategy 4: Stratified by cell cycle stage (detailed in Step 3b below)
+        log_success("Strategy 4 (By Cell Cycle): See Step 3b for detailed analysis")
+
+        # =========================================================================
+        # STEP 3b: Cell Cycle Variable Definition (RFC006 Section 3, Strategy 4)
+        # =========================================================================
+        log_section("Step 3b: Cell Cycle Variable Calculation (RFC006 Strategy 4)")
+
+        from tests.conftest import REAL_DATA_OUTDIR
+        from uq import calculate_cell_cycle
+
+        # Use the dedicated calculate_cell_cycle function from uq.cell_cycle
+        # This function encapsulates the RFC006 cell cycle workflow
+        cc_result = calculate_cell_cycle(
+            experiment_id="api_simulation_default",
+            outdir_root=str(REAL_DATA_OUTDIR),
+            variable_type="mass_based",
+            n_bins=10,
+            output_column="listeners__mass__dry_mass",
+            verbose=True,  # Will print the RFC006 quote and detailed stats
+        )
+
+        # Verify the result
+        assert cc_result is not None
+        assert cc_result.cell_cycle_variable.normalized is True
+        assert cc_result.n_stages_with_data > 0
+        assert cc_result.phenotypic_variation_cv > 0, "Should see mass variation across cell cycle"
+
+        # Extract values for use later in the test
+        cc_var = cc_result.cell_cycle_variable
+        n_stages_with_data = cc_result.n_stages_with_data
+        cc_variation = cc_result.phenotypic_variation_cv
+
+        log_success(f"calculate_cell_cycle() returned {type(cc_result).__name__}")
+        log_success("Cell cycle stratification reveals phenotypic variation!")
 
         # =========================================================================
         # STEP 4: Morris Screening (RFC006 Section 4, Item 4 - O(n) cheap)

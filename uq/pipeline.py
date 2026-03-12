@@ -14,7 +14,7 @@ from numpy.polynomial.legendre import legval
 from scipy.linalg import lstsq
 from scipy.stats import qmc
 
-from uq import InputParameterSpaceVecoli, PCESurrogate, SensitivityAnalyzer
+from uq import InputParameterSpaceVecoli, PCESurrogate, SensitivityAnalyzer, calculate_cell_cycle
 from uq.inputs import InputParameterSpace
 from uq.models import (
     Parameter,
@@ -26,6 +26,19 @@ from uq.models import (
     PCESurrogateConfig,
 )
 from uq.pce import generate_surrogate
+
+result = calculate_cell_cycle(
+    experiment_id="api_simulation_default",
+    outdir_root="/path/to/sims",
+    variable_type="mass_based",  # or "dna_replication", "cell_angle", "koopman"
+    n_bins=10,
+    output_column="listeners__mass__dry_mass",
+    verbose=True,
+)
+# Access results
+result.print_summary()
+print(f"Phenotypic CV: {result.phenotypic_variation_cv}")
+print(f"Cell cycle values: {result.cell_cycle_variable.values}")
 
 
 def pipeline(

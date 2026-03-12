@@ -121,12 +121,14 @@ from uq.aggregation import (
 from uq.cell_cycle import (
     CellAngleCellCycleVariable,
     CellCycleAggregator,
+    CellCycleResult,
     CellCycleVariableComputer,
     CompositeCellCycleVariable,
     DNAReplicationCellCycleVariable,
     GSAInformedCellCycleVariable,
     KoopmanCellCycleVariable,
     MassBasedCellCycleVariable,
+    calculate_cell_cycle,
     register_cell_cycle_variable,
 )
 from uq.inputs import (
@@ -237,9 +239,11 @@ __all__ = [
     "run_gsa_informed_cell_cycle_analysis",
     "run_sensitivity_analysis",
     # Cell cycle (GSAInformedCellCycleVariable is the RFC006-compliant approach)
+    "calculate_cell_cycle",
     "CellAngleCellCycleVariable",
     "CellCycleAggregator",
     "CellCyclePhase",
+    "CellCycleResult",
     "CellCycleVariable",
     "CellCycleVariableComputer",
     "CompositeCellCycleVariable",

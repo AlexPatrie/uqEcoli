@@ -1101,3 +1101,267 @@ class GSAInformedCellCycleVariable(CellCycleVariableComputer):
 
 # Register the GSA-informed variable
 CellCycleAggregator.VARIABLES["gsa_informed"] = GSAInformedCellCycleVariable
+
+
+@dataclass
+class CellCycleResult:
+    """
+    Result of cell cycle variable calculation.
+
+    Contains the cell cycle variable, stage statistics, and metadata
+    for reporting and further analysis.
+    """
+
+    cell_cycle_variable: CellCycleVariable
+    stages: np.ndarray
+    n_bins: int
+    n_stages_with_data: int
+    stage_stats: list[dict]
+    phenotypic_variation_cv: float
+    computer_type: str
+    n_data_points: int
+    output_column: str
+
+    def summary(self) -> str:
+        """Return a formatted summary string."""
+        lines = [
+            "=" * 70,
+            "  CELL CYCLE VARIABLE CALCULATION RESULT",
+            "=" * 70,
+            "",
+            f"  Cell cycle variable type: {self.computer_type}",
+            f"  Data points analyzed:     {self.n_data_points:,}",
+            f"  Normalized:               {self.cell_cycle_variable.normalized}",
+            f"  Value range:              [{self.cell_cycle_variable.values.min():.4f}, "
+            f"{self.cell_cycle_variable.values.max():.4f}]",
+            f"  Mean:                     {self.cell_cycle_variable.values.mean():.4f}",
+            f"  Std:                      {self.cell_cycle_variable.values.std():.4f}",
+            "",
+            f"  Stages with data:         {self.n_stages_with_data}/{self.n_bins}",
+            f"  Phenotypic variation CV:  {self.phenotypic_variation_cv:.4f}",
+            "",
+            f"  Cell Cycle Stage Statistics ({self.output_column}):",
+            f"  {'Stage':<8} {'N':<10} {'Mean':<15} {'Std':<15}",
+            f"  {'-' * 48}",
+        ]
+        for s in self.stage_stats:
+            lines.append(f"  {s['stage']:<8} {s['n']:<10} {s['mean']:<15.4f} {s['std']:<15.4f}")
+        lines.append("=" * 70)
+        return "\n".join(lines)
+
+    def print_summary(self) -> None:
+        """Print the formatted summary."""
+        print(self.summary())
+
+
+def calculate_cell_cycle(
+    experiment_id: str = "api_simulation_default",
+    outdir_root: Optional[str] = None,
+    variable_type: str = "mass_based",
+    n_bins: int = 10,
+    output_column: str = "listeners__mass__dry_mass",
+    verbose: bool = True,
+) -> CellCycleResult:
+    """
+    Calculate cell cycle variable from real simulation data.
+
+    This function implements RFC006 aggregation strategy (4): stratified by cell
+    cycle stage. It loads real simulation data, computes a cell cycle variable,
+    bins data into stages, and reports detailed statistics.
+
+    Per RFC006 Section 3:
+        "The choice of the 'cell cycle variable' will be informed by the
+        sensitivity analyses (1-3), will be explored through dedicated
+        visualisations, and will be discussed with all subteams."
+
+    Args:
+        experiment_id: Experiment identifier for loading data.
+            Default: "api_simulation_default"
+        outdir_root: Root directory for simulation outputs.
+            If None, uses the default path from uq.inputs.load_dataset.
+        variable_type: Type of cell cycle variable to compute.
+            Options: "mass_based", "dna_replication", "cell_angle", "koopman"
+            Default: "mass_based"
+        n_bins: Number of cell cycle stages for binning.
+            Default: 10
+        output_column: Column to use for computing stage statistics.
+            Default: "listeners__mass__dry_mass"
+        verbose: Whether to print progress and results.
+            Default: True
+
+    Returns:
+        CellCycleResult containing:
+            - cell_cycle_variable: The computed CellCycleVariable
+            - stages: Array of stage assignments for each data point
+            - stage_stats: List of dicts with per-stage statistics
+            - phenotypic_variation_cv: Coefficient of variation across stages
+            - Additional metadata
+
+    Example:
+        >>> from uq.cell_cycle import calculate_cell_cycle
+        >>>
+        >>> # Calculate using default settings
+        >>> result = calculate_cell_cycle()
+        >>> result.print_summary()
+        >>>
+        >>> # Calculate with custom path and variable type
+        >>> result = calculate_cell_cycle(
+        ...     experiment_id="my_experiment",
+        ...     outdir_root="/path/to/sims",
+        ...     variable_type="dna_replication",
+        ...     n_bins=20,
+        ... )
+        >>> print(f"Phenotypic variation: {result.phenotypic_variation_cv:.4f}")
+
+    Raises:
+        ValueError: If variable_type is not recognized
+        FileNotFoundError: If simulation data cannot be found
+    """
+    from pathlib import Path
+
+    from uq.inputs import load_dataset
+
+    # Validate variable type
+    if variable_type not in CellCycleAggregator.VARIABLES:
+        raise ValueError(
+            f"Unknown cell cycle variable type: {variable_type}. "
+            f"Available: {list(CellCycleAggregator.VARIABLES.keys())}"
+        )
+
+    if variable_type == "gsa_informed":
+        raise ValueError(
+            "gsa_informed variable type requires aggregation results. "
+            "Use GSAInformedCellCycleVariable directly instead."
+        )
+
+    if verbose:
+        print()
+        print("=" * 70)
+        print("  CELL CYCLE VARIABLE CALCULATION (RFC006 Strategy 4)")
+        print("=" * 70)
+        print()
+        print("  RFC006: 'The choice of the cell cycle variable will be")
+        print("  informed by the sensitivity analyses (1-3)'")
+        print()
+        print("  Cell cycle variable: A low-dimensional coordinate computed")
+        print("  from omics variables for deterministic binning into stages")
+        print("=" * 70)
+        print()
+
+    # Determine which columns are needed
+    computer_class = CellCycleAggregator.VARIABLES[variable_type]
+    temp_computer = computer_class() if variable_type != "gsa_informed" else None
+    required_cols = temp_computer.required_columns if temp_computer else []
+
+    # Always include output column and metadata columns
+    observables = list(set(required_cols + [output_column, "time", "generation", "agent_id", "lineage_seed"]))
+
+    # Load data
+    if verbose:
+        print(f"  Loading data: experiment_id={experiment_id}")
+        if outdir_root:
+            print(f"  Output root: {outdir_root}")
+        print(f"  Columns: {len(observables)} observables")
+
+    outdir_path = Path(outdir_root) if outdir_root else None
+    df = load_dataset(
+        experiment_id=experiment_id,
+        outdir_root=outdir_path,
+        observables=observables,
+    )
+
+    if verbose:
+        print(f"  ✓ Loaded {len(df):,} data points")
+        print()
+
+    # Rename columns if needed for compatibility
+    if "listeners__mass__growth" in df.columns and "listeners__fba_results__growth" not in df.columns:
+        df = df.rename({"listeners__mass__growth": "listeners__fba_results__growth"})
+
+    # Create cell cycle variable computer (already validated above)
+    computer = temp_computer
+
+    if verbose:
+        print(f"  Cell cycle variable type: {type(computer).__name__}")
+        print("  Computing cell cycle coordinate...")
+
+    # Compute cell cycle variable
+    cc_var = computer.compute(df)
+
+    if verbose:
+        print(f"  ✓ Cell cycle variable computed for {len(cc_var.values):,} data points")
+        print(f"    - Normalized: {cc_var.normalized}")
+        print(f"    - Value range: [{cc_var.values.min():.4f}, {cc_var.values.max():.4f}]")
+        print(f"    - Mean: {cc_var.values.mean():.4f}, Std: {cc_var.values.std():.4f}")
+        print()
+
+    # Bin into stages
+    stages = cc_var.to_stage_bins(n_bins=n_bins)
+    unique_stages = np.unique(stages)
+    n_stages_with_data = len(unique_stages)
+
+    if verbose:
+        print(f"  ✓ Data binned into {n_stages_with_data}/{n_bins} cell cycle stages")
+        print()
+
+    # Compute per-stage statistics
+    if output_column not in df.columns:
+        # Try to find a similar column
+        candidates = [c for c in df.columns if "dry_mass" in c or "cell_mass" in c]
+        if candidates:
+            output_column = candidates[0]
+            if verbose:
+                print(f"  Note: Using {output_column} for statistics")
+        else:
+            raise ValueError(f"Output column '{output_column}' not found in data")
+
+    output_values = df[output_column].to_numpy()
+
+    stage_stats = []
+    for stage in range(n_bins):
+        mask = stages == stage
+        n_in_stage = int(np.sum(mask))
+        if n_in_stage > 0:
+            stage_mean = float(np.mean(output_values[mask]))
+            stage_std = float(np.std(output_values[mask]))
+            stage_stats.append({
+                "stage": stage,
+                "n": n_in_stage,
+                "mean": stage_mean,
+                "std": stage_std,
+            })
+
+    # Report stage statistics
+    if verbose:
+        print(f"  Cell Cycle Stage Statistics ({output_column}):")
+        print(f"  {'Stage':<8} {'N':<10} {'Mean':<15} {'Std':<15}")
+        print(f"  {'-' * 48}")
+        for s in stage_stats:
+            print(f"  {s['stage']:<8} {s['n']:<10} {s['mean']:<15.4f} {s['std']:<15.4f}")
+        print()
+
+    # Compute phenotypic variation (CV across stages)
+    stage_means = [s["mean"] for s in stage_stats]
+    if len(stage_means) > 1:
+        phenotypic_cv = float(np.std(stage_means) / np.mean(stage_means))
+    else:
+        phenotypic_cv = 0.0
+
+    if verbose:
+        print(f"  Phenotypic variation CV: {phenotypic_cv:.4f}")
+        if phenotypic_cv > 0:
+            print("  ✓ Cell cycle stratification reveals phenotypic variation!")
+        print()
+        print("=" * 70)
+
+    return CellCycleResult(
+        cell_cycle_variable=cc_var,
+        stages=stages,
+        n_bins=n_bins,
+        n_stages_with_data=n_stages_with_data,
+        stage_stats=stage_stats,
+        phenotypic_variation_cv=phenotypic_cv,
+        computer_type=type(computer).__name__,
+        n_data_points=len(df),
+        output_column=output_column,
+    )
