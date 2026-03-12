@@ -321,7 +321,10 @@ class PCESolverConfig(PCEWorkflowConfig):
 
     Attributes:
         basis_type: Polynomial basis type: 'legendre' (uniform inputs) or 'hermite' (Gaussian).
-        method: Fitting method: - 'least_squares': Standard least squares (default) - 'lasso': L1-regularized (sparse) via sklearn - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn
+        method: Fitting method:
+            - 'least_squares': Standard least squares (default)
+            - 'lasso': L1-regularized (sparse) via sklearn
+            - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn
         lasso_alpha: Regularization strength for LASSO (only used if method='lasso').
         omp_n_nonzero: Number of non-zero coefficients for OMP. If None, uses n_terms // 4.
     """
@@ -432,7 +435,10 @@ class PCEConfig(BaseClass):
 
     `solver (PCESolverConfig)`:
         basis_type: Polynomial basis type: 'legendre' (uniform inputs) or 'hermite' (Gaussian).;
-        method: Fitting method: - 'least_squares': Standard least squares (default) - 'lasso': L1-regularized (sparse) via sklearn - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn;
+        method: Fitting method:
+            - 'least_squares': Standard least squares (default)
+            - 'lasso': L1-regularized (sparse) via sklearn
+            - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn;
         lasso_alpha: Regularization strength for LASSO (only used if method='lasso').;
         omp_n_nonzero: Number of non-zero coefficients for OMP. If None, uses n_terms // 4.
 

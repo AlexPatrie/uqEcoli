@@ -121,8 +121,6 @@ from uq.aggregation import (
 from uq.cell_cycle import (
     CellAngleCellCycleVariable,
     CellCycleAggregator,
-    CellCyclePhase,
-    CellCycleVariable,
     CellCycleVariableComputer,
     CompositeCellCycleVariable,
     DNAReplicationCellCycleVariable,
@@ -133,7 +131,6 @@ from uq.cell_cycle import (
 )
 from uq.inputs import (
     InputParameterSpaceVecoli,
-    UQInputParameters,
     get_available_columns,
     load_dataset,
 )
@@ -150,6 +147,9 @@ from uq.koopman import (
     extract_koopman_features,
 )
 
+# Data models
+from uq.models import CellCyclePhase, CellCycleVariable, PCEFitResult, PCESurrogateConfig, UQInputParameters
+
 # Output variable extraction
 from uq.outputs import (
     OutputExtractor,
@@ -159,9 +159,7 @@ from uq.outputs import (
 )
 
 # Pipeline utilities
-from uq.pipeline import (
-    PCEFitResult,
-    PCESurrogateConfig,
+from uq.pce import (
     fit_pce_coefficients,
     generate_multi_indices,
     prescreen_parameters,
