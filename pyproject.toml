@@ -52,6 +52,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "scipy-stubs>=1.17.1.1",
     "tox",
 ]
 docs = [

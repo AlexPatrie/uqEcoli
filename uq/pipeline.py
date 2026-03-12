@@ -1,5 +1,7 @@
 """
-PCE is a method where you strategically sample a tiny fraction of the input space to reconstruct (approximate) the function's behavior across the entire space — exploiting the structure provided by orthogonal polynomial bases in the underlying Hilbert space.
+PCE is a method where you strategically sample a tiny fraction of the input space to reconstruct (approximate)
+    the function's behavior across the entire space — exploiting the
+    structure provided by orthogonal polynomial bases in the underlying Hilbert space.
 
 The Decision Framework
   ┌─────────────────────────────────────────────────┬──────────────────────────────────┐
@@ -104,7 +106,9 @@ class PCESurrogateConfig:
     @property
     def N(self) -> int:
         # alias for n_samples
-        # # Given a parameterized function f(x) = y with n input parameters, the sample size N (number of input configurations evaluated) must satisfy N ≥ 2 × C(n+p, p), where p is the chosen polynomial order.
+        # # Given a parameterized function f(x) = y with n input parameters, the sample
+        # size N (number of input configurations evaluated) must satisfy N ≥ 2 * C(n+p, p),
+        # where p is the chosen polynomial order.
         return self.n_samples
 
     @property
@@ -117,7 +121,8 @@ class PCESurrogateConfig:
             self.polynomial_order = self._calculate_p()
         if not self._validate_sample_size():
             warnings.warn(
-                f"WARNING: Given n_parameters and polynomial order, n_samples is too small with a value of {self.n_samples}"
+                f"WARNING: Given n_parameters and polynomial order, "
+                f"n_samples is too small with a value of {self.n_samples}"
             )
 
     def _calculate_p(self) -> int:
@@ -530,7 +535,10 @@ def process_samples(
     """
     :param X: array of samples (perturbation combos of selected attributes of x) with shape (n_samples, n_params)
     :param f: stochastic timeseries generator (think of this as the simulation func)
-    **kwargs: if using method='adaptive', kwargs are target_cv: float = 0.05, min_reps=3, max_reps=20, if method='simple', kwargs are n_replicates
+    **kwargs: if using method='adaptive', kwargs are:
+        target_cv: float = 0.05,
+        min_reps=3,
+        max_reps=20, if method='simple', kwargs are n_replicates
     """
     processor = (
         process_samples_adaptive if method == "adaptive" else process_samples_simple if method == "simple" else None
@@ -554,6 +562,9 @@ def generate_pce_surrogate(
     Generate a PCE surrogate with synthetic coefficients (for demos/testing).
 
     For real usage, use fit_pce_coefficients() with actual simulation data.
+
+    surrogate = generate_pce_surrogate(...)
+    Y_pred = surrogate.predict(X_new)
     """
     # prescreen to find most relevant params
     selected = prescreen_parameters(full_space=full_space, config=config)
@@ -571,18 +582,8 @@ def generate_pce_surrogate(
     Y = process_samples(X=X, f=f, target_cv=target_cv, min_reps=min_reps, max_reps=max_reps)
 
     # generate pce coeffs from fitting
-    coeffs = fit_pce_coefficients(multi_indices)
-
-    pce = PCESurrogate(
-        coefficients=coeffs,
-        multi_indices=multi_indices,
-        basis_type=basis_type,
-        polynomial_order=pce_config.p,
-        input_dim=pce_config.n,
-        output_dim=1,
-        r_squared=0.95,
-        input_bounds=param_bounds,
-    )
+    fitting = fit_pce_coefficients(multi_indices)
+    pce = fitting.to_surrogate()
     print("PCE Surrogate created from config:")
     print(f"  - Parameters: {full_space.parameter_names}")
     print(f"  - Bounds: {full_space.parameter_bounds}")
