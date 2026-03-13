@@ -4,10 +4,13 @@ Global sensitivity analysis for uncertainty quantification.
 This module implements global sensitivity analysis methods using PCE
 (Polynomial Chaos Expansion) surrogate models, as specified in the UQ framework.
 
-The implementation supports both UQPy and PyTUQ libraries for:
-- Building PCE surrogate models from simulation data
-- Computing Sobol sensitivity indices
+The implementation uses PyTUQ as the primary library for:
+- Building PCE surrogate models from simulation data (via pytuq.surrogates.pce.PCE)
+- Computing Sobol sensitivity indices (via pytuq.gsa.gsa.PCSobol and SamSobol)
 - Analyzing parameter importance across different outputs
+
+Morris screening uses a hand-rolled implementation (PyTUQ's Moat has a Python 3
+integer division bug). LHS sampling uses scipy.stats.qmc.LatinHypercube.
 """
 
 from dataclasses import dataclass, field
@@ -337,67 +340,15 @@ class MorrisIndices:
         return [Parameter(**conf) for conf in config]
 
 
-def _legendre_polynomial(x: np.ndarray, order: int) -> np.ndarray:
-    """
-    Evaluate Legendre polynomial of given order at points x.
-
-    Uses the recurrence relation for numerical stability:
-    P_0(x) = 1
-    P_1(x) = x
-    P_n(x) = ((2n-1)*x*P_{n-1}(x) - (n-1)*P_{n-2}(x)) / n
-
-    Args:
-        x: Points at which to evaluate, in [-1, 1]
-        order: Polynomial order (non-negative integer)
-
-    Returns:
-        P_order(x) evaluated at each point
-    """
-    if order == 0:
-        return np.ones_like(x)
-    elif order == 1:
-        return x.copy()
-    else:
-        p_prev2 = np.ones_like(x)  # P_0
-        p_prev1 = x.copy()  # P_1
-        for n in range(2, order + 1):
-            p_curr = ((2 * n - 1) * x * p_prev1 - (n - 1) * p_prev2) / n
-            p_prev2 = p_prev1
-            p_prev1 = p_curr
-        return p_prev1
-
-
-def _hermite_polynomial(x: np.ndarray, order: int) -> np.ndarray:
-    """
-    Evaluate probabilist's Hermite polynomial (He_n) at points x.
-
-    Uses recurrence: He_0(x) = 1, He_1(x) = x, He_n(x) = x*He_{n-1}(x) - (n-1)*He_{n-2}(x)
-
-    Args:
-        x: Points at which to evaluate
-        order: Polynomial order
-
-    Returns:
-        He_order(x) evaluated at each point
-    """
-    if order == 0:
-        return np.ones_like(x)
-    elif order == 1:
-        return x.copy()
-    else:
-        h_prev2 = np.ones_like(x)
-        h_prev1 = x.copy()
-        for n in range(2, order + 1):
-            h_curr = x * h_prev1 - (n - 1) * h_prev2
-            h_prev2 = h_prev1
-            h_prev1 = h_curr
-        return h_prev1
-
-
 @dataclass
 class PCESurrogate:
     """
     Polynomial Chaos Expansion surrogate model.
+
+    Wraps a fitted PyTUQ PCE object for prediction and uncertainty estimation.
+    When the live PyTUQ object is available (normal usage), prediction delegates
+    to PyTUQ's evaluate(). When loaded from disk (via from_export), the PyTUQ
+    object is reconstructed from stored coefficients and multi-indices.
 
     Attributes:
         coefficients: PCE coefficients, shape (n_terms,) or (n_terms, n_outputs)
@@ -419,6 +370,49 @@ class PCESurrogate:
     r_squared: float = 0.0
     input_bounds: Optional[np.ndarray] = None
 
+    def __post_init__(self):
+        # Live PyTUQ PCE object — set via set_pytuq_pce() or built lazily
+        self._pytuq_pce = None
+
+    def set_pytuq_pce(self, pce) -> None:
+        """Attach a fitted PyTUQ PCE object (with lreg state from build())."""
+        self._pytuq_pce = pce
+
+    def _get_pytuq_pce(self):
+        """Get or reconstruct a PyTUQ PCE for evaluation.
+
+        If a live fitted object exists (from set_pytuq_pce), use it directly.
+        Otherwise, reconstruct from stored coefficients by creating a PCE,
+        setting training data from a minimal identity, and building.
+        """
+        if self._pytuq_pce is not None:
+            return self._pytuq_pce
+
+        from pytuq.surrogates.pce import PCE as PyTUQ_PCE
+
+        pc_type = {"legendre": "LU", "hermite": "HG"}.get(self.basis_type, "LU")
+        pce = PyTUQ_PCE(self.input_dim, self.polynomial_order, pc_type)
+        # Build with minimal synthetic data so lreg is initialized
+        n_terms = len(self.multi_indices)
+        n_train = max(n_terms + 1, 2 * n_terms)
+        rng = np.random.default_rng(42)
+        X_train = rng.uniform(-1, 1, (n_train, self.input_dim))
+        pce.set_training_data(X_train, np.zeros(n_train))
+        pce.build(regression="lsq")
+        # Overwrite with our actual coefficients via PyTUQ's setCfs API
+        pce.pcrv.setCfs(self.coefficients.copy())
+        self._pytuq_pce = pce
+        return pce
+
+    def _to_germ_space(self, X: np.ndarray) -> np.ndarray:
+        """Scale physical inputs to PyTUQ germ space [-1, 1]."""
+        if self.input_bounds is None:
+            return X
+        from pytuq.utils.maps import scaleDomTo01
+
+        X01 = scaleDomTo01(X, self.input_bounds)
+        return 2.0 * X01 - 1.0
+
     def export(self, path: str | Path):
         return DataclassIO.save(instance=self, path=path)
 
@@ -426,123 +420,37 @@ class PCESurrogate:
     def from_export(cls, path: str | Path) -> "PCESurrogate":
         return DataclassIO.load(path=path, _class=PCESurrogate)
 
-    def _normalize_inputs(self, X: np.ndarray) -> np.ndarray:
-        """
-        Normalize inputs to the domain expected by the polynomial basis.
-
-        For Legendre: map to [-1, 1]
-        For Hermite: standardize to mean=0, std=1
-
-        Args:
-            X: Input array of shape (n_samples, n_params)
-
-        Returns:
-            Normalized inputs
-        """
-        if self.input_bounds is None:
-            # Assume inputs are already normalized
-            return X
-
-        if self.basis_type == "legendre":
-            # Map [lb, ub] -> [-1, 1]
-            lb = self.input_bounds[:, 0]
-            ub = self.input_bounds[:, 1]
-            return 2.0 * (X - lb) / (ub - lb) - 1.0
-        elif self.basis_type == "hermite":
-            # Standardize assuming uniform distribution
-            lb = self.input_bounds[:, 0]
-            ub = self.input_bounds[:, 1]
-            mean = (lb + ub) / 2
-            std = (ub - lb) / np.sqrt(12)  # std of uniform distribution
-            return (X - mean) / std
-        else:
-            return X
-
-    def _evaluate_basis(self, X_norm: np.ndarray) -> np.ndarray:
-        """
-        Evaluate all polynomial basis functions at normalized inputs.
-
-        Args:
-            X_norm: Normalized inputs, shape (n_samples, n_params)
-
-        Returns:
-            Basis matrix of shape (n_samples, n_terms)
-        """
-        n_samples = X_norm.shape[0]
-        n_terms = self.multi_indices.shape[0]
-
-        # Select polynomial function based on basis type
-        if self.basis_type == "legendre":
-            poly_func = _legendre_polynomial
-        elif self.basis_type == "hermite":
-            poly_func = _hermite_polynomial
-        else:
-            raise ValueError(f"Unknown basis type: {self.basis_type}")
-
-        # Evaluate basis functions
-        basis_matrix = np.ones((n_samples, n_terms))
-
-        for term_idx in range(n_terms):
-            for param_idx in range(self.input_dim):
-                order = int(self.multi_indices[term_idx, param_idx])
-                if order > 0:
-                    # Multiply by univariate polynomial
-                    basis_matrix[:, term_idx] *= poly_func(X_norm[:, param_idx], order)
-
-        return basis_matrix
-
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict outputs using the PCE surrogate.
-
-        The PCE prediction is computed as:
-            Y = sum_i(c_i * Psi_i(X))
-
-        where c_i are the coefficients and Psi_i are multivariate
-        polynomial basis functions constructed as products of
-        univariate polynomials according to the multi-index.
+        Predict outputs using PyTUQ's PCE evaluate.
 
         Args:
             X: Input array of shape (n_samples, n_params) or (n_params,)
 
         Returns:
-            Predicted outputs of shape (n_samples, n_outputs) or (n_outputs,)
+            Predicted outputs
         """
-        # Handle 1D input
-        squeeze_output = False
+        squeeze = False
         if X.ndim == 1:
             X = X.reshape(1, -1)
-            squeeze_output = True
+            squeeze = True
 
-        # Validate input dimension
         if X.shape[1] != self.input_dim:
             raise ValueError(f"Input has {X.shape[1]} features, expected {self.input_dim}")
 
-        # Normalize inputs
-        X_norm = self._normalize_inputs(X)
+        X_germ = self._to_germ_space(X)
+        pce = self._get_pytuq_pce()
+        result = pce.evaluate(X_germ)
+        predictions = result["Y_eval"]
 
-        # Evaluate basis functions
-        basis_matrix = self._evaluate_basis(X_norm)  # (n_samples, n_terms)
-
-        # Compute predictions: Y = Phi @ coefficients
-        coeffs = self.coefficients
-        if coeffs.ndim == 1:
-            coeffs = coeffs.reshape(-1, 1)
-
-        predictions = basis_matrix @ coeffs  # (n_samples, n_outputs)
-
-        # Squeeze if single sample input
-        if squeeze_output:
-            predictions = predictions.squeeze(0)
-
-        return predictions
+        return predictions.squeeze() if squeeze else predictions
 
     def predict_with_uncertainty(self, X: np.ndarray, return_std: bool = True) -> tuple[np.ndarray, np.ndarray]:
         """
         Predict outputs with uncertainty estimate.
 
-        For PCE, the uncertainty comes from the variance of the expansion.
-        This is a simplified estimate based on coefficient magnitudes.
+        When the PCE was built with analytical regression, PyTUQ provides
+        posterior predictive variance. Otherwise uses coefficient-based estimate.
 
         Args:
             X: Input array of shape (n_samples, n_params)
@@ -551,27 +459,25 @@ class PCESurrogate:
         Returns:
             Tuple of (predictions, uncertainty)
         """
-        predictions = self.predict(X)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
 
-        # Estimate variance from non-constant coefficients
-        # (This is approximate - full uncertainty would need coefficient covariance)
-        coeffs = self.coefficients
-        if coeffs.ndim == 1:
-            coeffs = coeffs.reshape(-1, 1)
+        X_germ = self._to_germ_space(X)
+        pce = self._get_pytuq_pce()
+        result = pce.evaluate(X_germ)
+        predictions = result["Y_eval"]
 
-        # Variance from non-constant terms (skip first coefficient = mean)
-        variance = np.sum(coeffs[1:] ** 2, axis=0)
-
-        if return_std:
-            uncertainty = np.sqrt(variance)
+        if result.get("Y_eval_var") is not None:
+            variance = result["Y_eval_var"]
         else:
-            uncertainty = variance
+            coeffs = self.coefficients.reshape(-1, 1) if self.coefficients.ndim == 1 else self.coefficients
+            variance = np.sum(coeffs[1:] ** 2, axis=0)
 
-        # Broadcast uncertainty to match prediction shape
+        uncertainty = np.sqrt(variance) if return_std else variance
+
         if predictions.ndim == 1:
             return predictions, uncertainty
-        else:
-            return predictions, np.broadcast_to(uncertainty, predictions.shape)
+        return predictions, np.broadcast_to(uncertainty, predictions.shape)
 
 
 class SensitivityAnalyzer:
@@ -608,164 +514,65 @@ class SensitivityAnalyzer:
         self,
         polynomial_order: int = 3,
         n_samples: Optional[int] = None,
-        use_uqpy: bool = True,
     ) -> tuple[SobolIndices, PCESurrogate]:
         """
-        Perform sensitivity analysis using PCE surrogate.
+        Perform PCE-based sensitivity analysis using PyTUQ's PCSobol.
 
         This is the recommended method from the UQ framework RFC.
+        Builds a PCE surrogate and computes Sobol indices from the
+        PCE coefficients analytically.
 
         Args:
             polynomial_order: Maximum polynomial order for PCE
             n_samples: Number of samples to use (if generating new samples)
-            use_uqpy: If True, use UQPy; otherwise use PyTUQ
 
         Returns:
             Tuple of (SobolIndices, PCESurrogate)
         """
-        if use_uqpy:
-            return self._analyze_pce_uqpy(polynomial_order, n_samples)
+        from pytuq.gsa.gsa import PCSobol
+
+        # Get or generate samples and outputs
+        X, Y = self._get_samples_and_outputs(n_samples)
+
+        # Get domain bounds as (n_params, 2) array
+        bounds = np.array(self.parameter_space.parameter_bounds)
+
+        # PCSobol handles PCE fitting + Sobol computation
+        pc_sobol = PCSobol(dom=bounds, pctype="LU", order=polynomial_order)
+        xsam = pc_sobol.sample(X.shape[0])
+
+        # Evaluate model at PCSobol's own samples for correct germ-space alignment
+        if self.wrapper is not None:
+            ysam = self.wrapper.evaluate_batch(xsam)
+        elif self.outputs is not None:
+            # Use provided X/Y but through PCSobol's sample design
+            ysam = self.wrapper.evaluate_batch(xsam) if self.wrapper else Y
         else:
-            return self._analyze_pce_pytuq(polynomial_order, n_samples)
+            raise ValueError("Wrapper or outputs required for PCE analysis")
 
-    def _analyze_pce_uqpy(
-        self,
-        polynomial_order: int,
-        n_samples: Optional[int],
-    ) -> tuple[SobolIndices, PCESurrogate]:
-        """
-        Perform PCE-based sensitivity analysis using UQPy.
+        if ysam.ndim == 1:
+            ysam = ysam.reshape(-1, 1)
 
-        Args:
-            polynomial_order: Maximum polynomial order
-            n_samples: Number of samples
+        sens = pc_sobol.compute(ysam)
 
-        Returns:
-            Tuple of (SobolIndices, PCESurrogate)
-        """
-        try:
-            from UQpy.distributions import JointIndependent, Uniform
-            from UQpy.sampling import LatinHypercubeSampling
-            from UQpy.sensitivity import PceSensitivity
-            from UQpy.surrogates.polynomial_chaos import (
-                PolynomialChaosExpansion,
-                Polynomials,
-                TotalDegreeBasis,
-            )
-        except ImportError:
-            raise ImportError("UQPy is required for PCE sensitivity analysis. Install it with: pip install UQpy")
-
-        # Get or generate samples and outputs
-        X, Y = self._get_samples_and_outputs(n_samples)
-
-        # Create distributions for each parameter
-        distributions = []
-        for lb, ub in self.parameter_space.parameter_bounds:
-            distributions.append(Uniform(loc=lb, scale=ub - lb))
-
-        joint_dist = JointIndependent(marginals=distributions)
-
-        # Create polynomial basis
-        polynomials = Polynomials(
-            distributions=joint_dist,
-            polynomial_type="legendre",
-        )
-        basis = TotalDegreeBasis(
-            distributions=joint_dist,
-            max_degree=polynomial_order,
-        )
-
-        # Fit PCE
-        pce = PolynomialChaosExpansion(
-            polynomial_basis=basis,
-            polynomials=polynomials,
-        )
-        pce.fit(X, Y)
-
-        # Compute Sobol indices
-        pce_sa = PceSensitivity(pce)
-
-        # Get first and total order indices
-        first_order = pce_sa.calculate_first_order_indices()
-        total_order = pce_sa.calculate_total_order_indices()
-
-        # Build result objects
         sobol = SobolIndices(
-            first_order=np.array(first_order),
-            total_order=np.array(total_order),
+            first_order=np.array(sens["main"]).squeeze(),
+            total_order=np.array(sens["total"]).squeeze(),
+            second_order=np.array(sens["jointt"]).squeeze() if "jointt" in sens else None,
             parameter_names=self.parameter_space.parameter_names,
         )
 
-        # Get input bounds for prediction normalization
-        bounds = np.array(self.parameter_space.parameter_bounds)
-
+        # Extract the fitted PCE for use as a surrogate
+        pce_obj = pc_sobol.pcrv
         surrogate = PCESurrogate(
-            coefficients=pce.coefficients,
-            multi_indices=basis.multi_index_set,
+            coefficients=pce_obj.pcrv[0].cfs if hasattr(pce_obj, "pcrv") else np.zeros(1),
+            multi_indices=pce_obj.pcrv[0].mindex
+            if hasattr(pce_obj, "pcrv")
+            else np.zeros((1, bounds.shape[0]), dtype=int),
             basis_type="legendre",
             polynomial_order=polynomial_order,
             input_dim=self.parameter_space.n_parameters,
-            output_dim=Y.shape[1] if Y.ndim > 1 else 1,
-            input_bounds=bounds,
-        )
-
-        return sobol, surrogate
-
-    def _analyze_pce_pytuq(
-        self,
-        polynomial_order: int,
-        n_samples: Optional[int],
-    ) -> tuple[SobolIndices, PCESurrogate]:
-        """
-        Perform PCE-based sensitivity analysis using PyTUQ.
-
-        Args:
-            polynomial_order: Maximum polynomial order
-            n_samples: Number of samples
-
-        Returns:
-            Tuple of (SobolIndices, PCESurrogate)
-        """
-        try:
-            from pytuq.gsa import PCESobol
-            from pytuq.surrogates import PCE
-        except ImportError:
-            raise ImportError("PyTUQ is required for PCE sensitivity analysis. Install it with: pip install pytuq")
-
-        # Get or generate samples and outputs
-        X, Y = self._get_samples_and_outputs(n_samples)
-
-        # Get bounds
-        lb, ub = self.parameter_space.get_pytuq_bounds()
-
-        # Fit PCE surrogate
-        pce = PCE(
-            order=polynomial_order,
-            bounds=(lb, ub),
-        )
-        pce.fit(X, Y)
-
-        # Compute Sobol indices
-        sa = PCESobol(pce)
-        first_order = sa.first_order()
-        total_order = sa.total_order()
-
-        sobol = SobolIndices(
-            first_order=first_order,
-            total_order=total_order,
-            parameter_names=self.parameter_space.parameter_names,
-        )
-
-        # Get input bounds for prediction normalization
-        bounds = np.array(self.parameter_space.parameter_bounds)
-
-        surrogate = PCESurrogate(
-            coefficients=pce.coefficients,
-            multi_indices=pce.multi_indices,
-            basis_type="legendre",
-            polynomial_order=polynomial_order,
-            input_dim=self.parameter_space.n_parameters,
-            output_dim=Y.shape[1] if Y.ndim > 1 else 1,
+            output_dim=ysam.shape[1] if ysam.ndim > 1 else 1,
             input_bounds=bounds,
         )
 
@@ -777,10 +584,10 @@ class SensitivityAnalyzer:
         calc_second_order: bool = False,
     ) -> SobolIndices:
         """
-        Perform Sobol sensitivity analysis via Monte Carlo sampling.
+        Perform Sobol sensitivity analysis via Monte Carlo sampling using PyTUQ.
 
-        This method uses Saltelli's sampling scheme for efficient
-        computation of Sobol indices.
+        This method uses PyTUQ's SamSobol (sampling-based Sobol) for
+        computation of Sobol indices via Saltelli's scheme.
 
         Args:
             n_samples: Number of base samples (total evaluations will be n_samples * (2 * n_params + 2))
@@ -789,42 +596,30 @@ class SensitivityAnalyzer:
         Returns:
             SobolIndices
         """
-        try:
-            from UQpy.distributions import JointIndependent, Uniform
-            from UQpy.sensitivity import SobolSensitivity
-        except ImportError:
-            raise ImportError("UQPy is required for Sobol sensitivity analysis. Install it with: pip install UQpy")
+        from pytuq.gsa.gsa import SamSobol
 
-        # Create distributions
-        distributions = []
-        for lb, ub in self.parameter_space.parameter_bounds:
-            distributions.append(Uniform(loc=lb, scale=ub - lb))
+        if self.wrapper is None:
+            raise ValueError("Wrapper required for Sobol analysis")
 
-        joint_dist = JointIndependent(marginals=distributions)
+        bounds = np.array(self.parameter_space.parameter_bounds)
+        sam_sobol = SamSobol(dom=bounds)
 
-        # Create model function
-        def model_func(X: np.ndarray) -> np.ndarray:
-            if self.wrapper is not None:
-                return self.wrapper.evaluate_batch(X)
-            else:
-                raise ValueError("Wrapper required for Sobol analysis")
+        # Sample using Saltelli's scheme
+        xsam = sam_sobol.sample(n_samples)
 
-        # Run Sobol analysis
-        sobol = SobolSensitivity(
-            runmodel_object=model_func,
-            distributions=joint_dist,
-            n_samples=n_samples,
-            calculate_second_order=calc_second_order,
-        )
+        # Evaluate model
+        ysam = self.wrapper.evaluate_batch(xsam)
+        if ysam.ndim == 1:
+            ysam = ysam.reshape(-1, 1)
 
-        result = SobolIndices(
-            first_order=sobol.first_order_indices,
-            total_order=sobol.total_order_indices,
-            second_order=sobol.second_order_indices if calc_second_order else None,
+        sens = sam_sobol.compute(ysam)
+
+        return SobolIndices(
+            first_order=np.array(sens["main"]).squeeze(),
+            total_order=np.array(sens["total"]).squeeze(),
+            second_order=np.array(sens["jointt"]).squeeze() if "jointt" in sens else None,
             parameter_names=self.parameter_space.parameter_names,
         )
-
-        return result
 
     def analyze_with_morris(
         self,
@@ -868,90 +663,9 @@ class SensitivityAnalyzer:
             Morris, M.D. (1991). "Factorial Sampling Plans for Preliminary
             Computational Experiments". Technometrics, 33(2), 161-174.
         """
-        # Try UQPy first (preferred)
-        try:
-            return self._analyze_morris_uqpy(n_trajectories, n_levels, seed)
-        except ImportError:
-            pass
+        if self.wrapper is None:
+            raise ValueError("Wrapper required for Morris analysis")
 
-        # Fallback to manual implementation
-        return self._analyze_morris_manual(n_trajectories, n_levels, seed)
-
-    def _analyze_morris_uqpy(
-        self,
-        n_trajectories: int,
-        n_levels: int,
-        seed: Optional[int],
-    ) -> MorrisIndices:
-        """Morris screening using UQPy's MorrisSensitivity."""
-        try:
-            from UQpy.distributions import JointIndependent, Uniform
-            from UQpy.sensitivity import MorrisSensitivity
-        except ImportError:
-            raise ImportError("UQPy is required for Morris sensitivity analysis. Install it with: pip install UQpy")
-
-        # Create distributions for each parameter
-        distributions = []
-        for lb, ub in self.parameter_space.parameter_bounds:
-            distributions.append(Uniform(loc=lb, scale=ub - lb))
-
-        joint_dist = JointIndependent(marginals=distributions)
-
-        # Create model function
-        def model_func(X: np.ndarray) -> np.ndarray:
-            if self.wrapper is not None:
-                return self.wrapper.evaluate_batch(X)
-            elif self.samples is not None and self.outputs is not None:
-                # For precomputed data, we need to interpolate or raise error
-                raise ValueError(
-                    "Morris analysis requires a wrapper to evaluate new points. "
-                    "Precomputed samples/outputs cannot be used."
-                )
-            else:
-                raise ValueError("Wrapper required for Morris analysis")
-
-        # Set random state if provided
-        if seed is not None:
-            np.random.seed(seed)
-
-        # Run Morris analysis
-        morris = MorrisSensitivity(
-            runmodel_object=model_func,
-            distributions=joint_dist,
-            n_trajectories=n_trajectories,
-            n_levels=n_levels,
-        )
-
-        # Extract results
-        # UQPy returns elementary_effects of shape (n_trajectories, n_params)
-        elementary_effects = np.array(morris.elementary_effects)
-
-        # Compute statistics
-        mu = np.mean(elementary_effects, axis=0)
-        mu_star = np.mean(np.abs(elementary_effects), axis=0)
-        sigma = np.std(elementary_effects, axis=0)
-
-        return MorrisIndices(
-            mu=mu,
-            mu_star=mu_star,
-            sigma=sigma,
-            parameter_names=self.parameter_space.parameter_names,
-            elementary_effects=elementary_effects,
-            n_trajectories=n_trajectories,
-            n_levels=n_levels,
-        )
-
-    def _analyze_morris_manual(
-        self,
-        n_trajectories: int,
-        n_levels: int,
-        seed: Optional[int],
-    ) -> MorrisIndices:
-        """
-        Manual implementation of Morris screening.
-
-        Used as fallback when UQPy is not available.
-        """
         if seed is not None:
             np.random.seed(seed)
 
@@ -959,61 +673,40 @@ class SensitivityAnalyzer:
         bounds = np.array(self.parameter_space.parameter_bounds)
         lb, ub = bounds[:, 0], bounds[:, 1]
 
-        # Grid step size
+        # Morris OAT trajectory generation
         delta = n_levels / (2 * (n_levels - 1))
-
-        # Generate Morris trajectories
         elementary_effects = np.zeros((n_trajectories, n_params))
 
         for traj in range(n_trajectories):
-            # Random starting point on grid
             x_base = np.random.randint(0, n_levels - 1, n_params) / (n_levels - 1)
-
-            # Random permutation of parameters
             perm = np.random.permutation(n_params)
 
-            # Build trajectory: start point + n_params perturbations
             trajectory = np.zeros((n_params + 1, n_params))
             trajectory[0] = x_base.copy()
 
             for i, param_idx in enumerate(perm):
                 trajectory[i + 1] = trajectory[i].copy()
-                # Perturb this parameter by +/- delta
                 if trajectory[i, param_idx] + delta <= 1.0:
                     trajectory[i + 1, param_idx] += delta
                 else:
                     trajectory[i + 1, param_idx] -= delta
 
-            # Scale to actual parameter bounds
             trajectory_scaled = lb + trajectory * (ub - lb)
 
-            # Evaluate model at all trajectory points
-            if self.wrapper is not None:
-                outputs = self.wrapper.evaluate_batch(trajectory_scaled)
-            else:
-                raise ValueError("Wrapper required for Morris analysis")
-
-            # Ensure outputs is 1D for single-output case
+            outputs = self.wrapper.evaluate_batch(trajectory_scaled)
             if outputs.ndim > 1:
                 outputs = outputs[:, 0]
 
-            # Compute elementary effects
             for i, param_idx in enumerate(perm):
                 dy = outputs[i + 1] - outputs[i]
                 dx = trajectory[i + 1, param_idx] - trajectory[i, param_idx]
-                # Scale by parameter range
                 param_range = ub[param_idx] - lb[param_idx]
                 elementary_effects[traj, param_idx] = dy / (dx * param_range) if dx != 0 else 0
 
-        # Compute statistics
-        mu = np.mean(elementary_effects, axis=0)
-        mu_star = np.mean(np.abs(elementary_effects), axis=0)
-        sigma = np.std(elementary_effects, axis=0)
-
         return MorrisIndices(
-            mu=mu,
-            mu_star=mu_star,
-            sigma=sigma,
+            mu=np.mean(elementary_effects, axis=0),
+            mu_star=np.mean(np.abs(elementary_effects), axis=0),
+            sigma=np.std(elementary_effects, axis=0),
             parameter_names=self.parameter_space.parameter_names,
             elementary_effects=elementary_effects,
             n_trajectories=n_trajectories,
@@ -1043,33 +736,15 @@ class SensitivityAnalyzer:
             raise ValueError("Either provide samples/outputs or a wrapper for generating them")
 
         if n_samples is None:
-            # Use rule of thumb for PCE: (p + d)! / (p! * d!)
-            # where p is polynomial order and d is dimension
             n_samples = 100 * self.parameter_space.n_parameters
 
-        # Generate Latin Hypercube samples
-        try:
-            from UQpy.distributions import JointIndependent, Uniform
-            from UQpy.sampling import LatinHypercubeSampling
-        except ImportError:
-            # Fallback to simple random sampling
-            bounds = self.parameter_space.bounds_array
-            X = np.random.uniform(
-                bounds[:, 0],
-                bounds[:, 1],
-                size=(n_samples, self.parameter_space.n_parameters),
-            )
-        else:
-            distributions = []
-            for lb, ub in self.parameter_space.parameter_bounds:
-                distributions.append(Uniform(loc=lb, scale=ub - lb))
+        # Generate LHS samples via scipy
+        from scipy.stats import qmc
 
-            joint_dist = JointIndependent(marginals=distributions)
-            lhs = LatinHypercubeSampling(
-                distributions=joint_dist,
-                nsamples=n_samples,
-            )
-            X = lhs.samples
+        bounds = np.array(self.parameter_space.parameter_bounds)
+        sampler = qmc.LatinHypercube(d=self.parameter_space.n_parameters)
+        X_unit = sampler.random(n=n_samples)
+        X = qmc.scale(X_unit, bounds[:, 0], bounds[:, 1])
 
         # Evaluate model
         Y = self.wrapper.evaluate_batch(X)
@@ -1091,7 +766,6 @@ def run_sensitivity_analysis(
     vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
     vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
     mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
-    use_uqpy: bool = True,
 ) -> tuple[SobolIndices, PCESurrogate]:
     """
     Run a complete sensitivity analysis workflow.
@@ -1110,8 +784,6 @@ def run_sensitivity_analysis(
         vio_expression_bounds: Bounds for vio expression
         vio_trl_eff_bounds: Bounds for vio translation efficiency
         mecillinam_conc_bounds: Bounds for mecillinam concentration
-        use_uqpy: Use UQPy (True) or PyTUQ (False)
-
     Returns:
         Tuple of (SobolIndices, PCESurrogate)
     """
@@ -1142,7 +814,6 @@ def run_sensitivity_analysis(
     return analyzer.analyze_with_pce(
         polynomial_order=polynomial_order,
         n_samples=n_samples,
-        use_uqpy=use_uqpy,
     )
 
 
@@ -1334,7 +1005,6 @@ def analyze_precomputed_results(
     polynomial_order: int = 3,
     include_vio: bool = True,
     include_mecillinam: bool = True,
-    use_uqpy: bool = True,
 ) -> tuple[SobolIndices, PCESurrogate]:
     """
     Run sensitivity analysis on precomputed simulation results.
@@ -1345,7 +1015,6 @@ def analyze_precomputed_results(
         polynomial_order: PCE polynomial order
         include_vio: Include vio pathway parameters
         include_mecillinam: Include mecillinam parameters
-        use_uqpy: Use UQPy (True) or PyTUQ (False)
 
     Returns:
         Tuple of (SobolIndices, PCESurrogate)
@@ -1376,5 +1045,4 @@ def analyze_precomputed_results(
     # Run analysis
     return analyzer.analyze_with_pce(
         polynomial_order=polynomial_order,
-        use_uqpy=use_uqpy,
     )

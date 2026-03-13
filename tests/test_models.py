@@ -117,27 +117,24 @@ class TestPCESolverConfig:
 
         assert config.basis_type == "legendre"
         assert config.method == "least_squares"
-        assert config.lasso_alpha == 0.01
 
     @pytest.mark.unit
-    def test_lasso_config(self):
-        """Should accept LASSO configuration."""
+    def test_analytical_config(self):
+        """Should accept analytical (full Bayesian) configuration."""
         from uq.models import PCESolverConfig
 
-        config = PCESolverConfig(method="lasso", lasso_alpha=0.05)
+        config = PCESolverConfig(method="analytical")
 
-        assert config.method == "lasso"
-        assert config.lasso_alpha == 0.05
+        assert config.method == "analytical"
 
     @pytest.mark.unit
-    def test_omp_config(self):
-        """Should accept OMP configuration."""
+    def test_variational_config(self):
+        """Should accept variational inference configuration."""
         from uq.models import PCESolverConfig
 
-        config = PCESolverConfig(method="omp", omp_n_nonzero=10)
+        config = PCESolverConfig(method="variational")
 
-        assert config.method == "omp"
-        assert config.omp_n_nonzero == 10
+        assert config.method == "variational"
 
     @pytest.mark.unit
     def test_hermite_basis(self):

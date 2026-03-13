@@ -112,7 +112,7 @@
   │                                                                             │
   │  6c. Fit PCE Coefficients                                                   │
   │      • fit_pce_coefficients(X, Y, polynomial_order, method)                 │
-  │      • Methods: least_squares, lasso, omp                                   │
+  │      • Methods: least_squares, analytical, variational (via PyTUQ)          │
   │      • Output: PCEFitResult with coefficients, R², sparsity                 │
   │                                                                             │
   │  6d. Create Surrogate                                                       │
@@ -296,10 +296,10 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
 - [x] **"Implement input->output wrapper functions that can be called from numerical libraries"** (RFC006 §4, Activity 3)
 
-  Implemented in `uq/wrappers.py`: `SimulationWrapper`, `PrecomputedWrapper`, `create_uqpy_model()`, `create_pytuq_model()`.
+  Implemented in `uq/wrappers.py`: `SimulationWrapper`, `PrecomputedWrapper`.
 
   ```python
-  from uq.wrappers import SimulationWrapper, WrapperConfig, create_uqpy_model, create_pytuq_model
+  from uq.wrappers import SimulationWrapper, WrapperConfig
 
   config = WrapperConfig(
       sim_data_path="/path/to/sim_data.cPickle",
@@ -310,17 +310,11 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
   # Direct wrapper (callable from any numerical library)
   wrapper = SimulationWrapper(config, param_space)
   output = wrapper(np.array([2.5, 1.0, 5.0]))  # numpy in, numpy out
-
-  # UQPy-compatible model
-  uqpy_model = create_uqpy_model(config, param_space)
-
-  # PyTUQ-compatible model
-  pytuq_func = create_pytuq_model(config, param_space)
   ```
 
 - [x] **"Implement well established global sensitivity analysis methods [...] Expected to use PCE surrogate method for the stochastic function `(sim_data -> SIM output)`"** (RFC006 §4, Activity 4)
 
-  Implemented in `uq/sensitivity.py`: `SensitivityAnalyzer.analyze_with_pce()` with both UQPy and PyTUQ backends. PCE fitting in `uq/pce.py`: `fit_pce_coefficients()` with Legendre/Hermite bases and LS/LASSO/OMP solvers.
+  Implemented in `uq/sensitivity.py`: `SensitivityAnalyzer.analyze_with_pce()` using PyTUQ (`PCSobol`). PCE fitting in `uq/pce.py`: `fit_pce_coefficients()` with Legendre/Hermite bases and least_squares/analytical/variational solvers via PyTUQ.
 
   ```python
   from uq import SensitivityAnalyzer, InputParameterSpaceVecoli
@@ -328,11 +322,8 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
   param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
   analyzer = SensitivityAnalyzer(param_space, wrapper=wrapper)
 
-  # PCE-based GSA (using UQPy)
-  sobol, surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100, use_uqpy=True)
-
-  # PCE-based GSA (using PyTUQ)
-  sobol, surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100, use_uqpy=False)
+  # PCE-based GSA (via PyTUQ PCSobol)
+  sobol, surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100)
 
   print(f"First-order Sobol indices: {sobol.first_order}")
   print(f"Total-order Sobol indices: {sobol.total_order}")
@@ -340,19 +331,17 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
 - [x] **"*using UQPy or PyTUQ libraries"** (RFC006 §4, footnote)
 
-  Both libraries are supported. `SensitivityAnalyzer.analyze_with_pce(use_uqpy=True|False)` dispatches to `_analyze_pce_uqpy()` or `_analyze_pce_pytuq()`. Factory functions `create_uqpy_model()` and `create_pytuq_model()` in `uq/wrappers.py`.
+  PyTUQ is the primary library for PCE fitting, Sobol index computation (via `PCSobol` and `SamSobol`), and surrogate evaluation. Morris screening uses a hand-rolled implementation (PyTUQ's `Moat` has a Python 3 integer division bug). scipy's `qmc.LatinHypercube` is used for LHS sampling.
 
   ```python
-  # UQPy path
-  sobol, surrogate = analyzer.analyze_with_pce(use_uqpy=True)
+  # PCE-based Sobol (PyTUQ PCSobol)
+  sobol, surrogate = analyzer.analyze_with_pce(polynomial_order=3)
 
-  # PyTUQ path
-  sobol, surrogate = analyzer.analyze_with_pce(use_uqpy=False)
+  # Sampling-based Sobol (PyTUQ SamSobol)
+  sobol = analyzer.analyze_with_sobol(n_samples=1024)
 
-  # Or create library-specific model objects directly
-  from uq.wrappers import create_uqpy_model, create_pytuq_model
-  uqpy_model = create_uqpy_model(config, param_space)
-  pytuq_func = create_pytuq_model(config, param_space)
+  # Morris screening (hand-rolled, PyTUQ Moat has Python 3 bug)
+  morris = analyzer.analyze_with_morris(n_trajectories=20)
   ```
 
 - [x] **"Explicitly parametrise each of the following steps: A. The selection/extraction of subsampled time points and variables from the emitted simulation trajectories"** (RFC006 §4)
@@ -391,7 +380,7 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
 - [x] **"C. The choice of a numerical sensitivity analysis method that is applied to these aggregated output variables"** (RFC006 §4)
 
-  Parametrized via `SensitivityMethod` enum and `SensitivityAnalyzer` methods: `analyze_with_pce()`, `analyze_with_morris()`. PCE solver choice further parametrized in `PCESolverConfig` (least_squares, lasso, omp) and basis type (legendre, hermite).
+  Parametrized via `SensitivityMethod` enum and `SensitivityAnalyzer` methods: `analyze_with_pce()`, `analyze_with_morris()`, `analyze_with_sobol()`. PCE solver choice further parametrized in `PCESolverConfig` (least_squares, analytical, variational — all via PyTUQ) and basis type (legendre, hermite).
 
   ```python
   from uq.sensitivity import SensitivityAnalyzer, SensitivityMethod
@@ -995,6 +984,39 @@ def run_cell_cycle_sensitivity(
         "per_stage_sobol": per_stage_sobol,
     }
 ```
+
+  1. Missing types in imports/annotations
+  - AggregatedOutput → from uq.aggregation
+  - CellCycleResult → from uq.cell_cycle
+  - MorrisIndices, PCESurrogate → from uq.sensitivity
+  - PCEFitResult → from uq.models
+  - Parameter → from uq.models
+  - Callable → from typing
+
+  2. Step 3 — Aggregation is unfinished (the hardest part)
+  Aggregator needs (conn: DuckDBPyConnection, history_sql, config_sql). You'll need to get a DuckDB connection from the loaded data,
+  build SQL, then call aggregator.aggregate(data, strategy) for each of the 3 strategies. This is the real wiring gap.
+
+  3. Step 5 — prescreen_parameters returns list[Parameter], not MorrisIndices
+  Its signature is (full_space, config, f) -> list[Parameter]. To populate morris_indices in PipelineResult, you'd need to run Morris
+  separately via SensitivityAnalyzer.morris_sensitivity(), or change the return type of prescreen_parameters to also yield the indices.
+
+  4. Step 7 — PCESurrogate has no compute_sobol_indices() method
+  PCESurrogate only has predict(), export(), from_export(). Sobol indices from PCE coefficients need to be computed either:
+  - Via SensitivityAnalyzer.pce_sensitivity(), or
+  - By writing a function that extracts Sobol indices directly from PCEFitResult.coefficients and multi_indices (the standard PCE→Sobol
+   formula: S_i = sum of coefficients where only param i appears / total variance)
+
+  5. PCEFitResult.to_surrogate() — verify it exists
+  The agent found it's "implied" but not confirmed. Check uq/models.py for that method.
+
+  What it would satisfy from PIPELINE.md:
+  The only unchecked requirement this pipeline addresses is #13 — "Apply the sensitivity analysis for aggregation strategies (1-3) for
+  representative simulations" (Activity 5). The other two unchecked items (#16, #17) are about the consensus cell-cycle RFC, which is
+  external.
+
+  Bottom line: The skeleton is right. The three things to fix before it runs are: (a) wire up Aggregator with DuckDB, (b) get
+  MorrisIndices from somewhere, (c) compute Sobol from PCE coefficients correctly
 
 **The concrete gaps that need filling:**
 

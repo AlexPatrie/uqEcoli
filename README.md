@@ -214,6 +214,151 @@ for name, value in sobol_indices.get_most_influential(n=5):
     print(f"  {name}: {value:.4f}")
 ```
 
+### Cell cycle variable
+
+`uq` uses Koopman Spectral Analysis to compute/express cell cycle. `KoopmanCellCycleVariable` (cell_cycle.py:380) fits DMD/EDMD to trajectory data,
+identifies the oscillatory Koopman mode matching
+the expected cell cycle frequency, and extracts the eigenfunction phase as `θ(t) = arg(φ(xₜ)) / 2π ∈ [0, 1]`. It's registered as
+`variable_type="koopman"` in `CellCycleAggregator.VARIABLES` and callable via `calculate_cell_cycle(..., variable_type="koopman")`.
+
+The GSA-informed variant (`GSAInformedCellCycleVariable`, line 888) goes further — it uses variance decomposition residuals to select
+which observables to feed into that same Koopman analysis, closing the feedback loop from Strategies 1-3.
+
+Both are implemented, registered, and testable.
+  │ STEP 6d: ◄── MISSING │   ║
+      ║  │ → SobolIndices       │                    ║  │ Stage4 Wrapper       │   ║
+      ║  └──────────┬───────────┘                    ║  │                      │   ║
+      ║             │                                ║  │ f_stage4(params):    │   ║
+      ║             │                                ║  │   raw = f(params)    │   ║
+      ║             │                                ║  │   θ = koopman(raw)   │   ║
+      ║             │                                ║  │   bin by θ           │   ║
+      ║             │                                ║  │   return stage_means
+#### `uq` uses Koopman spectral analysis — numerically approximated via DMD/EDMD — to compute the cell cycle variable θ.
+
+The theoretical
+foundation is that the Koopman operator linearizes nonlinear dynamics in observable space: even though vEcoli is a stochastic,
+nonlinear, multi-scale system, there exists a linear operator governing how functions of the system state evolve in time. DMD
+approximates this operator from snapshot data, yielding eigenvalues (frequencies/growth rates) and modes (spatial patterns of
+co-variation among observables).
+
+The cell cycle variable θ is extracted by identifying the Koopman eigenfunction whose frequency matches the expected cell division
+frequency. The phase of this eigenfunction — arg(φ_cc)/2π — gives a data-driven, scalar coordinate θ ∈ [0, 1] that tracks cell cycle
+progression without mechanistic assumptions.
+
+Crucially, which observables are fed to DMD is informed by Phase 1's GSA: variance decomposition across strategies 1-3 identifies
+observables with high residual variance (not explained by generation convergence or lineage stochasticity), indicating
+cell-cycle-related dynamics. These GSA-selected observables become the columns of the snapshot matrix that DMD decomposes.
+The DMD approximation is lossy and rank-truncated — not lossless. Its quality is measured by reconstruction error. EDMD enriches the
+observable space via dictionary functions (polynomial, Fourier, RBF) to better capture nonlinear Koopman eigenfunctions in a finite
+basis.
+
+DMD alone on raw nonlinear data would be questionable. Koopman theory is what makes DMD legitimate for nonlinear systems — it
+provides the mathematical guarantee that a linear operator exists in observable space. EDMD's dictionary lifting improves the
+finite-dimensional approximation of that infinite-dimensional operator. And the GSA feedback loop ensures the observables fed to this
+machinery are the right ones — those carrying cell-cycle signal rather than noise from other variance sources.
+
+phase 2 in the ./uq (rfc) (full workflow) metaphorically converts the
+raw dataset/WCM function/system into a temporal signal, like audio
+
+#### Why Koopman is the right choice for the cell cycle variable
+
+  RFC006 §3 states:
+
+  "the definition of a low-dimensional (possibly scalar) 'cell cycle variable' computed from omics variables [...] any deterministic
+  function of relevant process variables inside vEcoli may be considered if it has approximately cyclic behaviour"
+
+  There are three constraints embedded in that sentence:
+  1. It must be scalar (or low-dimensional)
+  2. It must be a deterministic function of state (not time itself)
+  3. It must have approximately cyclic behaviour
+
+  The question is: how do you find such a function from high-dimensional omics data without hand-picking it?
+
+  The problem with heuristic approaches
+
+  The other implemented cell cycle variables are heuristics:
+  - Mass-based: θ = (mass - mass_birth) / (mass_division - mass_birth). Assumes the cycle is linearly parameterized by mass. Breaks if
+  mass growth is nonlinear or if mass isn't the dominant periodic signal.
+  - DNA replication: θ derived from replication fork progress. Only defined during active replication — undefined during the B and D
+  periods.
+  - Cell angle: An established scalar with cyclic behavior, but it's one specific observable chosen a priori — it may not be the most
+  informative coordinate for every output variable of interest.
+
+  All three require you to already know which observable tracks the cycle. That's a circular problem when the RFC says the choice
+  should be "informed by the sensitivity analyses (1-3)".
+
+  What Koopman gives you
+
+  The Koopman operator K acts on observables g(x) of the dynamical system dx/dt = F(x):
+
+  Kg(x) = g(F(x))
+
+  It's infinite-dimensional but linear, even when F is nonlinear. This means spectral decomposition works: you can find eigenvalues λ_k
+   and eigenfunctions φ_k(x) such that:
+
+  Kφ_k(x) = λ_k · φ_k(x)
+
+  For a system with periodic dynamics (like the cell cycle), there exists an eigenvalue λ_cc = |λ|e^(iω_cc) where ω_cc = 2π/T_cc is the
+   cell cycle frequency. The corresponding eigenfunction φ_cc(x) has a crucial property:
+
+  θ(x) = arg(φ_cc(x)) / 2π ∈ [0, 1]
+
+  This phase angle θ is exactly the cell cycle variable the RFC asks for. Here's why it satisfies every constraint:
+
+  1. Scalar: θ is a single number in [0, 1] — one phase angle.
+  2. Deterministic function of state: θ = θ(x) maps the full state vector to a phase. It doesn't depend on time directly — it depends
+  on where the cell is in state space. Two cells at the same omics state get the same θ, regardless of when they arrived there.
+  3. Approximately cyclic: By construction, θ advances monotonically through [0, 1] once per period and wraps. It's not approximately
+  cyclic — it's exactly cyclic, because it's extracted from the spectral mode at the cycle frequency.
+  4. Data-driven: DMD/EDMD identifies the cell cycle mode from data. You don't choose which observable to watch — the algorithm finds
+  the oscillatory structure at the expected frequency across all observables simultaneously.
+  5. Informed by GSA (1-3): This is the key connection. Variance decomposition from Strategies 1-3 produces a residual fraction per
+  observable. Observables with high residual variance are the ones whose variation is not explained by generation or seed — meaning
+  it's cell-cycle-linked. GSAInformedCellCycleVariable feeds exactly those observables into the Koopman DMD as observable_columns. So
+  the sensitivity analysis literally selects which signals the Koopman decomposition operates on.
+
+  Why it's better than the alternatives, mathematically
+
+  The cell angle or mass-based approaches project the full state onto a single pre-chosen coordinate. This is a rank-1 projection — it
+  discards all other information. If the cell cycle modulates 500 genes simultaneously, using dry mass alone captures only the
+  mass-correlated component of that variation.
+
+  Koopman eigenfunction extraction is doing something fundamentally different: it finds the linear combination of all observables that
+  evolves most coherently at the cycle frequency. The DMD mode vector tells you how each observable participates in the cyclic
+  dynamics. The phase θ is extracted from this full-rank decomposition — it uses all the information, weighted by relevance to the
+  periodic structure.
+
+  In operator-theoretic terms: mass-based θ is choosing a specific g(x) and hoping it's close to φ_cc. Koopman DMD is computing φ_cc
+  directly.
+
+  The GSA feedback loop makes it principled, not ad hoc
+
+  Without GSA: you'd run Koopman on all observables, which could be thousands of columns. The DMD would work but might pick up spurious
+   periodicity in noisy low-signal channels.
+
+  With GSA: variance decomposition identifies which observables carry genuine cell-cycle-linked variance (high residual fraction). Only
+   those get fed to DMD. This is a statistically grounded dimensionality reduction that makes the Koopman mode identification more
+  robust and interpretable.
+
+  The flow is:
+
+  Strategies 1-3 → variance decomp → residual_fraction per observable
+                                            │
+                      high residual = cell-cycle-linked
+                                            │
+                                            ▼
+                      GSAInformedCellCycleVariable
+                      selects these observables → Koopman DMD
+                                            │
+                      finds eigenvalue at ω_cc → extracts φ_cc → θ(x)
+                                            │
+                                            ▼
+                      Strategy 4: bin by θ → per-stage statistics
+
+  This is what RFC006 §3 describes. Koopman isn't just a choice — it's the mathematically natural answer to "find a scalar,
+  deterministic, cyclic function of omics state, informed by GSA."
+
+
 ### Using Precomputed Results
 
 If you have already run simulations, you can analyze them directly:

@@ -680,18 +680,17 @@ class TestRequirement9_LibrarySupport:
         )
 
     @pytest.mark.milestone
-    def test_analyze_with_pce_has_use_uqpy_parameter(self):
+    def test_analyze_with_pce_uses_pytuq(self):
         """
-        REQUIREMENT 9.5: analyze_with_pce must support both libraries via use_uqpy flag.
+        REQUIREMENT 9.5: analyze_with_pce must use PyTUQ for PCE-based Sobol analysis.
         """
         import inspect
 
         from uq import SensitivityAnalyzer
 
         sig = inspect.signature(SensitivityAnalyzer.analyze_with_pce)
-        assert "use_uqpy" in sig.parameters, (
-            "MILESTONE 08.4.2 FAILED: analyze_with_pce must have use_uqpy parameter "
-            "to select between UQPy and PyTUQ libraries"
+        assert "polynomial_order" in sig.parameters, (
+            "MILESTONE 08.4.2 FAILED: analyze_with_pce must accept polynomial_order parameter"
         )
 
 

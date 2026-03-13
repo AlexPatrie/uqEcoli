@@ -182,6 +182,8 @@ class TestInputParameterSpace:
             vio_expression_bounds=(1.0, 3.0),
             vio_trl_eff_bounds=(0.5, 1.5),
             mecillinam_conc_bounds=(0.0, 5.0),
+            include_vio=True,
+            include_mecillinam=True,
         )
 
         bounds = space.parameter_bounds

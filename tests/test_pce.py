@@ -3,7 +3,7 @@ Unit tests for the PCE (Polynomial Chaos Expansion) module.
 
 Tests cover the complete PCE workflow including:
 - Multi-index generation
-- Coefficient fitting (least squares, LASSO, OMP)
+- Coefficient fitting (least squares, analytical, variational via PyTUQ)
 - Sample generation (LHS)
 - Sample processing for stochastic functions
 - End-to-end surrogate generation
@@ -454,35 +454,12 @@ class TestGenerateSurrogate:
             pytest.skip("PCESurrogate.predict not implemented")
 
 
-class TestSparseMethods:
-    """Tests for sparse fitting methods (LASSO, OMP)."""
+class TestRegressionMethods:
+    """Tests for PyTUQ regression methods (analytical, variational)."""
 
     @pytest.mark.unit
-    def test_lasso_produces_sparse_coefficients(self, rng):
-        """LASSO should produce sparse coefficient vector."""
-        pytest.importorskip("sklearn")
-        from uq.pce import fit_pce_coefficients
-
-        # Simple function that only depends on x1
-        X = rng.uniform(-1, 1, (100, 3))
-        Y = X[:, 0]  # Only depends on first parameter
-
-        result = fit_pce_coefficients(
-            X,
-            Y,
-            polynomial_order=2,
-            method="lasso",
-            lasso_alpha=0.1,
-        )
-
-        # Most coefficients should be near zero
-        n_nonzero = np.sum(np.abs(result.coefficients) > 0.01)
-        assert n_nonzero < len(result.coefficients) / 2
-
-    @pytest.mark.unit
-    def test_omp_produces_sparse_coefficients(self, rng):
-        """OMP should produce exactly k non-zero coefficients."""
-        pytest.importorskip("sklearn")
+    def test_analytical_fits_linear(self, rng):
+        """Analytical (full Bayesian) regression should fit a linear function."""
         from uq.pce import fit_pce_coefficients
 
         X = rng.uniform(-1, 1, (100, 3))
@@ -492,12 +469,29 @@ class TestSparseMethods:
             X,
             Y,
             polynomial_order=2,
-            method="omp",
-            omp_n_nonzero=3,
+            method="analytical",
         )
 
-        n_nonzero = np.sum(np.abs(result.coefficients) > 1e-10)
-        assert n_nonzero <= 3
+        assert result.method == "analytical"
+        assert result.r_squared > 0.9
+
+    @pytest.mark.unit
+    def test_variational_fits_quadratic(self, rng):
+        """Variational inference regression should fit a quadratic function."""
+        from uq.pce import fit_pce_coefficients
+
+        X = rng.uniform(-1, 1, (100, 3))
+        Y = 1.0 + X[:, 0] ** 2 + 0.5 * X[:, 1]
+
+        result = fit_pce_coefficients(
+            X,
+            Y,
+            polynomial_order=2,
+            method="variational",
+        )
+
+        assert result.method == "variational"
+        assert result.r_squared > 0.9
 
     @pytest.mark.unit
     def test_invalid_method_raises(self, rng):

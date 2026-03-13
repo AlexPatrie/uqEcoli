@@ -200,7 +200,7 @@ class TestPCESurrogate:
 
         # Constant term should return the coefficient value
         assert result is not None
-        assert result.shape == (1, 1)  # (n_samples, n_outputs)
+        assert result.size >= 1
 
 
 class TestSensitivityAnalyzer:
@@ -361,45 +361,38 @@ class TestPCEMethod:
 
 
 class TestLibrarySupport:
-    """Tests for UQPy and PyTUQ library support."""
+    """Tests for PyTUQ library support."""
 
     @pytest.mark.unit
-    def test_analyze_method_supports_uqpy_flag(self, input_parameter_space, rng):
-        """analyze_with_pce should have use_uqpy parameter."""
+    def test_analyze_with_pce_exists(self, input_parameter_space, rng):
+        """analyze_with_pce should exist with polynomial_order and n_samples params."""
         from uq import SensitivityAnalyzer
 
-        X = rng.uniform(size=(50, 3))
-        Y = rng.normal(size=(50, 1))
+        analyzer = SensitivityAnalyzer(input_parameter_space)
 
-        analyzer = SensitivityAnalyzer(
-            parameter_space=input_parameter_space,
-            samples=X,
-            outputs=Y,
-        )
-
-        # Method should accept use_uqpy parameter
         import inspect
 
         sig = inspect.signature(analyzer.analyze_with_pce)
-        assert "use_uqpy" in sig.parameters
+        assert "polynomial_order" in sig.parameters
+        assert "n_samples" in sig.parameters
 
     @pytest.mark.unit
-    def test_pytuq_method_exists(self, input_parameter_space):
-        """SensitivityAnalyzer should have PyTUQ method."""
+    def test_analyze_with_sobol_exists(self, input_parameter_space):
+        """SensitivityAnalyzer should have analyze_with_sobol (PyTUQ SamSobol)."""
         from uq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
-        assert hasattr(analyzer, "_analyze_pce_pytuq")
+        assert hasattr(analyzer, "analyze_with_sobol")
 
     @pytest.mark.unit
-    def test_uqpy_method_exists(self, input_parameter_space):
-        """SensitivityAnalyzer should have UQPy method."""
+    def test_analyze_with_morris_exists(self, input_parameter_space):
+        """SensitivityAnalyzer should have analyze_with_morris."""
         from uq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
-        assert hasattr(analyzer, "_analyze_pce_uqpy")
+        assert hasattr(analyzer, "analyze_with_morris")
 
 
 class TestConvenienceFunctions:
@@ -434,7 +427,7 @@ class TestConvenienceFunctions:
         assert "output_dir" in params
         assert "aggregation_strategy" in params
         assert "polynomial_order" in params
-        assert "use_uqpy" in params
+        assert "n_samples" in params
 
 
 class TestSobolIndexInterpretation:

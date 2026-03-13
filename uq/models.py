@@ -315,30 +315,24 @@ class PCEPreprocessingConfig(PCEWorkflowConfig):
 @dataclass
 class PCESolverConfig(PCEWorkflowConfig):
     """
-    Used to configure the fitting process.
+    Used to configure the fitting process via PyTUQ.
 
     Attributes:
         basis_type: Polynomial basis type: 'legendre' (uniform inputs) or 'hermite' (Gaussian).
-        method: Fitting method:
-            - 'least_squares': Standard least squares (default)
-            - 'lasso': L1-regularized (sparse) via sklearn
-            - 'omp': Orthogonal Matching Pursuit (sparse) via sklearn
-        lasso_alpha: Regularization strength for LASSO (only used if method='lasso').
-        omp_n_nonzero: Number of non-zero coefficients for OMP. If None, uses n_terms // 4.
+        method: Fitting method (PyTUQ regression):
+            - 'least_squares': Standard least squares (default, PyTUQ 'lsq')
+            - 'analytical': Full analytical solution (PyTUQ 'anl' with method='full')
+            - 'variational': Variational inference (PyTUQ 'anl' with method='vi')
     """
 
     basis_type: Literal["legendre", "hermite"] | None = None
-    method: Literal["least_squares", "lasso", "omp"] | None = None
-    lasso_alpha: float | None = None
-    omp_n_nonzero: int | None = None
+    method: Literal["least_squares", "analytical", "variational"] | None = None
 
     def init_defaults(self) -> None:
         if self.basis_type is None:
             self.basis_type = "legendre"
         if self.method is None:
             self.method = "least_squares"
-        if self.lasso_alpha is None:
-            self.lasso_alpha = 0.01
 
 
 @dataclass
@@ -459,7 +453,11 @@ class PCEConfig(BaseClass):
 
 @dataclass
 class PCEFitResult(BaseClass):
-    """Result of fitting PCE coefficients from data."""
+    """Result of fitting PCE coefficients from data.
+
+    Carries both the serializable numpy arrays (for export) and
+    an optional live PyTUQ PCE object (for efficient prediction).
+    """
 
     coefficients: np.ndarray
     multi_indices: np.ndarray
@@ -475,12 +473,18 @@ class PCEFitResult(BaseClass):
     def __post_init__(self):
         n_nonzero = np.sum(np.abs(self.coefficients) > 1e-10)
         self.sparsity = 1.0 - (n_nonzero / len(self.coefficients))
+        # Live PyTUQ PCE object — not serialized, set via set_pytuq_pce()
+        self._pytuq_pce = None
+
+    def set_pytuq_pce(self, pce) -> None:
+        """Attach the fitted PyTUQ PCE object for use in to_surrogate()."""
+        self._pytuq_pce = pce
 
     def to_surrogate(self) -> "PCESurrogate":
         """Convert fit result to a PCESurrogate for prediction."""
         from uq.sensitivity import PCESurrogate
 
-        return PCESurrogate(
+        surrogate = PCESurrogate(
             coefficients=self.coefficients,
             multi_indices=self.multi_indices,
             basis_type=self.basis_type,
@@ -490,3 +494,6 @@ class PCEFitResult(BaseClass):
             r_squared=self.r_squared,
             input_bounds=self.input_bounds,
         )
+        if self._pytuq_pce is not None:
+            surrogate.set_pytuq_pce(self._pytuq_pce)
+        return surrogate

@@ -10,7 +10,6 @@ dependencies = [
     "plotly",
     "polars",
     "pydmd",
-    "pytuq",
     "ray[data,train,tune]",
     "salib",
     "scipy-stubs~=1.17.1",
@@ -20,6 +19,7 @@ dependencies = [
     "uqpy",
     "vecoli",
     "vl-convert-python",
+    "pytuq[all]>=1.0.0",
 ]
 
 [project.scripts]
