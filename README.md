@@ -173,7 +173,7 @@ This installs [UQPy](https://uqpyproject.readthedocs.io/), the primary library u
 
 ```python
 from uq import (
-    InputParameterSpaceVecoli,
+    XSpaceVecoli,
     WrapperConfig,
     SimulationWrapper,
     SensitivityAnalyzer,
@@ -181,7 +181,7 @@ from uq import (
 )
 
 # 1. Define the input parameter space
-param_space = InputParameterSpaceVecoli(
+param_space = XSpaceVecoli(
     include_vio=True,  # Include violacein pathway parameters
     include_mecillinam=True,  # Include mecillinam antibiotic parameters
     vio_expression_bounds=(0.0, 5.0),  # Expression factor range
@@ -1150,7 +1150,7 @@ lb, ub = param_space.get_pytuq_bounds()
 
 ```python
 from uq import (
-    InputParameterSpaceVecoli,
+    XSpaceVecoli,
     WrapperConfig,
     SimulationWrapper,
     SensitivityAnalyzer,
@@ -1159,7 +1159,7 @@ from uq import (
 )
 
 # Configure
-param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
+param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True)
 config = WrapperConfig(
     sim_data_path="./sim_data.cPickle",
     output_dir="./uq_analysis",

@@ -177,12 +177,12 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
   ```python
   from uq import (
-      InputParameterSpaceVecoli,
+      XSpaceVecoli,
       SensitivityAnalyzer,
       AggregationStrategy,
   )
 
-  param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
+  param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True)
   analyzer = SensitivityAnalyzer(param_space, wrapper=simulation_wrapper)
   sobol_indices, pce_surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100)
 
@@ -272,11 +272,11 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
   ```python
   from uq.models import VioPathwayParams, MecillinamParams, GeneKnockoutParams
-  from uq.inputs import InputParameterSpaceVecoli
+  from uq.inputs import XSpaceVecoli
   from uq.outputs import OutputExtractor, OutputType
 
   # Inputs
-  param_space = InputParameterSpaceVecoli(
+  param_space = XSpaceVecoli(
       include_vio=True,          # vio pathway presence
       include_mecillinam=True,   # mecillinam condition
       knockout_genes=["geneA"],  # gene knockouts
@@ -317,9 +317,9 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
   Implemented in `uq/sensitivity.py`: `SensitivityAnalyzer.analyze_with_pce()` using PyTUQ (`PCSobol`). PCE fitting in `uq/pce.py`: `fit_pce_coefficients()` with Legendre/Hermite bases and least_squares/analytical/variational solvers via PyTUQ.
 
   ```python
-  from uq import SensitivityAnalyzer, InputParameterSpaceVecoli
+  from uq import SensitivityAnalyzer, XSpaceVecoli
 
-  param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
+  param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True)
   analyzer = SensitivityAnalyzer(param_space, wrapper=wrapper)
 
   # PCE-based GSA (via PyTUQ PCSobol)
@@ -612,7 +612,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
 
-from uq.inputs import InputParameterSpaceVecoli, load_dataset
+from uq.inputs import XSpaceVecoli, load_dataset
 from uq.aggregation import Aggregator, AggregationStrategy, compute_variance_decomposition
 from uq.cell_cycle import calculate_cell_cycle
 from uq.pce.surrogate import prescreen_parameters, create_samples, process_samples, fit_pce_coefficients
@@ -648,7 +648,7 @@ def run_full_pipeline(
         experiment_id: str,
         outdir_root: str,
         f: Callable,  # the simulation function or precomputed wrapper
-        param_space: InputParameterSpaceVecoli | None = None,
+        param_space: XSpaceVecoli | None = None,
         n_morris_trajectories: int = 20,
         n_top_params: int = 5,
         n_pce_samples: int = 100,
@@ -664,7 +664,7 @@ def run_full_pipeline(
     """
     # Step 1: Parameter space
     if param_space is None:
-        param_space = InputParameterSpaceVecoli(
+        param_space = XSpaceVecoli(
             include_vio=True, include_mecillinam=True
         )
 

@@ -45,7 +45,7 @@ from uq.koopman import (
     ExtendedDMD,
     KoopmanMode,
 )
-from uq.models import CellCyclePhase, CellCycleVariable
+from uq.pipeline.models import CellCyclePhase, CellCycleVariable
 
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import SimulationDataEcoli

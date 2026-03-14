@@ -383,11 +383,11 @@ class TestRealDataSensitivity:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import InputParameterSpaceVecoli
+        from uq import XSpaceVecoli
 
         log_header("PARAMETER SPACE VALIDATION - REAL DATA")
 
-        space = InputParameterSpaceVecoli(
+        space = XSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
         )
@@ -449,7 +449,7 @@ class TestRealDataE2E:
             pytest.skip("Real simulation data not available")
 
         from uq import (
-            InputParameterSpaceVecoli,
+            XSpaceVecoli,
             compute_variance_decomposition,
         )
 
@@ -463,7 +463,7 @@ class TestRealDataE2E:
 
         # 1. Define parameter space
         log_section("Step 1: Define Parameter Space")
-        param_space = InputParameterSpaceVecoli(
+        param_space = XSpaceVecoli(
             include_vio=True,
             include_mecillinam=True,
         )
@@ -656,14 +656,14 @@ class TestRFC006FullWorkflow:
 
         from uq import (
             GeneKnockoutParams,
-            InputParameterSpaceVecoli,
             MecillinamParams,
             UQInputParametersVecoli,
             VioPathwayParams,
+            XSpaceVecoli,
         )
 
         # Create the full parameter space as specified in RFC006
-        param_space = InputParameterSpaceVecoli(
+        param_space = XSpaceVecoli(
             vio_expression_bounds=(0.0, 5.0),
             vio_trl_eff_bounds=(0.0, 2.0),
             mecillinam_conc_bounds=(0.0, 10.0),

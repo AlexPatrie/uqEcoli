@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 console = Console()
 
 
-class InputParameterSpace(abc.ABC):
+class XSpace(abc.ABC):
     parameter_names: list[str]
     parameter_bounds: list[tuple[float, float]]
     parameter_types: list[Literal["continuous", "discrete", "categorical"]]
@@ -199,7 +199,7 @@ class InputParameterSpace(abc.ABC):
         console.print(panel)
 
 
-class InputParameterSpaceVecoli(InputParameterSpace):
+class XSpaceVecoli(XSpace):
     """
     Defines the parameter space for UQ sensitivity analysis pipeline
     on vEcoli datasets.

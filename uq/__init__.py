@@ -132,7 +132,7 @@ from uq.cell_cycle import (
     register_cell_cycle_variable,
 )
 from uq.inputs import (
-    InputParameterSpaceVecoli,
+    XSpaceVecoli,
     get_available_columns,
     load_dataset,
 )
@@ -149,18 +149,6 @@ from uq.koopman import (
     extract_koopman_features,
 )
 
-# Data models
-from uq.models import (
-    CellCyclePhase,
-    CellCycleVariable,
-    GeneKnockoutParams,
-    MecillinamParams,
-    PCEFitResult,
-    PCESurrogateConfig,
-    UQInputParametersVecoli,
-    VioPathwayParams,
-)
-
 # Output variable extraction
 from uq.outputs import (
     OutputExtractor,
@@ -168,12 +156,21 @@ from uq.outputs import (
     OutputVariables,
     get_output_variable_info,
 )
+from uq.pce.models import PCEFitResult, PCESurrogateConfig
 
 # Pipeline utilities
 from uq.pce.surrogate import (
     fit_pce_coefficients,
     generate_multi_indices,
     prescreen_parameters,
+)
+from uq.pipeline.models import (
+    CellCyclePhase,
+    CellCycleVariable,
+    GeneKnockoutParams,
+    MecillinamParams,
+    UQInputParametersVecoli,
+    VioPathwayParams,
 )
 
 # Sensitivity analysis
@@ -205,7 +202,7 @@ from uq.wrappers import (
 __all__ = [
     # Input parameters
     "GeneKnockoutParams",
-    "InputParameterSpaceVecoli",
+    "XSpaceVecoli",
     "MecillinamParams",
     "UQInputParametersVecoli",
     "VioPathwayParams",

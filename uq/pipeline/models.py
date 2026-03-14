@@ -1,26 +1,31 @@
 import abc
+import json
 import math
+import random
 import subprocess
 import warnings
 from dataclasses import asdict, dataclass, field
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional
 
 import numpy as np
 import polars
+import pytest
 from ecoli.library.sim_data import LoadSimData
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
-from uq import load_dataset
 from uq.common.models import BaseClass
 from uq.io import get_bucket
+from uq.pce.models import Parameter
+from uq.synthetic import generate_synthetic_simulation_data
 
 if TYPE_CHECKING:
     from uq.sensitivity import PCESurrogate, SobolIndices
 
 
 # === Simulator: where and how to obtain the function that will be fit by UQ === #
+
 
 @dataclass
 class SimulatorSource(BaseClass):
@@ -41,9 +46,7 @@ class SimulatorConfig:
 
     def install(self) -> subprocess.CompletedProcess[str]:
         cmd = f"{self.installation.command} {self.installation.source.value}"
-        return subprocess.run(
-            cmd.split(" "), check=True
-        )
+        return subprocess.run(cmd.split(" "), check=True)
 
 
 # === Simulations: simulation config, metadata, computes, API requests, etc ===
@@ -51,6 +54,7 @@ class SimulatorConfig:
 # These classes should parameterize the stochastic timeseries generator (f(x) -> y), where
 #     SimulationConfig is an attribute of x. x should consist of both simulation, and model-specific params
 # Vecoli-specific Simulator param classes
+
 
 class MediaCondition(str, Enum):
     """Available media conditions for simulations."""
@@ -62,8 +66,105 @@ class MediaCondition(str, Enum):
     NO_OXYGEN = "no_oxygen"
 
 
+class InvalidParamDefinition(Exception):
+    pass
+
+
 @dataclass
-class VioPathwayParams(BaseClass):
+class Param(BaseClass):
+    """
+    Input parameter for UQ pipeline extracted from sim_data.
+
+    Attributes:
+        name: str
+        bounds: tuple[float, float] (low, high)
+        granularity_step: float - granularity of control allowed for ui element
+            range control (knob, slider, etc). TODO: move this.
+        description: str
+    """
+
+    name: str
+    bounds: tuple[float, float] | tuple[complex, complex]
+    default: float | int | complex | None = None
+    value: float | int | complex | None = None
+    granularity_step: float = 0.25
+    description: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.value is None:
+            if self.default is None:
+                self.default = self.bounds[1] - self.bounds[0]
+            self.set(self.default)
+
+    @property
+    def dtype(self):
+        return type(self.value)
+
+    def set(self, value: float | int | complex):
+        self.value = value
+
+    def model_dump(self):
+        d = asdict(self)
+        bounds = tuple(self.bounds)
+        d["bounds"] = bounds
+        d["dtype"] = self.dtype.name
+        return d
+
+
+@dataclass
+class BaseClass:
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def export(self, f: Path) -> None:
+        with open(f.__str__(), "w") as fp:
+            json.dump(self.model_dump(), fp, indent=3)
+
+
+@dataclass
+class VariantConfig(BaseClass):
+    attribute_id: str  # if SimData were a dataframe, this is one of the cols
+    value: float | int | complex = None  # not implicitly delta, rather manually set val
+    delta: float | int | complex | None = None
+
+    @classmethod
+    def from_delta(cls, param: Param, delta: float | int | complex) -> "VariantConfig":
+        variant = VariantConfig(attribute_id=param.name, value=param.value - delta)
+        variant.delta = delta
+        return variant
+
+
+@dataclass
+class VecoliParams(BaseClass, abc.ABC):
+    variants: list[VariantConfig] = field(default_factory=list)
+
+    def apply_perturbations(
+        self, selected: dict[str, float | int | complex], factor: float
+    ) -> dict[str, float | complex | int]:
+        return {key: val * type(factor) for key, val in selected.items()}
+
+    @abc.abstractmethod
+    def get_default_perturbations(self):
+        pass
+
+    @property
+    def default_perturbations(self):
+        dp = self.get_default_perturbations()
+        dp.update({variant.attribute_id: variant.value for variant in self.variants})
+        return dp
+
+    def to_variant_params(self) -> dict[str, Any]:
+        """
+        Convert to variant parameter dictionary for mecillinam_timeline.
+
+        Returns:
+            Dictionary compatible with apply_variant function
+        """
+        return self.default_perturbations
+
+
+@dataclass
+class VioPathwayParams(VecoliParams):
     """
     Parameters for violacein (vio) pathway presence.
 
@@ -79,6 +180,7 @@ class VioPathwayParams(BaseClass):
         rel_exp_adj_list: List of relative expression adjustments per gene
         rel_trl_eff_adj_list: List of relative translation efficiency adjustments
         condition: Environmental condition (basal, with_aa, etc.)
+        variants: list[VariantConfig]
     """
 
     enabled: bool = True
@@ -90,14 +192,11 @@ class VioPathwayParams(BaseClass):
     rel_trl_eff_adj_list: list[float] = field(default_factory=lambda: [1.0])
     condition: MediaCondition = MediaCondition.BASAL
 
-    def to_variant_params(self) -> dict[str, Any]:
-        """
-        Convert to variant parameter dictionary for new_gene_internal_shift_variable_strength.
+    def __post_init__(self):
+        pass
 
-        Returns:
-            Dictionary compatible with apply_variant function
-        """
-        params: dict[str, Any] = {
+    def get_default_perturbations(self):
+        d = {
             "condition": self.condition.value,
             "induction_gen": self.induction_gen,
             "exp_trl_eff": {
@@ -109,13 +208,29 @@ class VioPathwayParams(BaseClass):
                 "rel_trl_eff_adj_list": self.rel_trl_eff_adj_list,
             },
         }
+        return d
+
+    def to_variant_params(self, pert_factor: float = 0.22) -> dict[str, Any]:
+        """
+        Convert to variant parameter dictionary for new_gene_internal_shift_variable_strength.
+
+        Returns:
+            Dictionary compatible with apply_variant function
+        """
+        # params = self._parse_variants(**deltas) or self.default_perturbation()
+        # params = {}
+        # if deltas is not None:
+        #     for attr, d_v in deltas.items():
+        #         original = getattr(self, attr)
+        #         params[attr] = original - d_v if not isinstance(d_v, Callable) else d_v(original)
+        params = self.default_perturbations
         if self.knockout_gen is not None:
             params["knockout_gen"] = self.knockout_gen
         return params
 
 
 @dataclass
-class MecillinamParams(BaseClass):
+class MecillinamParams(VecoliParams):
     """
     Parameters for mecillinam antibiotic condition.
 
@@ -136,7 +251,7 @@ class MecillinamParams(BaseClass):
         if len(self.times) != len(self.concentrations):
             raise ValueError("times and concentrations must have the same length")
 
-    def to_variant_params(self) -> dict[str, Any]:
+    def get_default_perturbations(self) -> dict[str, Any]:
         """
         Convert to variant parameter dictionary for mecillinam_timeline.
 
@@ -185,9 +300,7 @@ class OutputEmitterConfig(BaseClass):
 class SimulationConfig(BaseClass, abc.ABC):
     def __post_init__(self) -> None:
         if not self.validate():
-            raise ValueError(
-                f"The requested config payload does not match expected structure:\n{self.model_dump()}"
-            )
+            raise ValueError(f"The requested config payload does not match expected structure:\n{self.model_dump()}")
 
     @abc.abstractmethod
     def validate(self) -> bool:
@@ -218,12 +331,15 @@ class VariantVecoli(BaseClass):
 @dataclass
 class SimulationConfigVecoli(SimulationConfig):
     """Vecoli simulation config (JSON), 1:1"""
+
     experiment_id: str
     sim_data_path: str
     n_init_sims: int = field(default=1)
     generations: int = field(default=1)
     variants: list[VariantVecoli] = field(default_factory=list)
-    emitter_arg: OutputEmitterConfig = field(default=OutputEmitterConfig(type="parquet", out_uri=get_bucket()))
+    emitter_arg: OutputEmitterConfig | dict = field(
+        default_factory=dict
+    )  # OutputEmitterConfig(type="parquet", out_uri=get_bucket())
 
     def validate(self) -> bool:
         # TODO: add full vEcoli simulation config JSON attributes exposed by SMS API
@@ -238,15 +354,9 @@ class SimulationConfigVecoli(SimulationConfig):
 
     def model_dump(self) -> dict[str, Any]:
         attrs = [self.experiment_id, self.sim_data_path]
-        config = dict(zip(
-            attrs,
-            [getattr(self, attr) for attr in attrs]
-        ))
+        config = dict(zip(attrs, [getattr(self, attr) for attr in attrs]))
         config.update(self._format_emitter())
-        config.update({"variants": {
-            variant.id: variant.config
-            for variant in self.variants
-        }})
+        config.update({"variants": {variant.id: variant.config for variant in self.variants}})
         return config
 
     def _format_emitter(self) -> dict[str, Any]:
@@ -278,26 +388,87 @@ class TimeseriesDataset(BaseClass):
 
     @property
     def x(self):
+        # TODO: get this from stanford (simdata as df)
         return self.load_simdata()
 
     @property
     def y(self):
         return self.load_timeseries()
 
+    def _get_repo_root(self) -> Path:
+        """Get the repository root directory."""
+        # Try to find repo root by looking for pyproject.toml
+        current = Path(__file__).resolve().parent
+        for _ in range(10):  # Max 10 levels up
+            if (current / "pyproject.toml").exists():
+                return current
+            current = current.parent
+        # Fallback to cwd
+        return Path.cwd()
+
+    def load_dataset(
+        self,
+        experiment_id: str,
+        outdir_root: Path | None = None,
+        observables: list[str] | None = None,
+        include_metadata: bool = True,
+    ) -> polars.DataFrame:
+        """
+        Load simulation dataset from parquet files.
+
+        Args:
+            experiment_id: The experiment identifier (e.g., "api_simulation_default")
+            outdir_root: Root directory for simulation outputs. Defaults to
+                         {repo_root}/api_integration/sims
+            observables: Optional list of column names to select
+            include_metadata: If True, include hive partition columns (variant, lineage_seed,
+                             generation, agent_id) from the directory structure
+
+        Returns:
+            Polars DataFrame with the simulation data
+        """
+        if outdir_root is None:
+            outdir_root = self._get_repo_root() / "api_integration" / "sims"
+
+        base_path = Path(outdir_root) / experiment_id / "history" / f"experiment_id={experiment_id}"
+
+        # Scan nested parquet files with hive partitioning to extract metadata columns
+        # (variant, lineage_seed, generation, agent_id) from directory structure
+        lf = polars.scan_parquet(str(base_path / "**/*.pq"), hive_partitioning=include_metadata)
+
+        if observables is not None:
+            # Filter to only existing columns, but always include metadata if requested
+            available = lf.collect_schema().names()
+            valid_observables = [col for col in observables if col in available]
+
+            # Add metadata columns if they exist and include_metadata is True
+            if include_metadata:
+                metadata_cols = ["variant", "lineage_seed", "generation", "agent_id"]
+                for col in metadata_cols:
+                    if col in available and col not in valid_observables:
+                        valid_observables.append(col)
+
+            if valid_observables:
+                lf = lf.select(valid_observables)
+
+        return lf.collect()
+
     def load_timeseries(self) -> polars.DataFrame:
-        return load_dataset(
+        return self.load_dataset(
             self.simulation.config.experiment_id,
             Path(self.outdir_root),
             observables=self.selections,
             include_metadata=self.metadata_included,
         )
 
-    def load_simdata(self) -> SimulationDataEcoli:
+    def load_simdata(self) -> polars.DataFrame:  # SimulationDataEcoli:
         # TODO: be able to turn into pl.DataFrame!
-        return LoadSimData(sim_data_path=self.simulation.config.sim_data_path).sim_data
+        # return LoadSimData(sim_data_path=self.simulation.config.sim_data_path).sim_data
+        return generate_synthetic_simulation_data()
 
 
 # === UQ Pipeline (e2e workflow params and outputs): x, y, theta, etc ===
+
 
 @dataclass
 class UQInputParameters(BaseClass, abc.ABC):
@@ -424,8 +595,8 @@ class CellCycleVariable(BaseClass):
 
 @dataclass
 class PCESurrogateProfile:
-    population: PCESurrogate
-    cell_cycle: PCESurrogate
+    population: "PCESurrogate"
+    cell_cycle: "PCESurrogate"
 
 
 @dataclass
@@ -434,11 +605,12 @@ class SobolIndexProfile(BaseClass):
     each attribute of size 2 => one for fist order, one for total order
     """
 
-    population: SobolIndices
-    cell_cycle: list[SobolIndices]  # (of clen(n_cell_cycle_bins))
+    population: "SobolIndices"
+    cell_cycle: list["SobolIndices"]  # (of clen(n_cell_cycle_bins))
 
 
 # === UQ e2e workflow/pipeline results/outputs ===
+
 
 class StratificationLens(StrEnum):
     POPULATION = "population"
@@ -455,17 +627,18 @@ class UqProfile:
         stratification: (StratificationLens) "population" (bulk, phase1) or "cell_cycle" (tempo is theta, phase2)
         sobol_indices: (list[SobolIndices]) For population stratification, must be len == 1, otherwise len == n_theta_bins
     """
+
     stratification: StratificationLens
-    sobol_indices: list[SobolIndices]
-    surrogate: PCESurrogate  # TODO: or, surrogate_id --> hydrate pickled instances!
+    sobol_indices: list["SobolIndices"]
+    surrogate: "PCESurrogate"  # TODO: or, surrogate_id --> hydrate pickled instances!
 
     def __post_init__(self) -> None:
         if len(self.sobol_indices) > 1 and self.stratification == StratificationLens.POPULATION:
             raise ValueError(
-                f"A population level stratification "
-                f"is only expected to have 1 set of SobolIndices. "
-                f"As such, a cell cycle level stratification is"
-                f"expected to have n_bin sets of SobolIndices!"
+                "A population level stratification "
+                "is only expected to have 1 set of SobolIndices. "
+                "As such, a cell cycle level stratification is"
+                "expected to have n_bin sets of SobolIndices!"
             )
 
 
@@ -477,6 +650,7 @@ class PipelineResult:
     human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
     orthogonal decompositions.
     """
+
     population: UqProfile
     cell_cycle: UqProfile
 
@@ -498,6 +672,7 @@ class Pipeline:
         result: PipelineResult object containing 2 `UqProfile` instances, one for
             each stratification type (population(bulk), cell_cycle(cell, [i][j])
     """
+
     database_id: int
     config: PipelineConfig
     dataset: TimeseriesDataset

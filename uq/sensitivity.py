@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy
-from uq.inputs import InputParameterSpaceVecoli
+from uq.inputs import XSpaceVecoli
 from uq.io import DataclassIO
 from uq.pce.models import Parameter
 from uq.wrappers import PrecomputedWrapper, SimulationWrapper, WrapperConfig
@@ -501,7 +501,7 @@ class SensitivityAnalyzer:
 
     def __init__(
         self,
-        parameter_space: InputParameterSpaceVecoli,
+        parameter_space: XSpaceVecoli,
         wrapper: Optional[Union[SimulationWrapper, PrecomputedWrapper]] = None,
         samples: Optional[np.ndarray] = None,
         outputs: Optional[np.ndarray] = None,
@@ -798,7 +798,7 @@ def run_sensitivity_analysis(
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = InputParameterSpaceVecoli(
+    parameter_space = XSpaceVecoli(
         vio_expression_bounds=vio_expression_bounds,
         vio_trl_eff_bounds=vio_trl_eff_bounds,
         mecillinam_conc_bounds=mecillinam_conc_bounds,
@@ -1030,7 +1030,7 @@ def analyze_precomputed_results(
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = InputParameterSpaceVecoli(
+    parameter_space = XSpaceVecoli(
         include_vio=include_vio,
         include_mecillinam=include_mecillinam,
     )

@@ -139,12 +139,12 @@ from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq import (
     AggregatedOutput,
-    InputParameterSpaceVecoli,
     PCESurrogate,
     SensitivityAnalyzer,
     SimulationWrapper,
     SobolIndices,
     WrapperConfig,
+    XSpaceVecoli,
     cell_cycle,
     compute_variance_decomposition,
     inputs,
@@ -152,10 +152,12 @@ from uq import (
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
-from uq.inputs import InputParameterSpace
+from uq.inputs import XSpace
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate, prescreen_parameters
 from uq.pipeline.models import Pipeline, PipelineConfig
+
+# TODO: make process-bigraph steps out of this and use Nextflow py to run
 
 
 # 1.)
@@ -166,13 +168,13 @@ def define_parameter_space(
     vio_expression_bounds=(0.0, 5.0),
     vio_trl_eff_bounds=(0.0, 2.0),
     mecillinam_conc_bounds=(0.0, 10.0),
-) -> InputParameterSpace | InputParameterSpaceVecoli:
+) -> XSpace | XSpaceVecoli:
     """
     Creates an instance of InputParameterSpace for pipeline from SimData.
     """
     # TODO: first load SimulationDataEcoli, then extract list[Parameter],
     #  where bounds are inferred from initial condition/parca?
-    return InputParameterSpaceVecoli(
+    return XSpaceVecoli(
         include_vio,
         include_mecillinam,
         vio_expression_bounds,
@@ -224,7 +226,7 @@ def get_variance_decomposition(agg: AggregationResult) -> VarianceDecomposition:
 
 # 5. )
 async def phase1(
-    input_parameter_space: InputParameterSpaceVecoli,
+    input_parameter_space: XSpaceVecoli,
     simulation_func: Callable,
     sample_size: int,
     export_surrogate: bool = True,
@@ -253,7 +255,7 @@ async def phase1(
 
 
 def create_surrogate(
-    full_space: InputParameterSpace,
+    full_space: XSpace,
     f: Callable,
     sample_size: int,
     config: PCEParameterSelectionConfig | None = None,

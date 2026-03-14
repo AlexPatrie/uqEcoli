@@ -30,7 +30,7 @@ def _(mo):
 @app.cell
 def _(mo):
     from uq import (
-        InputParameterSpaceVecoli,
+        XSpaceVecoli,
         SensitivityAnalyzer,
         AggregationStrategy,
     )
@@ -241,7 +241,7 @@ def _(mo):
         # ------------------------------------------------------------------ #
 
     f = Simulator.f
-    param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True)
+    param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True)
     analyzer = SensitivityAnalyzer(param_space, wrapper=f)
     sobol_indices, pce_surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100)
 

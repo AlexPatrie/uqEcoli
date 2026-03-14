@@ -26,6 +26,7 @@ Author: Alex Patrie
 
 import argparse
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -45,7 +46,7 @@ from uq import (
     DynamicModeDecomposition,
     GeneKnockoutParams,
     # Input parameters
-    InputParameterSpaceVecoli,
+    XSpaceVecoli,
     MassBasedCellCycleVariable,
     MecillinamParams,
     # Output extraction
@@ -55,230 +56,28 @@ from uq import (
     # Wrappers
     compute_variance_decomposition,
 )
-
-# =============================================================================
-# Synthetic Data Generation (for demonstration without real simulations)
-# =============================================================================
+from uq.pce.models import Parameter
+from uq.pipeline.models import TimeseriesDataset, Simulation
 
 
-def generate_synthetic_simulation_data(
-    n_experiments: int = 3,
-    n_seeds: int = 4,
-    n_generations: int = 8,
-    n_timepoints_per_gen: int = 100,
-    n_cistrons: int = 50,
-    n_proteins: int = 50,
-    n_fluxes: int = 20,
-) -> pl.DataFrame:
+@dataclass
+class XSpaceConfigVecoli:
+    p: list[Parameter] = field(default_factory=list)
+    vio_params: VioPathwayParams | None = None
+    mec_params: MecillinamParams | None = None
+    ko_params: GeneKnockoutParams | None = None
+
+
+def define_parameter_space() -> XSpaceVecoli:
     """
-    Generate synthetic simulation data mimicking vEcoli output structure.
-
-    This creates realistic-looking data for demonstration purposes when
-    real simulation outputs are not available.
-    """
-    np.random.seed(42)
-
-    rows = []
-    time = 0.0
-
-    for exp_id in range(n_experiments):
-        # Each experiment has different parameter values
-        vio_expression = 0.5 + exp_id * 2.0  # 0.5, 2.5, 4.5
-        mec_concentration = exp_id * 3.0  # 0, 3, 6
-
-        for seed in range(n_seeds):
-            seed_value = seed * 1000
-
-            for gen in range(n_generations):
-                # Simulate cell growth within generation
-                for t_idx in range(n_timepoints_per_gen):
-                    time_in_gen = t_idx / n_timepoints_per_gen
-
-                    # Mass grows exponentially within generation
-                    base_mass = 1.0 * (2.0**time_in_gen)
-
-                    # Add stochastic variation
-                    mass_noise = np.random.normal(0, 0.05)
-                    dry_mass = base_mass * (1 + mass_noise)
-
-                    # DNA mass increases during replication (C period)
-                    if 0.3 < time_in_gen < 0.7:
-                        dna_mass = 0.03 * (1 + (time_in_gen - 0.3) / 0.4)
-                    else:
-                        dna_mass = 0.03 if time_in_gen < 0.3 else 0.06
-
-                    # Growth rate varies with cell cycle
-                    growth_rate = 0.01 * (1 + 0.2 * np.sin(2 * np.pi * time_in_gen))
-
-                    # Transcriptome: influenced by vio_expression
-                    transcriptome = np.random.poisson(100 * (1 + 0.1 * vio_expression), size=n_cistrons).astype(float)
-
-                    # Add cell cycle variation to some genes
-                    cell_cycle_genes = np.sin(2 * np.pi * time_in_gen + np.random.rand(10) * np.pi)
-                    transcriptome[:10] *= 1 + 0.3 * cell_cycle_genes
-
-                    # Proteome: correlated with transcriptome but delayed
-                    proteome = np.random.poisson(500 * (1 + 0.05 * vio_expression), size=n_proteins).astype(float)
-
-                    # Fluxes: influenced by mecillinam
-                    base_flux = max(1.0, 10.0 * (1 - 0.05 * mec_concentration))
-                    fluxes = np.random.exponential(base_flux, size=n_fluxes)
-
-                    # Exchange fluxes (subset with EX_ prefix behavior)
-                    exchange_fluxes = fluxes[:5] * np.random.uniform(0.8, 1.2, 5)
-
-                    row = {
-                        "experiment_id": exp_id,
-                        "variant": f"vio_{vio_expression:.1f}_mec_{mec_concentration:.1f}",
-                        "lineage_seed": seed_value,
-                        "generation": gen,
-                        "agent_id": f"agent_{seed}_{gen}",
-                        "time": time,
-                        "listeners__mass__dry_mass": dry_mass,
-                        "listeners__mass__cell_mass": dry_mass * 1.3,
-                        "listeners__mass__dna_mass": dna_mass,
-                        "listeners__mass__protein_mass": dry_mass * 0.5,
-                        "listeners__fba_results__growth": growth_rate,
-                        # Store arrays as JSON strings for demonstration
-                        "listeners__rna_counts__mRNA_cistron_counts": json.dumps(transcriptome.tolist()),
-                        "listeners__monomer_counts": json.dumps(proteome.tolist()),
-                        "listeners__fba_results__base_reaction_fluxes": json.dumps(fluxes.tolist()),
-                        # Parameter values for this experiment
-                        "_param_vio_expression": vio_expression,
-                        "_param_mec_concentration": mec_concentration,
-                    }
-                    rows.append(row)
-                    time += 1.0
-
-    return pl.DataFrame(rows)
-
-
-def create_synthetic_aggregated_outputs(
-    data: pl.DataFrame,
-    n_features: int = 10,
-) -> dict[str, AggregatedOutput]:
-    """Create aggregated outputs from synthetic data."""
-
-    # Strategy 1: Uniform aggregation
-    uniform_mean = (
-        data.select([
-            "listeners__mass__dry_mass",
-            "listeners__fba_results__growth",
-        ])
-        .mean()
-        .to_numpy()
-        .flatten()
-    )
-
-    uniform_std = (
-        data.select([
-            "listeners__mass__dry_mass",
-            "listeners__fba_results__growth",
-        ])
-        .std()
-        .to_numpy()
-        .flatten()
-    )
-
-    agg_uniform = AggregatedOutput(
-        mean=uniform_mean,
-        std=uniform_std,
-        n_samples=len(data),
-        groups=None,
-    )
-
-    # Strategy 2: By generation
-    by_gen = (
-        data.group_by("generation")
-        .agg([
-            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-            pl.count().alias("n"),
-        ])
-        .sort("generation")
-    )
-
-    agg_by_gen = AggregatedOutput(
-        mean=np.column_stack([
-            by_gen["mass_mean"].to_numpy(),
-            by_gen["growth_mean"].to_numpy(),
-        ]),
-        std=np.column_stack([
-            by_gen["mass_std"].to_numpy(),
-            by_gen["growth_std"].to_numpy(),
-        ]),
-        n_samples=by_gen["n"].to_numpy(),
-        groups=by_gen["generation"].to_numpy(),
-    )
-
-    # Strategy 3: By lineage seed
-    by_seed = (
-        data.group_by("lineage_seed")
-        .agg([
-            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-            pl.count().alias("n"),
-        ])
-        .sort("lineage_seed")
-    )
-
-    agg_by_seed = AggregatedOutput(
-        mean=np.column_stack([
-            by_seed["mass_mean"].to_numpy(),
-            by_seed["growth_mean"].to_numpy(),
-        ]),
-        std=np.column_stack([
-            by_seed["mass_std"].to_numpy(),
-            by_seed["growth_std"].to_numpy(),
-        ]),
-        n_samples=by_seed["n"].to_numpy(),
-        groups=by_seed["lineage_seed"].to_numpy(),
-    )
-
-    return {
-        "uniform": agg_uniform,
-        "by_generation": agg_by_gen,
-        "by_lineage_seed": agg_by_seed,
-    }
-
-
-# =============================================================================
-# Main Workflow
-# =============================================================================
-
-
-def run_full_uq_workflow(
-    data_dir: Optional[str] = None,
-    use_synthetic: bool = False,
-    output_dir: str = "./uq_results",
-):
-    """
-    Run the complete UQ workflow as specified in CONTEXT.md.
-
-    This demonstrates all components required for Milestone 08.4.2.
-    """
-
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    print("=" * 80)
-    print("vEcoli UQ Framework - Full End-to-End Workflow")
-    print("Milestone 08.4.2: Uncertainty Quantification Framework")
-    print("=" * 80)
-
     # =========================================================================
     # STEP 1: Define Input Parameters
-    # CONTEXT.md: "Identify scientifically relevant input/output variables"
+    # rfc006: "Identify scientifically relevant input/output variables"
     # =========================================================================
-
+    """
     print("\n" + "=" * 80)
     print("STEP 1: Define Scientifically Relevant Input Parameters")
     print("=" * 80)
-
     # 1a. Violacein (vio) Pathway Parameters
     print("\n1a. Violacein Pathway Parameters:")
     vio_params = VioPathwayParams(
@@ -291,7 +90,6 @@ def run_full_uq_workflow(
     print(f"    Expression factor: {vio_params.expression}")
     print(f"    Translation efficiency: {vio_params.translation_efficiency}")
     print(f"    Induction generation: {vio_params.induction_gen}")
-
     # 1b. Mecillinam Antibiotic Parameters
     print("\n1b. Mecillinam Antibiotic Parameters:")
     mec_params = MecillinamParams(
@@ -301,7 +99,6 @@ def run_full_uq_workflow(
     )
     print(f"    Time points: {mec_params.times}")
     print(f"    Concentrations: {mec_params.concentrations}")
-
     # 1c. Gene Knockout Parameters
     print("\n1c. Gene Knockout Parameters:")
     ko_params = GeneKnockoutParams(
@@ -309,7 +106,6 @@ def run_full_uq_workflow(
         translation_knockouts=[],
     )
     print(f"    Gene deletions: {ko_params.gene_deletions}")
-
     # 1d. Complete Input Parameter Container
     print("\n1d. Complete UQ Input Parameters:")
     uq_inputs = UQInputParametersVecoli(
@@ -321,10 +117,9 @@ def run_full_uq_workflow(
     )
     print(f"    Seed: {uq_inputs.seed}")
     print(f"    Generations: {uq_inputs.generations}")
-
     # 1e. Parameter Space for Sensitivity Analysis
     print("\n1e. Parameter Space for Sensitivity Analysis:")
-    param_space = InputParameterSpaceVecoli(
+    param_space = XSpaceVecoli(
         include_vio=True,
         include_mecillinam=True,
         vio_expression_bounds=(0.0, 5.0),
@@ -333,28 +128,38 @@ def run_full_uq_workflow(
     )
     print(f"    Parameters: {param_space.parameter_names}")
     print(f"    Bounds: {param_space.parameter_bounds}")
+    return param_space
 
-    # =========================================================================
-    # STEP 2: Load or Generate Simulation Data
-    # =========================================================================
 
-    print("\n" + "=" * 80)
-    print("STEP 2: Load Simulation Data")
-    print("=" * 80)
+# TODO: make a nextflow workflow or Ray!
+def run_full_uq_workflow(
+    data_dir: Optional[str] = None,
+    use_synthetic: bool = False,
+    output_dir: str = "./uq_results",
+):
+    """
+    Run the complete UQ workflow as specified in CONTEXT.md.
 
-    if use_synthetic:
-        print("\nGenerating synthetic simulation data for demonstration...")
-        sim_data = generate_synthetic_simulation_data(
-            n_experiments=5,
-            n_seeds=4,
-            n_generations=8,
-            n_timepoints_per_gen=50,
-        )
-        print(f"    Generated {len(sim_data)} data points")
-        print(f"    Experiments: {sim_data['experiment_id'].unique().to_list()}")
-        print(f"    Seeds: {sim_data['lineage_seed'].unique().to_list()}")
-        print(f"    Generations: {sim_data['generation'].unique().to_list()}")
-    else:
+    This demonstrates all components required for Milestone 08.4.2.
+    """
+
+    def load_dataset(output_dir: Path | None = None) -> TimeseriesDataset:
+        output_path = output_dir
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        print("=" * 80)
+        print("vEcoli UQ Framework - Full End-to-End Workflow")
+        print("Milestone 08.4.2: Uncertainty Quantification Framework")
+        print("=" * 80)
+
+        # =========================================================================
+        # STEP 2: Load or Generate Simulation Data
+        # =========================================================================
+
+        print("\n" + "=" * 80)
+        print("STEP 2: Load Simulation Data")
+        print("=" * 80)
+
         print(f"\nLoading real simulation data from: {data_dir}")
         # In production, use:
         # from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
@@ -362,6 +167,7 @@ def run_full_uq_workflow(
         # history_sql, config_sql, _ = dataset_sql(data_dir, ["experiment_id"])
         print("    [Real data loading would happen here]")
         print("    Using synthetic data for demonstration instead...")
+        dataset = TimeseriesDataset(database_id=0, simulation=Simulation(database_id=0))
         sim_data = generate_synthetic_simulation_data()
 
     # =========================================================================

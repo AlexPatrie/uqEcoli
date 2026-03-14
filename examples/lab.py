@@ -31,7 +31,7 @@ def _(mo):
 
 @app.cell
 def _(exp_id):
-    from uq import InputParameterSpaceVecoli, SensitivityAnalyzer, AggregationStrategy, SimulationWrapper, WrapperConfig
+    from uq import XSpaceVecoli, SensitivityAnalyzer, AggregationStrategy, SimulationWrapper, WrapperConfig
 
     class x:
         timesteps = 1111
@@ -43,7 +43,7 @@ def _(exp_id):
 
         return np.random.random((_x.timesteps, 2)) * _x.a / _x.b
 
-    param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True, experiment_id=exp_id.value)
+    param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True, experiment_id=exp_id.value)
     param_space.show()
     wrapper = SimulationWrapper(
         parameter_space=param_space,

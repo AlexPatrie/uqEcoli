@@ -25,6 +25,7 @@ class Parameter(BaseClass):
             range control (knob, slider, etc). TODO: move this.
         description: str
     """
+
     name: str
     bounds: tuple[float, float]
     default: float | int | complex

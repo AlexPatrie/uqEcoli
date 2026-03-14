@@ -52,7 +52,7 @@ from pytuq.surrogates.pce import PCE as PyTUQ_PCE
 from pytuq.utils.maps import scale01ToDom, scaleDomTo01
 from scipy.stats import qmc
 
-from uq.inputs import InputParameterSpace, InputParameterSpaceVecoli
+from uq.inputs import XSpace, XSpaceVecoli
 from uq.pce.models import (
     Parameter,
     PCEConfig,
@@ -93,7 +93,7 @@ class FunctionWrapper:
 
 
 def prescreen_parameters(
-    full_space: InputParameterSpace,
+    full_space: XSpace,
     config: PCEParameterSelectionConfig | None = None,
     f: Callable[[np.ndarray], float | np.ndarray] | None = None,
 ) -> list[Parameter]:
@@ -130,7 +130,7 @@ def prescreen_parameters_vecoli(
     """
     Prescreening attrs related to morris: n_trajectories, n_top (num selections)
     """
-    full_space = InputParameterSpaceVecoli(
+    full_space = XSpaceVecoli(
         vio_expression_bounds=vio_expression_bounds,
         vio_trl_eff_bounds=vio_trl_eff_bounds,
         mecillinam_conc_bounds=mecillinam_conc_bounds,
@@ -471,7 +471,7 @@ def process_samples(
 
 
 def generate_surrogate(
-    space: InputParameterSpace,
+    space: XSpace,
     generator: Callable[[np.ndarray], np.ndarray],
     sample_size: int,
     prescreening_config: PCEParameterSelectionConfig | None = None,
