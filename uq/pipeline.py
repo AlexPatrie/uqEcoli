@@ -469,13 +469,6 @@ class PipelineConfig:
 
 @dataclass
 class PCESurrogateProfile:
-    """
-    The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-    (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-    human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-    orthogonal decompositions.
-    """
-
     population: PCESurrogate
     cell: PCESurrogate
 
@@ -499,6 +492,13 @@ class UqProfile:
 
 @dataclass
 class PipelineResult:
+    """
+    The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
+    (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
+    human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
+    orthogonal decompositions.
+    """
+
     population: UqProfile
     cell: UqProfile
 
