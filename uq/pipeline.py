@@ -431,7 +431,7 @@ class Simulation(BaseClass):
 @dataclass
 class TimeseriesDataset(BaseClass):
     database_id: int  # TODO: used to perform loookup dataset from db/s3 (cross-reference with simulation attr)
-    simulation: Simulation
+    simulation: Simulation  # or simulation_id
     metadata_included: bool = True
     selections: list[str] | None = None
 
@@ -459,12 +459,6 @@ class TimeseriesDataset(BaseClass):
     def load_simdata(self) -> SimulationDataEcoli:
         # TODO: be able to turn into pl.DataFrame!
         return LoadSimData(sim_data_path=self.simulation.config.sim_data_path).sim_data
-
-
-@dataclass
-class PipelineConfig:
-    name: str
-    pce_config: PCESurrogateConfig
 
 
 @dataclass
@@ -509,6 +503,13 @@ class PipelineResult:
 
 
 @dataclass
+class PipelineConfig:
+    name: str
+    dataset_id: int
+    pce_config: PCESurrogateConfig
+
+
+@dataclass
 class Pipeline:
     """
     Attributes:
@@ -525,93 +526,8 @@ class Pipeline:
     result: PipelineResult
 
 
-def pipeline():
+def execute_pipeline(config: PipelineConfig) -> Pipeline:
     """
-        a. sobol_bulk:       (2, n_params)              — first/total order, population level
-        b. sobol_stages:     (2, n_params, n_bins)       — first/total order, per cell cycle stage
-        c. surrogates:       2 × PCESurrogate            — instant prediction without running WCM
-
-      And (c) is what makes the whole thing practically useful — the Sobol indices tell you where to look, the surrogates let you explore
-      cheaply.
-
-    ❯ so again, then say for bulk, if wanting to know which params, they can be found by doing parameter_dataset[i] for i in sobol_bulk?
-
-    ⏺ Right idea, but you'd sort/threshold first since the Sobol array has an entry for every parameter, not just the important ones.
-      Something like:
-
-      # Top 3 most influential parameters (by total-order)
-      top_idx = np.argsort(sobol_bulk[1])[::-1][:3]  # [1] = total order
-      for i in top_idx:
-          print(f"{param_names[i]}: S_T = {sobol_bulk[1, i]:.1%}")
-
-      Might give you:
-
-      vio_expression: S_T = 55.2%
-      mecillinam_concentration: S_T = 28.7%
-      vio_trl_eff: S_T = 12.1%
-
-      This is what SobolIndices.get_most_influential() already does in your code. The indices are the ranking; param_names[i] is the
-      lookup.
-    """
-
-
-"""
-Whats missing:
-
-    1. A wrapper that takes a parameter vector, runs (or looks up) the simulation, computes the Koopman/GSA-informed cell cycle variable,
-    bins by θ, and returns per-stage statistics as the output vector Y
-    2. Feed that wrapper into generate_surrogate() or the manual create_samples → process_samples → fit_pce_coefficients flow
-    3. Compute Sobol indices from the resulting PCE — this gives you "phenotypic sensitivity analysis" (which parameters drive variation
-    within each cell-cycle stage)
-
-    Music:
-    wait so then is a better mental model maybe something like, phase 2 in the ./uq (rfc) (full workflow) metaphorically converts the
-raw dataset/WCM function/system into a temporal signal, like audio?
-
-⏺ Yes — and it's not even a metaphor. It's mathematically literal.
-
-  Koopman/DMD spectral decomposition is the same operation as decomposing audio into frequencies. The math is the same class of
-  operation as a Fourier transform:
-
-  ┌────────────────────────────────────┬──────────────────────────────────────────────────────────────────────┐
-  │               Audio                │                        Phase 2 (Koopman/DMD)                         │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Raw waveform (pressure vs time)    │ Raw trajectory (observables vs time)                                 │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Fourier transform                  │ DMD eigendecomposition                                               │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Frequencies (Hz)                   │ Koopman eigenvalues (ω)                                              │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Amplitude per frequency            │ Mode amplitudes (bⱼ)                                                 │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Which instruments play each note   │ Koopman modes (φⱼ) — which observables participate in each frequency │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Fundamental pitch                  │ Cell cycle frequency (ω_cc)                                          │
-  ├────────────────────────────────────┼──────────────────────────────────────────────────────────────────────┤
-  │ Harmonics (2×, 3×, 4× fundamental) │ Cell cycle harmonics (your code checks up to 4th harmonic)           │
-  └────────────────────────────────────┴──────────────────────────────────────────────────────────────────────┘
-
-  The cell cycle variable θ is literally the phase of the fundamental frequency — like asking "where are we in the current cycle of the
-   dominant oscillation?" Phase 0 = start of cycle, phase 0.5 = halfway, phase 1.0 = back to start.
-
-  Your CellCycleKoopmanAnalyzer.identify_cell_cycle_modes() is doing exactly what a pitch detector does: scanning the spectrum for the
-  expected fundamental frequency and its harmonics:
-
-  for harmonic in range(1, 5):  # up to 4th harmonic
-      expected_freq = harmonic * self.expected_frequency
-      if |mode.frequency - expected_freq| < tolerance * expected_freq:
-          cell_cycle_modes.append(mode)
-
-  And then θ = arg(φ_cc)/2π extracts the phase angle of that mode — exactly like reading the instantaneous phase of a sine wave.
-
-  This is also why you have apollo/ — it's not a gimmick. The mapping from Koopman spectrum to musical score is bijective precisely
-  because the mathematical objects are the same: frequencies, amplitudes, and phases. apollo/ is just choosing to render the spectrum
-  as Western musical notation instead of as a power spectrum plot.
-
-  So the mental model is: Phase 1 asks "which knobs matter?" (input sensitivity). Phase 2 asks "what song is the cell singing?"
-  (temporal spectral structure). And θ is "where in the song are we right now?"
-
-
     Workflow:
       Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: InputParameterSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
 
@@ -666,5 +582,16 @@ raw dataset/WCM function/system into a temporal signal, like audio?
         2. Phase 2 Sobol: "During C-period (DNA replication), mecillinam_conc drives 80% of variance; during D-period, vio_expression
       dominates"
 
-
-"""
+    1. dataset = db.get_dataset(config.dataset_id)
+    2. x = dataset.load_simdata(); y = dataset.load_timeseries()
+    3. agg = aggregate(y)
+    4. decomp = variance_decomp(agg)
+    5. start_stategies(decomp, x) --> concurrently runs phase1() -> phase1_outputs -> phase2()
+    """
+    # Whats missing:
+    #     1. A wrapper that takes a parameter vector, runs (or looks up) the simulation, computes the Koopman/GSA-informed cell cycle variable,
+    #     bins by θ, and returns per-stage statistics as the output vector Y
+    #     2. Feed that wrapper into generate_surrogate() or the manual create_samples → process_samples → fit_pce_coefficients flow
+    #     3. Compute Sobol indices from the resulting PCE — this gives you "phenotypic sensitivity analysis" (which parameters drive variation
+    #     within each cell-cycle stage)
+    pass
