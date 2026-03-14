@@ -470,7 +470,7 @@ class PipelineConfig:
 @dataclass
 class PCESurrogateProfile:
     population: PCESurrogate
-    cell: PCESurrogate
+    cell_cycle: PCESurrogate
 
 
 @dataclass
@@ -480,14 +480,19 @@ class SobolIndexProfile(BaseClass):
     """
 
     population: SobolIndices
-    cell: list[SobolIndices]  # (of clen(n_cell_cycle_bins))
+    cell_cycle: list[SobolIndices]  # (of clen(n_cell_cycle_bins))
+
+
+class Stratification(StrEnum):
+    POPULATION = "population"
+    CELL_CYCLE = "cell_cycle"
 
 
 @dataclass
 class UqProfile:
-    lens: Literal["population", "cell"]
+    stratification: Stratification
     sobol_indices: SobolIndices | list[SobolIndices]
-    surrogate: PCESurrogate
+    surrogate: PCESurrogate  # TODO: or, surrogate_id --> hydrate pickled instances!
 
 
 @dataclass
@@ -500,7 +505,7 @@ class PipelineResult:
     """
 
     population: UqProfile
-    cell: UqProfile
+    cell_cycle: UqProfile
 
 
 @dataclass
