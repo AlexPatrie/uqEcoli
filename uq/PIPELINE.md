@@ -188,7 +188,7 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
 
   # Track prediction confidence: surrogate predicts with R² quality metric
   print(f"Surrogate R²: {pce_surrogate.r_squared}")
-  top = sobol_indices.get_most_influential(n=5)
+  top = sobol_indices.select(n=5)
   print(f"Most influential parameters: {top}")
   ```
 
@@ -615,7 +615,7 @@ import numpy as np
 from uq.inputs import InputParameterSpaceVecoli, load_dataset
 from uq.aggregation import Aggregator, AggregationStrategy, compute_variance_decomposition
 from uq.cell_cycle import calculate_cell_cycle
-from uq.pce import prescreen_parameters, create_samples, process_samples, fit_pce_coefficients
+from uq.pce.surrogate import prescreen_parameters, create_samples, process_samples, fit_pce_coefficients
 from uq.sensitivity import SobolIndices
 from uq.models import PCEParameterSelectionConfig
 
@@ -645,16 +645,16 @@ class PipelineResult:
 
 
 def run_full_pipeline(
-    experiment_id: str,
-    outdir_root: str,
-    f: Callable,                     # the simulation function or precomputed wrapper
-    param_space: InputParameterSpaceVecoli | None = None,
-    n_morris_trajectories: int = 20,
-    n_top_params: int = 5,
-    n_pce_samples: int = 100,
-    polynomial_order: int = 2,
-    cell_cycle_variable_type: str = "mass_based",
-    generation_lower_bound: int | None = None,
+        experiment_id: str,
+        outdir_root: str,
+        f: Callable,  # the simulation function or precomputed wrapper
+        param_space: InputParameterSpaceVecoli | None = None,
+        n_morris_trajectories: int = 20,
+        n_top_params: int = 5,
+        n_pce_samples: int = 100,
+        polynomial_order: int = 2,
+        cell_cycle_variable_type: str = "mass_based",
+        generation_lower_bound: int | None = None,
 ) -> PipelineResult:
     """
     Execute the complete RFC006 7-step UQ workflow.
@@ -901,7 +901,7 @@ result = run_full_pipeline(
 # - Per-stage sensitivity: "vio_expression has S_T=0.8 during C period but S_T=0.2 during B period"
 
 for stage_idx, stage_sobol in enumerate(result.per_stage_sobol_indices):
-    print(f"Stage {stage_idx}: top param = {stage_sobol.get_most_influential(n=1)}")
+    print(f"Stage {stage_idx}: top param = {stage_sobol.select(n=1)}")
 ```
 
 **Working sketch — what needs to happen:**

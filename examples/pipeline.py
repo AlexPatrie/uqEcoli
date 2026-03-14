@@ -247,7 +247,7 @@ def _(mo):
 
     # Track prediction confidence: surrogate predicts with R² quality metric
     print(f"Surrogate R²: {pce_surrogate.r_squared}")
-    top = sobol_indices.get_most_influential(n=5)
+    top = sobol_indices.select(n=5)
     print(f"Most influential parameters: {top}")
 
     mo.vstack([

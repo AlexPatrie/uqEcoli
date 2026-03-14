@@ -658,7 +658,7 @@ class TestRFC006FullWorkflow:
             GeneKnockoutParams,
             InputParameterSpaceVecoli,
             MecillinamParams,
-            UQInputParameters,
+            UQInputParametersVecoli,
             VioPathwayParams,
         )
 
@@ -681,7 +681,7 @@ class TestRFC006FullWorkflow:
         vio_params = VioPathwayParams(expression=2.5, translation_efficiency=1.0)
         mec_params = MecillinamParams(times=[0.0, 100.0], concentrations=[0.0, 5.0])
         ko_params = GeneKnockoutParams()
-        uq_inputs = UQInputParameters(
+        uq_inputs = UQInputParametersVecoli(
             vio=vio_params,
             mecillinam=mec_params,
             knockouts=ko_params,
@@ -711,7 +711,7 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 3: Apply All Four Aggregation Strategies")
 
-        from uq import MassBasedCellCycleVariable, compute_variance_decomposition
+        from uq import compute_variance_decomposition
 
         # Strategy 1: Uniform aggregation
         assert real_aggregated_uniform.n_samples > 0
@@ -767,7 +767,7 @@ class TestRFC006FullWorkflow:
         log_section("Step 4: Morris Screening to Identify Important Parameters")
 
         from uq import SensitivityAnalyzer
-        from uq.pce import FunctionWrapper, prescreen_parameters
+        from uq.pce.surrogate import FunctionWrapper
 
         # Define a simple model function for Morris screening
         # In practice, this would be the actual simulation wrapper
@@ -810,7 +810,7 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 5: PCE Surrogate Fitting on Important Parameters")
 
-        from uq.pce import (
+        from uq.pce.surrogate import (
             create_samples,
             fit_pce_coefficients,
             generate_multi_indices,

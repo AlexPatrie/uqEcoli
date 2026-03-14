@@ -157,7 +157,7 @@ from uq.models import (
     MecillinamParams,
     PCEFitResult,
     PCESurrogateConfig,
-    UQInputParameters,
+    UQInputParametersVecoli,
     VioPathwayParams,
 )
 
@@ -170,7 +170,7 @@ from uq.outputs import (
 )
 
 # Pipeline utilities
-from uq.pce import (
+from uq.pce.surrogate import (
     fit_pce_coefficients,
     generate_multi_indices,
     prescreen_parameters,
@@ -207,7 +207,7 @@ __all__ = [
     "GeneKnockoutParams",
     "InputParameterSpaceVecoli",
     "MecillinamParams",
-    "UQInputParameters",
+    "UQInputParametersVecoli",
     "VioPathwayParams",
     "get_available_columns",
     "load_dataset",

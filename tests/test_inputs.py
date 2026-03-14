@@ -103,9 +103,9 @@ class TestUQInputParameters:
     @pytest.mark.unit
     def test_creation_with_subparams(self, vio_params, mecillinam_params, knockout_params):
         """UQInputParameters should combine all parameter types."""
-        from uq import UQInputParameters
+        from uq import UQInputParametersVecoli
 
-        params = UQInputParameters(
+        params = UQInputParametersVecoli(
             vio=vio_params,
             mecillinam=mecillinam_params,
             knockouts=knockout_params,
@@ -122,9 +122,9 @@ class TestUQInputParameters:
     @pytest.mark.unit
     def test_default_subparams(self):
         """UQInputParameters should create defaults for subparams."""
-        from uq import UQInputParameters
+        from uq import UQInputParametersVecoli
 
-        params = UQInputParameters()
+        params = UQInputParametersVecoli()
         assert params.vio is not None
         assert params.mecillinam is not None
         assert params.knockouts is not None

@@ -55,7 +55,7 @@ def _(exp_id):
     sobol_indices, pce_surrogate = analyzer.analyze_with_pce(polynomial_order=3, n_samples=100)
     # Track prediction confidence: surrogate predicts with R² quality metric
     print(f"Surrogate R²: {pce_surrogate.r_squared}")
-    top = sobol_indices.get_most_influential(n=5)
+    top = sobol_indices.select(n=5)
     print(f"Most influential parameters: {top}")
     return f, param_space, x
 

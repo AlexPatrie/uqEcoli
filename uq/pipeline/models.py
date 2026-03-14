@@ -1,0 +1,507 @@
+import abc
+import math
+import subprocess
+import warnings
+from dataclasses import asdict, dataclass, field
+from enum import Enum, StrEnum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Optional
+
+import numpy as np
+import polars
+from ecoli.library.sim_data import LoadSimData
+from reconstruction.ecoli.simulation_data import SimulationDataEcoli
+
+from uq import load_dataset
+from uq.common.models import BaseClass
+from uq.io import get_bucket
+
+if TYPE_CHECKING:
+    from uq.sensitivity import PCESurrogate, SobolIndices
+
+
+# === Simulator: where and how to obtain the function that will be fit by UQ === #
+
+@dataclass
+class SimulatorSource(BaseClass):
+    type: Literal["repo", "pypi", "conda"]
+    value: str  # if pypi, whatever pip install <PACKAGE> where <PACKAGE> is value
+
+
+@classmethod
+class SimulatorInstallationConfig:
+    command: Literal["uv add", "pip install", "git clone"]
+    source: SimulatorSource  # GitRepoUrl(sms_api.Simulator), PyPIPackageName, CondaForgeID
+
+
+@dataclass
+class SimulatorConfig:
+    simulator_name: str
+    installation: SimulatorInstallationConfig
+
+    def install(self) -> subprocess.CompletedProcess[str]:
+        cmd = f"{self.installation.command} {self.installation.source.value}"
+        return subprocess.run(
+            cmd.split(" "), check=True
+        )
+
+
+# === Simulations: simulation config, metadata, computes, API requests, etc ===
+
+# These classes should parameterize the stochastic timeseries generator (f(x) -> y), where
+#     SimulationConfig is an attribute of x. x should consist of both simulation, and model-specific params
+# Vecoli-specific Simulator param classes
+
+class MediaCondition(str, Enum):
+    """Available media conditions for simulations."""
+
+    BASAL = "basal"
+    WITH_AA = "with_aa"
+    ACETATE = "acetate"
+    SUCCINATE = "succinate"
+    NO_OXYGEN = "no_oxygen"
+
+
+@dataclass
+class VioPathwayParams(BaseClass):
+    """
+    Parameters for violacein (vio) pathway presence.
+
+    The vio pathway is a new gene that can be induced at specific generations
+    with controllable expression and translation efficiency.
+
+    Attributes:
+        enabled: Whether the vio pathway is present
+        induction_gen: Generation at which to induce new gene expression
+        knockout_gen: Generation to knock out new gene expression (optional)
+        expression: Factor by which to multiply new gene expression once induced
+        translation_efficiency: Translation efficiency for new gene once induced
+        rel_exp_adj_list: List of relative expression adjustments per gene
+        rel_trl_eff_adj_list: List of relative translation efficiency adjustments
+        condition: Environmental condition (basal, with_aa, etc.)
+    """
+
+    enabled: bool = True
+    induction_gen: int = 1
+    knockout_gen: Optional[int] = None
+    expression: float = 1.0
+    translation_efficiency: float = 1.0
+    rel_exp_adj_list: list[float] = field(default_factory=lambda: [1.0])
+    rel_trl_eff_adj_list: list[float] = field(default_factory=lambda: [1.0])
+    condition: MediaCondition = MediaCondition.BASAL
+
+    def to_variant_params(self) -> dict[str, Any]:
+        """
+        Convert to variant parameter dictionary for new_gene_internal_shift_variable_strength.
+
+        Returns:
+            Dictionary compatible with apply_variant function
+        """
+        params: dict[str, Any] = {
+            "condition": self.condition.value,
+            "induction_gen": self.induction_gen,
+            "exp_trl_eff": {
+                "exp": self.expression,
+                "trl_eff": self.translation_efficiency,
+            },
+            "rel_adj": {
+                "rel_exp_adj_list": self.rel_exp_adj_list,
+                "rel_trl_eff_adj_list": self.rel_trl_eff_adj_list,
+            },
+        }
+        if self.knockout_gen is not None:
+            params["knockout_gen"] = self.knockout_gen
+        return params
+
+
+@dataclass
+class MecillinamParams(BaseClass):
+    """
+    Parameters for mecillinam antibiotic condition.
+
+    Mecillinam is a beta-lactam antibiotic that inhibits PBP2 (penicillin-binding
+    protein 2), affecting cell wall synthesis and cell shape.
+
+    Attributes:
+        times: Times at which to change mecillinam concentration (seconds)
+        concentrations: Mecillinam concentrations at each time point (mM)
+        knockouts: Gene IDs for which to knock out translation
+    """
+
+    times: list[float] = field(default_factory=lambda: [0.0])
+    concentrations: list[float] = field(default_factory=lambda: [0.0])
+    knockouts: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if len(self.times) != len(self.concentrations):
+            raise ValueError("times and concentrations must have the same length")
+
+    def to_variant_params(self) -> dict[str, Any]:
+        """
+        Convert to variant parameter dictionary for mecillinam_timeline.
+
+        Returns:
+            Dictionary compatible with apply_variant function
+        """
+        return {
+            "times": self.times,
+            "concentrations": self.concentrations,
+            "knockouts": self.knockouts,
+        }
+
+
+@dataclass
+class GeneKnockoutParams(BaseClass):
+    """
+    Parameters for gene knockout conditions.
+
+    Gene knockouts can be applied at the ParCa level (gene_deletions) or
+    at the translation level (translation efficiency = 0).
+
+    Attributes:
+        gene_deletions: List of gene IDs to delete at ParCa level
+        translation_knockouts: List of gene IDs to knock out at translation level
+    """
+
+    gene_deletions: list[str] = field(default_factory=list)
+    translation_knockouts: list[str] = field(default_factory=list)
+
+
+class NextflowProfile(StrEnum):
+    STANDARD = "standard"
+    AWS = "aws"
+    CCAM = "ccam"
+
+
+@dataclass
+class OutputEmitterConfig(BaseClass):
+    type: Literal["parquet", "timeseries", "xarray"]
+    out_dir: str | None = None
+    out_uri: str | None = None
+    args: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SimulationConfig(BaseClass, abc.ABC):
+    def __post_init__(self) -> None:
+        if not self.validate():
+            raise ValueError(
+                f"The requested config payload does not match expected structure:\n{self.model_dump()}"
+            )
+
+    @abc.abstractmethod
+    def validate(self) -> bool:
+        """
+        The purpose of this method is to validate timeseries generator
+            request payloads/workloads and safely onboard new configs/workloads
+            by preventing arbitrary configs or arbitrary funcs.
+
+        This method should be implemented such that:
+
+        Inputs:
+            Implementation attributes/fields and vals
+        Outputs:
+            Whether the serialized representation produced by
+                the `model_dump()` method has values
+                that are at least in some way directly consumable
+                by the corresponding Simulator
+        """
+        pass
+
+
+@dataclass
+class VariantVecoli(BaseClass):
+    id: Literal["new_gene_internal_shift_variable_strength", "condition", "mecillinam_timeline"]
+    config: dict[str, Any]
+
+
+@dataclass
+class SimulationConfigVecoli(SimulationConfig):
+    """Vecoli simulation config (JSON), 1:1"""
+    experiment_id: str
+    sim_data_path: str
+    n_init_sims: int = field(default=1)
+    generations: int = field(default=1)
+    variants: list[VariantVecoli] = field(default_factory=list)
+    emitter_arg: OutputEmitterConfig = field(default=OutputEmitterConfig(type="parquet", out_uri=get_bucket()))
+
+    def validate(self) -> bool:
+        # TODO: add full vEcoli simulation config JSON attributes exposed by SMS API
+        # seed, generations, "new_gene_internal_shift_variable_strength" condition mecillinam_timeline, variants
+        # expected_keys = ['emitter', 'emitter_arg', 'experiment_id', 'sim_data_path']
+        # expected_types = [str, dict, str, str]
+        # payload = self.model_dump()
+        # payload_keys = sorted(list(payload.keys()))
+        # return payload_keys == expected_keys \
+        #     and [type(payload[key]) for key in payload_keys] == expected_types
+        return True
+
+    def model_dump(self) -> dict[str, Any]:
+        attrs = [self.experiment_id, self.sim_data_path]
+        config = dict(zip(
+            attrs,
+            [getattr(self, attr) for attr in attrs]
+        ))
+        config.update(self._format_emitter())
+        config.update({"variants": {
+            variant.id: variant.config
+            for variant in self.variants
+        }})
+        return config
+
+    def _format_emitter(self) -> dict[str, Any]:
+        outdir_key = "out_dir"
+        path = self.emitter_arg.out_dir or self.emitter_arg.out_uri
+        if path == self.emitter_arg.out_uri:
+            outdir_key = "out_uri"
+
+        return {"emitter": self.emitter_arg.type, "emitter_arg": {outdir_key: path}}
+
+
+@dataclass
+class Simulation(BaseClass):
+    database_id: int
+    config: SimulationConfigVecoli
+
+
+@dataclass
+class TimeseriesDataset(BaseClass):
+    database_id: int  # TODO: used to perform loookup dataset from db/s3 (cross-reference with simulation attr)
+    simulation: Simulation  # or simulation_id
+    metadata_included: bool = True
+    selections: list[str] | None = None
+
+    @property
+    def outdir_root(self):
+        emitter = self.simulation.config.emitter_arg
+        return emitter.out_dir or emitter.out_uri
+
+    @property
+    def x(self):
+        return self.load_simdata()
+
+    @property
+    def y(self):
+        return self.load_timeseries()
+
+    def load_timeseries(self) -> polars.DataFrame:
+        return load_dataset(
+            self.simulation.config.experiment_id,
+            Path(self.outdir_root),
+            observables=self.selections,
+            include_metadata=self.metadata_included,
+        )
+
+    def load_simdata(self) -> SimulationDataEcoli:
+        # TODO: be able to turn into pl.DataFrame!
+        return LoadSimData(sim_data_path=self.simulation.config.sim_data_path).sim_data
+
+
+# === UQ Pipeline (e2e workflow params and outputs): x, y, theta, etc ===
+
+@dataclass
+class UQInputParameters(BaseClass, abc.ABC):
+    """
+    Implementations of this interface should implement the `to_simulator_config()` method,
+    in which the parameters defined in this class are formatted for the given
+    simulator (library/repo/api). In this case, the aforementioned "simulator" provides
+    the simulation executor function, or at least that which is required to generate
+    the timeseries outputs. This simulation function (f) is the callable that
+    parameterizes the PCE phase(s) in creation and fitting of `PCESurrogate` output
+    instances.
+
+    The naming scheme should be:
+        `UQInputParameters<SIMULATOR NAME>`
+    """
+
+    @abc.abstractmethod
+    def to_simulation_config(self, *args, **kwargs) -> SimulationConfig:
+        pass
+
+
+@dataclass
+class UQInputParametersVecoli(UQInputParameters):
+    """
+    Complete set of vEcoli input parameters for UQ analysis.
+
+    This combines all input parameter types into a single container that can
+    be used to parametrize simulation runs for sensitivity analysis.
+
+    Attributes:
+        vio: Violacein pathway parameters
+        mecillinam: Mecillinam antibiotic parameters
+        knockouts: Gene knockout parameters
+        seed: Random seed for the simulation
+        generations: Number of generations to simulate
+        condition: Base media condition (if not set by vio)
+    """
+
+    vio: VioPathwayParams = field(default_factory=VioPathwayParams)
+    mecillinam: MecillinamParams = field(default_factory=MecillinamParams)
+    knockouts: GeneKnockoutParams = field(default_factory=GeneKnockoutParams)
+    seed: int = 0
+    generations: int = 8
+    condition: MediaCondition = MediaCondition.BASAL
+
+    def to_simulation_config(self) -> SimulationConfig:
+        """
+        Convert to configuration dictionary for EcoliSim.
+
+        Returns:
+            Dictionary that can be used to configure a simulation
+        """
+        config: dict[str, Any] = {
+            "seed": self.seed,
+            "generations": self.generations,
+        }
+
+        # Add variants based on which parameters are active
+        variants: dict[str, list[dict[str, Any]]] = {}
+
+        if self.vio.enabled:
+            variants["new_gene_internal_shift_variable_strength"] = [self.vio.to_variant_params()]
+        else:
+            # Just set the condition if vio is not enabled
+            variants["condition"] = [{"condition": self.condition.value}]
+
+        if any(self.mecillinam.concentrations):
+            variants["mecillinam_timeline"] = [self.mecillinam.to_variant_params()]
+
+        if variants:
+            config["variants"] = variants
+
+        return SimulationConfigVecoli
+
+
+class CellCyclePhase(str, Enum):
+    """Standard cell cycle phases for E. coli."""
+
+    B_PERIOD = "B_period"  # Pre-initiation (birth to replication initiation)
+    C_PERIOD = "C_period"  # DNA replication
+    D_PERIOD = "D_period"  # Post-replication to division
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class CellCycleVariable(BaseClass):
+    """
+    Container for cell cycle variable values.
+
+    Attributes:
+        values: The computed cell cycle variable values, shape (n_timepoints,)
+        phase_labels: Cell cycle phase labels for each timepoint
+        normalized: Whether values are normalized to [0, 1]
+        variable_name: Name of the cell cycle variable
+        metadata: Additional metadata about the computation
+    """
+
+    values: np.ndarray
+    phase_labels: Optional[np.ndarray] = None
+    normalized: bool = True
+    variable_name: str = "cell_cycle_variable"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_stage_bins(self, n_bins: int = 10) -> np.ndarray:
+        """
+        Bin the cell cycle variable into discrete stages.
+
+        Args:
+            n_bins: Number of bins/stages
+
+        Returns:
+            Array of bin indices (0 to n_bins-1)
+        """
+        if self.normalized:
+            bins = np.linspace(0, 1, n_bins + 1)
+        else:
+            bins = np.linspace(self.values.min(), self.values.max(), n_bins + 1)
+
+        return np.digitize(self.values, bins) - 1
+
+
+# === PCE: Surrogate creation, surrogate outputs ===
+
+
+@dataclass
+class PCESurrogateProfile:
+    population: PCESurrogate
+    cell_cycle: PCESurrogate
+
+
+@dataclass
+class SobolIndexProfile(BaseClass):
+    """
+    each attribute of size 2 => one for fist order, one for total order
+    """
+
+    population: SobolIndices
+    cell_cycle: list[SobolIndices]  # (of clen(n_cell_cycle_bins))
+
+
+# === UQ e2e workflow/pipeline results/outputs ===
+
+class StratificationLens(StrEnum):
+    POPULATION = "population"
+    CELL_CYCLE = "cell_cycle"
+
+
+@dataclass
+class UqProfile:
+    """
+    Uncertainty Quantification Profile for a given simulation/dataset/parameter-set.
+    The atomic output of `uq` workflows and the primary report for `uq` cli/api.
+
+    Attributes:
+        stratification: (StratificationLens) "population" (bulk, phase1) or "cell_cycle" (tempo is theta, phase2)
+        sobol_indices: (list[SobolIndices]) For population stratification, must be len == 1, otherwise len == n_theta_bins
+    """
+    stratification: StratificationLens
+    sobol_indices: list[SobolIndices]
+    surrogate: PCESurrogate  # TODO: or, surrogate_id --> hydrate pickled instances!
+
+    def __post_init__(self) -> None:
+        if len(self.sobol_indices) > 1 and self.stratification == StratificationLens.POPULATION:
+            raise ValueError(
+                f"A population level stratification "
+                f"is only expected to have 1 set of SobolIndices. "
+                f"As such, a cell cycle level stratification is"
+                f"expected to have n_bin sets of SobolIndices!"
+            )
+
+
+@dataclass
+class PipelineResult:
+    """
+    The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
+    (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
+    human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
+    orthogonal decompositions.
+    """
+    population: UqProfile
+    cell_cycle: UqProfile
+
+
+@dataclass
+class PipelineConfig:
+    name: str
+    dataset_id: int  # used to look up TimeseriesDataset in DB for SMS API :)
+
+
+@dataclass
+class Pipeline:
+    """
+    Attributes:
+        database_id: int
+        config: UqPipelineConfig consisting of pipleine name, and pce config.
+        dataset: Timeseries dataset containing the following attributes: timeseries data(y), parameter dataset (x), database_id, and simulation. Simulation itself
+            has a database_id, and a config (vecoli config/api request config?)
+        result: PipelineResult object containing 2 `UqProfile` instances, one for
+            each stratification type (population(bulk), cell_cycle(cell, [i][j])
+    """
+    database_id: int
+    config: PipelineConfig
+    dataset: TimeseriesDataset
+    result: PipelineResult
+
+    def build(self, *args):
+        pass

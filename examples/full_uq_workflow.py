@@ -50,7 +50,7 @@ from uq import (
     MecillinamParams,
     # Output extraction
     SobolIndices,
-    UQInputParameters,
+    UQInputParametersVecoli,
     VioPathwayParams,
     # Wrappers
     compute_variance_decomposition,
@@ -312,7 +312,7 @@ def run_full_uq_workflow(
 
     # 1d. Complete Input Parameter Container
     print("\n1d. Complete UQ Input Parameters:")
-    uq_inputs = UQInputParameters(
+    uq_inputs = UQInputParametersVecoli(
         vio=vio_params,
         mecillinam=mec_params,
         knockouts=ko_params,
@@ -561,7 +561,7 @@ def run_full_uq_workflow(
         print(f"        {name:30s}: {idx:.4f} {bar}")
 
     print("\n    Most Influential Parameters:")
-    for i, (name, value) in enumerate(sobol_indices.get_most_influential(n=3)):
+    for i, (name, value) in enumerate(sobol_indices.select(n=3)):
         print(f"        {i + 1}. {name}: {value:.4f}")
 
     # =========================================================================

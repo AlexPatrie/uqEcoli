@@ -311,7 +311,7 @@ def _(mo):
 @app.cell
 def _(mo, sobol_indices):
     # Get most influential parameters
-    top_params = sobol_indices.get_most_influential(n=3, index_type="total")
+    top_params = sobol_indices.select(n=3, index_type="total")
 
     mo.md(
         """

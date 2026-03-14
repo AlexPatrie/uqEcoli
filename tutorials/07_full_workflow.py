@@ -320,7 +320,7 @@ def _(FULL_PARAM_BOUNDS, morris_results):
     TOP_N = 5
     important_params = morris_results.get_screening_candidates(top_n=TOP_N)
     print(f"Top {TOP_N} parameters for detailed analysis:")
-    for name, mu_star in morris_results.get_most_influential(n=TOP_N):
+    for name, mu_star in morris_results.select(n=TOP_N):
         print(f"  {name}: μ*={mu_star:.4f}")
 
     # Classify all parameters

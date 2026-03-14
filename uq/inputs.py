@@ -24,7 +24,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from uq.models import UQInputParameters
+from uq.pce.models import Parameter
+from uq.pipeline.models import UQInputParametersVecoli
 
 if TYPE_CHECKING:
     pass
@@ -67,6 +68,7 @@ class InputParameterSpace(abc.ABC):
         self.implementation_init(*args, **kwargs)
 
     def implementation_init(self, *args, **kwargs) -> None:
+        # self.define_parameters()
         return None
 
     @property
@@ -84,8 +86,12 @@ class InputParameterSpace(abc.ABC):
         """
         return np.array(self.parameter_bounds)
 
+    # @abc.abstractmethod
+    # def define_parameters(self, *args, **kwargs) -> list[Parameter]:
+    #     pass
+
     @abc.abstractmethod
-    def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParameters:
+    def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParametersVecoli:
         """
         Convert a sample from the parameter space to UQInputParameters.
 
@@ -99,7 +105,7 @@ class InputParameterSpace(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def params_to_sample(self, params: UQInputParameters) -> np.ndarray:
+    def params_to_sample(self, params: UQInputParametersVecoli) -> np.ndarray:
         """
         Convert UQInputParameters to a sample array.
 
@@ -194,29 +200,29 @@ class InputParameterSpace(abc.ABC):
 
 
 class InputParameterSpaceVecoli(InputParameterSpace):
-    parameter_names: list[str]
-    parameter_bounds: list[tuple[float, float]]
-    parameter_types: list[Literal["continuous", "discrete", "categorical"]]
-
     """
-    Defines the parameter space for UQ sensitivity analysis.
+    Defines the parameter space for UQ sensitivity analysis pipeline
+    on vEcoli datasets.
 
     This class provides methods to sample input parameters and to convert
     between the UQ library format (numpy arrays) and UQInputParameters.
 
+    Kwargs:
+        `vio_expression_bounds: tuple[float, float] = (low, high)`
+        `vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0)`
+        `mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0)`
+        `include_vio: bool = True`
+        `include_mecillinam: bool = True`
+        `knockout_genes: Optional[list[str]] = None`
     Attributes:
         parameter_names: Names of the parameters being varied
         parameter_bounds: Lower and upper bounds for each parameter
         parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
-
-    Kwargs:
-        vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
-        vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-        mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
-        include_vio: bool = True,
-        include_mecillinam: bool = True,
-        knockout_genes: Optional[list[str]] = None,
     """
+
+    parameter_names: list[str]
+    parameter_bounds: list[tuple[float, float]]
+    parameter_types: list[Literal["continuous", "discrete", "categorical"]]
 
     def implementation_init(self, *args, **kwargs) -> None:
         if kwargs.get("include_vio"):
@@ -258,7 +264,7 @@ class InputParameterSpaceVecoli(InputParameterSpace):
         seed: int = 0,
         generations: int = 8,
         knockouts: Optional[list[str]] = None,
-    ) -> UQInputParameters:
+    ) -> UQInputParametersVecoli:
         """
         Convert a sample from the parameter space to UQInputParameters.
 
@@ -271,7 +277,7 @@ class InputParameterSpaceVecoli(InputParameterSpace):
         Returns:
             UQInputParameters instance
         """
-        params = UQInputParameters(seed=seed, generations=generations)
+        params = UQInputParametersVecoli(seed=seed, generations=generations)
 
         idx = 0
         if self._include_vio:
@@ -294,7 +300,7 @@ class InputParameterSpaceVecoli(InputParameterSpace):
         return params
 
     @override
-    def params_to_sample(self, params: UQInputParameters) -> np.ndarray:
+    def params_to_sample(self, params: UQInputParametersVecoli) -> np.ndarray:
         """
         Convert UQInputParameters to a sample array.
 

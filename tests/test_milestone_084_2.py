@@ -604,7 +604,7 @@ class TestRequirement8_SobolIndices:
 
         This is essential for understanding which parameters matter most.
         """
-        top_params = sample_sobol_indices.get_most_influential(n=3)
+        top_params = sample_sobol_indices.select(n=3)
 
         assert len(top_params) == 3, "MILESTONE 08.4.2 FAILED: get_most_influential must return requested number"
         assert all(isinstance(p, tuple) and len(p) == 2 for p in top_params), (
@@ -815,7 +815,7 @@ class TestMilestone084_2_Summary:
         assert aggregated_uniform.std is not None
 
         # Can identify most influential parameters
-        top_params = sample_sobol_indices.get_most_influential(n=3)
+        top_params = sample_sobol_indices.select(n=3)
         assert len(top_params) > 0
 
         print("\n" + "=" * 70)

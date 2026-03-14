@@ -23,7 +23,7 @@ import numpy as np
 from uq.aggregation import AggregatedOutput, AggregationStrategy
 from uq.inputs import InputParameterSpaceVecoli
 from uq.io import DataclassIO
-from uq.models import Parameter
+from uq.pce.models import Parameter
 from uq.wrappers import PrecomputedWrapper, SimulationWrapper, WrapperConfig
 
 if TYPE_CHECKING:
@@ -61,7 +61,17 @@ class SobolIndices:
     output_names: list[str] = field(default_factory=list)
     confidence_intervals: Optional[dict[str, np.ndarray]] = None
 
-    def get_most_influential(self, n: int = 5, index_type: str = "total") -> list[tuple[str, float]]:
+    @property
+    def selection_size(self) -> int:
+        return 5
+
+    @property
+    def selections(
+        self,
+    ) -> list[tuple[str, float]]:
+        return self.select(n=self.selection_size)
+
+    def select(self, n: int = 5, index_type: str = "total") -> list[tuple[str, float]]:
         """
         Get the most influential parameters.
 

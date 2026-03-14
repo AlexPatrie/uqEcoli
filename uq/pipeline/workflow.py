@@ -123,48 +123,159 @@ orthogonal decompositions.
   └─────────────────────────────────────────────────────────────────────────────────────┘
 """
 
+import abc
+import os
+
 # TODO: Implement the above!!! THEN update tutorials/docs!!!
-import math
-import warnings
 from dataclasses import dataclass, field
 from enum import StrEnum
-from itertools import combinations_with_replacement
 from pathlib import Path
 from typing import Any, Callable, Literal
 
 import numpy as np
 import polars
 from ecoli.library.sim_data import LoadSimData
-from numpy.polynomial.hermite_e import hermeval
-from numpy.polynomial.legendre import legval
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
-from scipy.linalg import lstsq
-from scipy.stats import qmc
 
 from uq import (
+    AggregatedOutput,
     InputParameterSpaceVecoli,
     PCESurrogate,
     SensitivityAnalyzer,
+    SimulationWrapper,
     SobolIndices,
-    calculate_cell_cycle,
-    load_dataset,
+    WrapperConfig,
+    cell_cycle,
+    compute_variance_decomposition,
+    inputs,
+)
+from uq import (
+    calculate_cell_cycle as _cell_cycle,
 )
 from uq.inputs import InputParameterSpace
-from uq.models import (
-    BaseClass,
-    Parameter,
-    PCEConfig,
-    PCEFitResult,
-    PCEParameterSelectionConfig,
-    PCEPreprocessingConfig,
-    PCESolverConfig,
-    PCESurrogateConfig,
-)
-from uq.pce import generate_surrogate
+from uq.pce.models import PCEParameterSelectionConfig
+from uq.pce.surrogate import generate_surrogate, prescreen_parameters
+from uq.pipeline.models import Pipeline, PipelineConfig
 
 
-def cell_cycle():
-    result = calculate_cell_cycle(
+# 1.)
+def define_parameter_space(
+    sim_data_path: Path | None = None,
+    include_vio=True,
+    include_mecillinam=True,
+    vio_expression_bounds=(0.0, 5.0),
+    vio_trl_eff_bounds=(0.0, 2.0),
+    mecillinam_conc_bounds=(0.0, 10.0),
+) -> InputParameterSpace | InputParameterSpaceVecoli:
+    """
+    Creates an instance of InputParameterSpace for pipeline from SimData.
+    """
+    # TODO: first load SimulationDataEcoli, then extract list[Parameter],
+    #  where bounds are inferred from initial condition/parca?
+    return InputParameterSpaceVecoli(
+        include_vio,
+        include_mecillinam,
+        vio_expression_bounds,
+        vio_expression_bounds,
+        vio_trl_eff_bounds,
+        mecillinam_conc_bounds,
+    )
+
+
+# 2.)
+def load_timeseries(
+    experiment_id: str, outdir_root: Path, observables: list[str] | None = None, include_metadata: bool = True
+) -> polars.DataFrame:
+    return inputs.load_dataset(experiment_id, outdir_root, observables, include_metadata)
+
+
+@dataclass
+class AggregationResult:
+    uniform: AggregatedOutput
+    generation: AggregatedOutput
+    seed: AggregatedOutput
+
+
+# 3.)
+async def aggregate_timeseries(timeseries) -> AggregationResult:
+    """
+    This function should call Aggregator(conn, history_sql, config_sql)
+    with queries tailored to each level of stratification in (cell, generation, seed).
+    """
+    # aggregator = Aggregator(conn, history_sql, config_sql)
+    pass
+
+
+VarianceDecomposition = dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
+
+
+# 4.)
+def get_variance_decomposition(agg: AggregationResult) -> VarianceDecomposition:
+    """
+    Returns Total variance from uniform aggregation
+    - 'between_generation_variance': Variance between generations
+    - 'between_seed_variance': Variance between lineage seeds
+    - 'within_group_variance': Residual variance
+    - 'generation_fraction': Fraction of variance from generation
+    - 'seed_fraction': Fraction of variance from lineage seed
+    """
+    return compute_variance_decomposition(agg.generation, agg.seed, agg.uniform)
+
+
+# 5. )
+async def phase1(
+    input_parameter_space: InputParameterSpaceVecoli,
+    simulation_func: Callable,
+    sample_size: int,
+    export_surrogate: bool = True,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
+    **kwargs,
+):
+    async def generate_surrogate():
+        return create_surrogate(
+            full_space=input_parameter_space,
+            f=simulation_func,
+            sample_size=sample_size,
+            prescreen_config=prescreen_config,
+            export=export_surrogate,
+            **kwargs,
+        )
+
+    async def get_sobol_indices():
+        wrapper = SimulationWrapper(config=WrapperConfig(**kwargs["simulation"]), parameter_space=input_parameter_space)
+        analyzer = SensitivityAnalyzer(
+            parameter_space=input_parameter_space,
+            wrapper=wrapper,
+            # TODO: pick samples?,
+            # TODO: pick outputs?
+        )
+        pass
+
+
+def create_surrogate(
+    full_space: InputParameterSpace,
+    f: Callable,
+    sample_size: int,
+    config: PCEParameterSelectionConfig | None = None,
+    export: bool = True,
+    **kwargs,
+) -> PCESurrogate:
+    surrogate = generate_surrogate(space=full_space, generator=f, sample_size=sample_size, config=config)
+    if export:
+        path = kwargs.get("path", Path(os.getcwd()).absolute())
+        surrogate.export(path)
+    return surrogate
+
+
+def calculate_cell_cycle(
+    experiment_id: str,
+    outdir_root: str,
+    variable_type: Literal["mass_based", "dna_replication", "cell_angle", "koopman"],
+    n_bins: int,
+    output_column: str,
+    verbose: bool = True,
+):
+    result = _cell_cycle(
         experiment_id="api_simulation_default",
         outdir_root="/path/to/sims",
         variable_type="mass_based",  # or "dna_replication", "cell_angle", "koopman"
@@ -177,144 +288,6 @@ def cell_cycle():
     print(f"Phenotypic CV: {result.phenotypic_variation_cv}")
     print(f"Cell cycle values: {result.cell_cycle_variable.values}")
     return result
-
-
-def create_surrogate(
-    full_space: InputParameterSpace, f: Callable, sample_size: int, config: PCEParameterSelectionConfig | None = None
-):
-    surrogate = generate_surrogate(space=full_space, generator=f, sample_size=sample_size, config=config)
-
-
-class NextflowProfile(StrEnum):
-    STANDARD = "standard"
-    AWS = "aws"
-    CCAM = "ccam"
-
-
-@dataclass
-class OutputEmitterConfig(BaseClass):
-    type: Literal["parquet", "timeseries", "xarray"]
-    out_dir: str | None = None
-    out_uri: str | None = None
-    args: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class SimulationConfig(BaseClass):
-    experiment_id: str
-    sim_data_path: str
-    emitter_arg: OutputEmitterConfig
-
-    def model_dump(self) -> dict[str, Any]:
-        outdir_key = "out_dir"
-        path = self.emitter_arg.out_dir or self.emitter_arg.out_uri
-        if path == self.emitter_arg.out_uri:
-            outdir_key = "out_uri"
-        return {"emitter": self.emitter_arg.type, "emitter_arg": {outdir_key: path}}
-
-
-@dataclass
-class Simulation(BaseClass):
-    database_id: int
-    config: SimulationConfig
-
-
-@dataclass
-class TimeseriesDataset(BaseClass):
-    database_id: int  # TODO: used to perform loookup dataset from db/s3 (cross-reference with simulation attr)
-    simulation: Simulation  # or simulation_id
-    metadata_included: bool = True
-    selections: list[str] | None = None
-
-    @property
-    def outdir_root(self):
-        emitter = self.simulation.config.emitter_arg
-        return emitter.out_dir or emitter.out_uri
-
-    @property
-    def x(self):
-        return self.load_simdata()
-
-    @property
-    def y(self):
-        return self.load_timeseries()
-
-    def load_timeseries(self) -> polars.DataFrame:
-        return load_dataset(
-            self.simulation.config.experiment_id,
-            Path(self.outdir_root),
-            observables=self.selections,
-            include_metadata=self.metadata_included,
-        )
-
-    def load_simdata(self) -> SimulationDataEcoli:
-        # TODO: be able to turn into pl.DataFrame!
-        return LoadSimData(sim_data_path=self.simulation.config.sim_data_path).sim_data
-
-
-@dataclass
-class PCESurrogateProfile:
-    population: PCESurrogate
-    cell_cycle: PCESurrogate
-
-
-@dataclass
-class SobolIndexProfile(BaseClass):
-    """
-    each attribute of size 2 => one for fist order, one for total order
-    """
-
-    population: SobolIndices
-    cell_cycle: list[SobolIndices]  # (of clen(n_cell_cycle_bins))
-
-
-class Stratification(StrEnum):
-    POPULATION = "population"
-    CELL_CYCLE = "cell_cycle"
-
-
-@dataclass
-class UqProfile:
-    stratification: Stratification
-    sobol_indices: SobolIndices | list[SobolIndices]
-    surrogate: PCESurrogate  # TODO: or, surrogate_id --> hydrate pickled instances!
-
-
-@dataclass
-class PipelineResult:
-    """
-    The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-    (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-    human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-    orthogonal decompositions.
-    """
-
-    population: UqProfile
-    cell_cycle: UqProfile
-
-
-@dataclass
-class PipelineConfig:
-    name: str
-    dataset_id: int
-    pce_config: PCESurrogateConfig
-
-
-@dataclass
-class Pipeline:
-    """
-    Attributes:
-        database_id: int
-        config: UqPipelineConfig consisting of pipleine name, and pce config.
-        dataset: Timeseries dataset containing the following attributes: timeseries data(y), parameter dataset (x), database_id, and simulation. Simulation itself
-            has a database_id, and a config (vecoli config/api request config?)
-        pce_surrogate: Object containing 2 pce surrogates generated from pipeline (bulk/phase1, phenotypic/phase2)
-    """
-
-    database_id: int
-    config: PipelineConfig
-    dataset_id: int  # used to look up TimeseriesDataset in DB for SMS API :)
-    result: PipelineResult
 
 
 def execute_pipeline(config: PipelineConfig) -> Pipeline:

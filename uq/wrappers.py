@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy, Aggregator
-from uq.inputs import InputParameterSpaceVecoli, UQInputParameters
+from uq.inputs import InputParameterSpaceVecoli, UQInputParametersVecoli
 from uq.outputs import OutputType
 
 if TYPE_CHECKING:
@@ -161,9 +161,9 @@ class SimulationWrapper:
             results.append(self(x))
         return np.vstack(results)
 
-    def _get_cache_key(self, params: UQInputParameters) -> str:
+    def _get_cache_key(self, params: UQInputParametersVecoli) -> str:
         """Generate a unique cache key for the parameters."""
-        config_dict = params.to_config_dict()
+        config_dict = params.to_simulation_config()
         config_str = json.dumps(config_dict, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()
 
@@ -179,7 +179,7 @@ class SimulationWrapper:
         cache_path = Path(self.config.cache_dir) / f"{cache_key}.npy"
         np.save(cache_path, result)
 
-    def _run_simulation(self, params: UQInputParameters, run_id: str) -> str:
+    def _run_simulation(self, params: UQInputParametersVecoli, run_id: str) -> str:
         """
         Run a vEcoli simulation with the specified parameters.
 
@@ -194,7 +194,7 @@ class SimulationWrapper:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # Create config file
-        config_dict = params.to_config_dict()
+        config_dict = params.to_simulation_config()
         config_dict["sim_data_path"] = self.config.sim_data_path
         config_dict["emitter"] = "parquet"
         config_dict["out_dir"] = str(output_path)
@@ -451,7 +451,7 @@ class PrecomputedWrapper:
 
         return np.vstack(X_list), np.vstack(Y_list)
 
-    def _config_to_params(self, config: dict[str, Any]) -> UQInputParameters:
+    def _config_to_params(self, config: dict[str, Any]) -> UQInputParametersVecoli:
         """Convert a config dictionary back to UQInputParameters."""
         from uq.inputs import (
             MecillinamParams,
@@ -459,7 +459,7 @@ class PrecomputedWrapper:
             VioPathwayParams,
         )
 
-        params = UQInputParameters()
+        params = UQInputParametersVecoli()
 
         if "variants" in config:
             variants = config["variants"]

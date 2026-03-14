@@ -177,10 +177,10 @@ def __(mo):
 
 @app.cell
 def __(ko_params, mec_params, mo, vio_params):
-    from uq import UQInputParameters
+    from uq import UQInputParametersVecoli
 
     # Combine all parameters
-    full_params = UQInputParameters(
+    full_params = UQInputParametersVecoli(
         vio=vio_params,
         mecillinam=mec_params,
         knockouts=ko_params,
@@ -197,13 +197,13 @@ def __(ko_params, mec_params, mo, vio_params):
 
     This object can be converted to a simulation configuration dictionary.
     """)
-    return UQInputParameters, full_params
+    return UQInputParametersVecoli, full_params
 
 
 @app.cell
 def __(full_params, mo):
     # Convert to configuration dictionary
-    config_dict = full_params.to_config_dict()
+    config_dict = full_params.to_simulation_config()
 
     mo.md(f"""
     **Configuration Dictionary:**

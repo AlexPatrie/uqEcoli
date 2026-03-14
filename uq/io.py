@@ -48,3 +48,7 @@ class DataclassIO:
             name = npy_file.stem
             data[name] = np.load(npy_file)
         return _class(**data)
+
+
+def get_bucket():
+    pass

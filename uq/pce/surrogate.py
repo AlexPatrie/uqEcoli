@@ -53,7 +53,7 @@ from pytuq.utils.maps import scale01ToDom, scaleDomTo01
 from scipy.stats import qmc
 
 from uq.inputs import InputParameterSpace, InputParameterSpaceVecoli
-from uq.models import (
+from uq.pce.models import (
     Parameter,
     PCEConfig,
     PCEFitResult,
@@ -188,6 +188,15 @@ def fit_pce_coefficients(
     Given N input-output pairs (X, Y), fit the polynomial chaos expansion
     coefficients using PyTUQ's regression methods.
 
+    Examples
+    --------
+    >>> X = np.random.uniform(-1, 1, (100, 3))
+    >>> Y = X[:, 0] + 0.5 * X[:, 1]**2 + 0.1 * X[:, 0] * X[:, 2]
+    >>> result = fit_pce_coefficients(X, Y, polynomial_order=2)
+    >>> print(f"R² = {result.r_squared:.4f}")
+    >>> surrogate = result.to_surrogate()
+    >>> Y_pred = surrogate.predict(X_new)
+
     Parameters
     ----------
     X : np.ndarray
@@ -211,15 +220,6 @@ def fit_pce_coefficients(
     -------
     PCEFitResult
         Fitted coefficients, multi-indices, and metadata.
-
-    Examples
-    --------
-    >>> X = np.random.uniform(-1, 1, (100, 3))
-    >>> Y = X[:, 0] + 0.5 * X[:, 1]**2 + 0.1 * X[:, 0] * X[:, 2]
-    >>> result = fit_pce_coefficients(X, Y, polynomial_order=2)
-    >>> print(f"R² = {result.r_squared:.4f}")
-    >>> surrogate = result.to_surrogate()
-    >>> Y_pred = surrogate.predict(X_new)
     """
     X = np.atleast_2d(X)
     Y = np.atleast_1d(Y).ravel()

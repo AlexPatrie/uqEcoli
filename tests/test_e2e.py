@@ -43,7 +43,7 @@ class TestE2EInputToOutput:
         """Complete workflow from parameter space to simulation-ready params."""
         from uq import (
             InputParameterSpaceVecoli,
-            UQInputParameters,
+            UQInputParametersVecoli,
             VioPathwayParams,
         )
 
@@ -65,7 +65,7 @@ class TestE2EInputToOutput:
         params = space.sample_to_params(sample)
 
         # 4. Verify structure
-        assert isinstance(params, UQInputParameters)
+        assert isinstance(params, UQInputParametersVecoli)
         assert isinstance(params.vio, VioPathwayParams)
         assert space.parameter_bounds[0][0] <= params.vio.expression <= space.parameter_bounds[0][1]
 
@@ -191,7 +191,7 @@ class TestE2ESensitivityWorkflow:
         )
 
         # 5. Verify expected importance ranking
-        top_params = indices.get_most_influential(n=3)
+        top_params = indices.select(n=3)
         assert top_params[0][0] == "vio_expression"  # Most influential
 
     @pytest.mark.e2e
@@ -525,7 +525,7 @@ class TestE2ECompleteWorkflow:
         assert len(sobol.total_order) == 3
 
         # R4: Can identify most influential parameters
-        top = sobol.get_most_influential(n=3)
+        top = sobol.select(n=3)
         assert len(top) == 3
 
         # R5: Library support (UQPy/PyTUQ interfaces exist)

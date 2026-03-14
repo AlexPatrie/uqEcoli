@@ -5,7 +5,6 @@ These fixtures provide both synthetic data and real simulation data for testing.
 Real data is loaded from api_simulation_default experiment using uq.inputs.load_dataset().
 """
 
-import glob
 import json
 from pathlib import Path
 
@@ -655,7 +654,7 @@ def pce_surrogate_config(pce_parameters):
 @pytest.fixture
 def pce_fit_result(pce_sample_data):
     """Pre-fitted PCE result for testing."""
-    from uq.pce import fit_pce_coefficients
+    from uq.pce.surrogate import fit_pce_coefficients
 
     X, Y = pce_sample_data
     bounds = np.array([[-1, 1], [-1, 1], [-1, 1]])

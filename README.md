@@ -210,7 +210,7 @@ sobol_indices, pce_surrogate = analyzer.analyze_with_pce(
 
 # 5. Interpret results
 print("Most influential parameters:")
-for name, value in sobol_indices.get_most_influential(n=5):
+for name, value in sobol_indices.select(n=5):
     print(f"  {name}: {value:.4f}")
 ```
 
@@ -1179,7 +1179,7 @@ print(f"Parameters: {param_space.parameter_names}")
 print(f"First-order indices: {sobol.first_order}")
 print(f"Total-order indices: {sobol.total_order}")
 print(f"\nMost influential:")
-for name, val in sobol.get_most_influential(3):
+for name, val in sobol.select(3):
     print(f"  {name}: {val:.4f}")
 ```
 

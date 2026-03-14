@@ -67,7 +67,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_get_most_influential_total(self, sample_sobol_indices):
         """get_most_influential should return top parameters by total order."""
-        top = sample_sobol_indices.get_most_influential(n=2, index_type="total")
+        top = sample_sobol_indices.select(n=2, index_type="total")
 
         assert len(top) == 2
         # First should have highest total order index
@@ -77,7 +77,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_get_most_influential_first(self, sample_sobol_indices):
         """get_most_influential should work with first-order indices."""
-        top = sample_sobol_indices.get_most_influential(n=2, index_type="first")
+        top = sample_sobol_indices.select(n=2, index_type="first")
 
         assert len(top) == 2
         assert top[0][0] == "vio_expression"
@@ -141,7 +141,7 @@ class TestSobolIndices:
             parameter_names=["p1", "p2", "p3"],
         )
 
-        top = indices.get_most_influential(n=3)
+        top = indices.select(n=3)
         # Average total order: p1=0.475, p2=0.475, p3=0.15
         # Either p1 or p2 should be first (they're equal)
         assert top[2][0] == "p3"  # p3 should be last
@@ -476,6 +476,6 @@ class TestSobolIndexInterpretation:
         )
 
         # Get least influential
-        all_params = indices.get_most_influential(n=3)
+        all_params = indices.select(n=3)
         assert all_params[-1][0] == "unimportant"
         assert all_params[-1][1] < 0.01
