@@ -19,7 +19,9 @@ import numpy as np
 from duckdb import DuckDBPyConnection
 
 if TYPE_CHECKING:
-    from reconstruction.ecoli.simulation_data import SimulationDataEcoli
+    from reconstruction.ecoli.simulation_data import (
+        SimulationDataEcoli,  # TODO: ecoli.library.sim_data.LoadSimData.sim_data instead!
+    )
 
 
 class OutputType(str, Enum):
