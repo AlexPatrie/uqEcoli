@@ -1,73 +1,140 @@
 #!/usr/bin/env python
 """
-Full End-to-End UQ Workflow Example
+Full End-to-End UQ Pipeline (RFC006)
 
-This script demonstrates the complete UQ framework workflow as specified in CONTEXT.md
-for Milestone 08.4.2: "Implement uncertainty quantification framework to track prediction confidence"
+This script demonstrates the complete UQ framework workflow as specified by RFC006
+for Milestone 08.4.2: "Implement uncertainty quantification framework to track
+prediction confidence."
 
-The workflow covers:
-1. Defining scientifically relevant input parameters (vio, mecillinam, knockouts)
-2. Extracting output variables from simulation data
-3. Applying all four aggregation strategies
-4. Computing variance decomposition to deconvolve uncertainty types
-5. Running PCE-based sensitivity analysis with Sobol indices
-6. Cell cycle stratification analysis
-7. (Bonus) Koopman spectral analysis for dynamical insights
+The pipeline has two parallel phases after variance decomposition:
+
+  Phase 1 (Population/Bulk):
+    Morris prescreening → PCE surrogate → Sobol indices
+    "Which parameters drive bulk output variance?"
+
+  Phase 2 (Cell Cycle/Phenotypic):
+    GSA-informed observable selection → Koopman θ → Strategy 4 wrapper
+    → per-stage PCE → per-stage Sobol indices
+    "Which parameters drive variance WITHIN each cell cycle stage?"
+
+Both phases produce a UqProfile, assembled into a PipelineResult.
+
+This example uses synthetic data (generate_synthetic_simulation_data) and
+synthetic wrappers (SyntheticBulkWrapper, SyntheticStrategy4Wrapper) as
+stand-ins for real vEcoli simulations. In production, these would be replaced
+by SimulationWrapper and the real Strategy4Wrapper from uq.pipeline.workflow.
 
 Usage:
-    # With real simulation data:
-    uv run python uq/examples/full_uq_workflow.py --data-dir ./outputs
-
-    # With synthetic data for demonstration:
-    uv run python uq/examples/full_uq_workflow.py --synthetic
+    uv run python examples/uq_pipeline.py
+    uv run python examples/uq_pipeline.py --output-dir ./my_results
 
 Author: Alex Patrie
 """
 
 import argparse
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-import polars
 import polars as pl
-import pytest
-from polars import DataFrame
 
 # =============================================================================
-# UQ Package Imports
+# UQ Package Imports — using actual pipeline module
 # =============================================================================
 from uq import (
-    AggregatedOutput,
-    CellAngleCellCycleVariable,
-    # Cell cycle
-    CellCycleKoopmanAnalyzer,
-    DNAReplicationCellCycleVariable,
-    # Koopman (bonus)
     DynamicModeDecomposition,
-    GeneKnockoutParams,
-    # Input parameters
-    XSpaceVecoli,
-    MassBasedCellCycleVariable,
     MecillinamParams,
-    # Output extraction
-    SobolIndices,
-    UQInputParametersVecoli,
     VioPathwayParams,
-    # Wrappers
-    compute_variance_decomposition,
+    XSpaceVecoli,
+    identify_cell_cycle_relevant_observables,
 )
-from uq.pce.models import Parameter
-from uq.pipeline.models import TimeseriesDataset, Simulation, VariantConfig, BaseClass, Param, SimulationConfigVecoli
-from uq.synthetic import generate_synthetic_simulation_data, create_synthetic_aggregated_outputs
+from uq.common.models import BaseClass
+from uq.pipeline.models import (
+    GeneKnockoutParams,
+    PipelineResult,
+    StratificationLens,
+    UqProfile,
+)
+from uq.pipeline.workflow import (
+    aggregate_timeseries,
+    compute_strategy4_sobol,
+    get_variance_decomposition,
+    run_phase1,
+)
+from uq.synthetic import generate_signal, generate_synthetic_simulation_data
 
 
-# TODO: generalize this!
+# =============================================================================
+# Synthetic Wrappers (stand-ins for real simulation wrappers)
+#
+# In production, Phase 1 uses SimulationWrapper and Phase 2 uses
+# uq.pipeline.workflow.Strategy4Wrapper (which wraps a base simulation
+# function with Koopman θ-binning). Here we use synthetic wrappers
+# that exercise the same pipeline machinery with generate_signal().
+# =============================================================================
+
+
+class SyntheticBulkWrapper:
+    """
+    Synthetic wrapper for Phase 1: params → scalar bulk output.
+
+    In production, this would be SimulationWrapper which runs vEcoli and
+    aggregates outputs. Here we use generate_signal() to produce a
+    parameter-dependent timeseries and return its mean as the bulk output.
+    """
+
+    def __init__(self, param_names: list[str]):
+        self.param_names = param_names
+
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        signal = generate_signal(x, self.param_names, baseline_value=1.5, n_timesteps=400)
+        return np.array([signal.mean()])
+
+    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+        return np.vstack([self(x) for x in X])
+
+
+class SyntheticStrategy4Wrapper:
+    """
+    Synthetic wrapper for Phase 2 (Step 6d): params → per-stage output.
+
+    In production, this would be uq.pipeline.workflow.Strategy4Wrapper which:
+      1. Runs the simulation via base_wrapper(params)
+      2. Computes θ via KoopmanCellCycleVariable
+      3. Bins by θ into n_bins stages
+      4. Returns per-stage means
+
+    Here we simulate this with generate_signal() and uniform binning.
+    """
+
+    def __init__(self, param_names: list[str], n_bins: int = 10):
+        self.param_names = param_names
+        self.n_bins = n_bins
+
+    def __call__(self, params: np.ndarray) -> np.ndarray:
+        signal = generate_signal(
+            params,
+            self.param_names,
+            baseline_value=1.5,
+            n_timesteps=self.n_bins * 40,
+            random_seed=int(abs(params.sum() * 1000)) % (2**31),
+        )
+        n_per_bin = len(signal) // self.n_bins
+        stage_means = np.array([signal[s * n_per_bin : (s + 1) * n_per_bin].mean() for s in range(self.n_bins)])
+        return stage_means
+
+    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+        return np.vstack([self(x) for x in X])
+
+
+# =============================================================================
+# Pipeline Configuration
+# =============================================================================
+
+
 @dataclass
 class XSpaceConfigVecoli(BaseClass):
-    # TODO: should we enable both to be in here?
     vio_params: VioPathwayParams
     mec_params: MecillinamParams
     ko_params: GeneKnockoutParams
@@ -76,115 +143,50 @@ class XSpaceConfigVecoli(BaseClass):
     mecillinam_conc_bounds: tuple[float, float]
     generations: int
 
-    # TODO: what to do here? Will vio and mec ever be together?
-    def __post_init__(self):
-        # if self.vio_params is not None and self.mec_params is not None:
-        #     raise ValueError(f"For now, you can only specify either vio or mec params")
-        pass
 
-    def get_params(self, sim_data_path: Path) -> list[Param]:
-        # TODO: enable sim_data -> pl.dataframe -> list[Param]
-        raise NotImplementedError("not yet implemented!")
+# =============================================================================
+# Pipeline Execution
+# =============================================================================
 
 
-DATASET_DB = {
-    "0": TimeseriesDataset(
-        database_id=0,
-        simulation=Simulation(
-            database_id=0,
-            config=SimulationConfigVecoli(
-                experiment_id="TEST", sim_data_path="./kb/simData.cPickle", generations=10, n_init_sims=1000
-            ),
-        ),
-    )
-}
+def run_full_uq_workflow(
+    xspace_config: XSpaceConfigVecoli,
+    output_dir: Path = Path("./uq_results"),
+    n_samples: int = 50,
+    polynomial_order: int = 2,
+    n_bins: int = 10,
+) -> PipelineResult:
+    """
+    Run the complete RFC006 UQ pipeline using actual uq.pipeline module code.
 
+    Steps 1-4 are sequential and shared. Then Phase 1 (population-level GSA)
+    and Phase 2 (cell-cycle-stratified GSA) run, producing a PipelineResult
+    with two UqProfile instances.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    observable_columns = ["listeners__mass__dry_mass", "listeners__fba_results__growth"]
 
-def find_dataset(dataset_id: int):
-    return DATASET_DB.get(str(dataset_id))
-
-
-def initialize_output_dir(output_dir: Path):
-    print("\n" + "=" * 80)
-    print("STEP 0: Create UQ pipeline output dir")
     print("=" * 80)
-    output_path = output_dir
-    output_path.mkdir(parents=True, exist_ok=True)
+    print("vEcoli UQ Framework — Full RFC006 Pipeline")
+    print("Milestone 08.4.2: Uncertainty Quantification Framework")
+    print("=" * 80)
 
-
-def load_datasets(dataset_ids: list[int]):
-    # TODO: implement this for multi-experiment IO using sql below
-    # print(f"\nLoading real simulation data from: {data_dir}")
-    # In production, use:
-    # from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
-    # conn = create_duckdb_conn()
-    # history_sql, config_sql, _ = dataset_sql(data_dir, ["experiment_id"])
-    # print("    [Real data loading would happen here]")
-
-    # OR?:
-    # for dataset_id in dataset_ids:
-    #     dataset = find_dataset(dataset_id=dataset_id)
-    #     generations = dataset.simulation.config.generations
-    #     sim_data = dataset.load_simdata()
-    #     x = sim_data
-    #     y = dataset.load_timeseries()
+    # ── Step 1: Load datasets ──
 
     print("\n" + "=" * 80)
     print("STEP 1: Load Simulation Data")
     print("=" * 80)
-    return generate_synthetic_simulation_data()
+    sim_data = generate_synthetic_simulation_data()
+    print(f"    Generated {len(sim_data)} data points")
+    print(f"    Experiments: {sim_data['experiment_id'].unique().to_list()}")
+    print(f"    Seeds: {sim_data['lineage_seed'].unique().to_list()}")
 
+    # ── Step 2: Define parameter space Ξ ──
 
-def define_parameter_space(
-    xspace_config: XSpaceConfigVecoli,  # TODO: get gens and seeds/etc from dataset load found from dataset_id!
-    random_seed: int = 221111,
-) -> XSpaceVecoli:
-    """
-
-    TODO: is generations a subset of generations able to be shared by all datasets involved in pipeline?
-
-    STEP 1: Define Input Parameters
-        >> rfc006: "Identify scientifically relevant input/output variables"
-
-    :param xspace_config: (XSpaceConfigVecoli)
-    :param generations: (int) TODO: get this instead from metadata (ie load_dataset(metadata=true)...
-    :param random_seed: (int)
-    """
     print("\n" + "=" * 80)
-    print("STEP 2: Define Scientifically Relevant Input Parameters")
+    print("STEP 2: Define Input Parameter Space (Ξ)")
     print("=" * 80)
-
-    # 1a. Violacein (vio) Pathway Parameters
-    print("\n1a. Violacein Pathway Parameters:")
-    vio_params = xspace_config.vio_params
-    print(f"    Expression factor: {vio_params.expression}")
-    print(f"    Translation efficiency: {vio_params.translation_efficiency}")
-    print(f"    Induction generation: {vio_params.induction_gen}")
-
-    # 1b. Mecillinam Antibiotic Parameters
-    print("\n1b. Mecillinam Antibiotic Parameters:")
-    mec_params = xspace_config.mec_params
-    print(f"    Time points: {mec_params.times}")
-    print(f"    Concentrations: {mec_params.concentrations}")
-
-    # 1c. Gene Knockout Parameters
-    print("\n1c. Gene Knockout Parameters:")
-    ko_params = xspace_config.ko_params
-    print(f"    Gene deletions: {ko_params.gene_deletions}")
-
-    # 1d. Complete Input Parameter Container
-    print("\n1d. Complete UQ Input Parameters:")
-    uq_inputs = UQInputParametersVecoli(
-        vio=vio_params,
-        mecillinam=mec_params,
-        knockouts=ko_params,
-        seed=random_seed,
-        generations=xspace_config.generations,
-    )
-    print(f"    Seed: {uq_inputs.seed}")
-    print(f"    Generations: {uq_inputs.generations}")
-    # 1e. Parameter Space for Sensitivity Analysis
-    print("\n1e. Parameter Space for Sensitivity Analysis:")
     param_space = XSpaceVecoli(
         include_vio=True,
         include_mecillinam=True,
@@ -194,513 +196,240 @@ def define_parameter_space(
     )
     print(f"    Parameters: {param_space.parameter_names}")
     print(f"    Bounds: {param_space.parameter_bounds}")
-    return param_space
 
-
-def aggregate_outputs(data: pl.DataFrame, n_features: int = 10, report: bool = True) -> dict[str, AggregatedOutput]:
-    # TODO: make this generalized: cols?
-    """Create aggregated outputs from data."""
-    # =========================================================================
-    # STEP 3a: Apply All Four Aggregation Strategies
-    # CONTEXT.md: "Aggregation strategies (1-4)"
-    # =========================================================================
-    print("\n" + "=" * 80)
-    print("STEP 3a: Apply Four Aggregation Strategies")
-    print("=" * 80)
-
-    # Strategy 1: Uniform aggregation
-    uniform_mean = (
-        data.select([
-            "listeners__mass__dry_mass",
-            "listeners__fba_results__growth",
-        ])
-        .mean()
-        .to_numpy()
-        .flatten()
-    )
-
-    uniform_std = (
-        data.select([
-            "listeners__mass__dry_mass",
-            "listeners__fba_results__growth",
-        ])
-        .std()
-        .to_numpy()
-        .flatten()
-    )
-
-    agg_uniform = AggregatedOutput(
-        mean=uniform_mean,
-        std=uniform_std,
-        n_samples=len(data),
-        groups=None,
-    )
-
-    # Strategy 2: By generation
-    by_gen = (
-        data.group_by("generation")
-        .agg([
-            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-            pl.count().alias("n"),
-        ])
-        .sort("generation")
-    )
-
-    agg_by_gen = AggregatedOutput(
-        mean=np.column_stack([
-            by_gen["mass_mean"].to_numpy(),
-            by_gen["growth_mean"].to_numpy(),
-        ]),
-        std=np.column_stack([
-            by_gen["mass_std"].to_numpy(),
-            by_gen["growth_std"].to_numpy(),
-        ]),
-        n_samples=by_gen["n"].to_numpy(),
-        groups=by_gen["generation"].to_numpy(),
-    )
-
-    # Strategy 3: By lineage seed
-    by_seed = (
-        data.group_by("lineage_seed")
-        .agg([
-            pl.col("listeners__mass__dry_mass").mean().alias("mass_mean"),
-            pl.col("listeners__mass__dry_mass").std().alias("mass_std"),
-            pl.col("listeners__fba_results__growth").mean().alias("growth_mean"),
-            pl.col("listeners__fba_results__growth").std().alias("growth_std"),
-            pl.count().alias("n"),
-        ])
-        .sort("lineage_seed")
-    )
-
-    agg_by_seed = AggregatedOutput(
-        mean=np.column_stack([
-            by_seed["mass_mean"].to_numpy(),
-            by_seed["growth_mean"].to_numpy(),
-        ]),
-        std=np.column_stack([
-            by_seed["mass_std"].to_numpy(),
-            by_seed["growth_std"].to_numpy(),
-        ]),
-        n_samples=by_seed["n"].to_numpy(),
-        groups=by_seed["lineage_seed"].to_numpy(),
-    )
-
-    def aggregation_report(aggregated):
-        # Strategy 1: Uniform (baseline)
-        print("\n3a. Strategy 1 - UNIFORM (Baseline):")
-        print('    "Uniformly across all simulated cells and times"')
-        agg_uniform = aggregated["uniform"]
-        print(f"    Mean: {agg_uniform.mean}")
-        print(f"    Std: {agg_uniform.std}")
-        print(f"    N samples: {agg_uniform.n_samples}")
-        # Strategy 2: By Generation
-        print("\n3b. Strategy 2 - BY_GENERATION:")
-        print('    "Stratified by generation (control of convergence towards steady-state growth)"')
-        agg_by_gen = aggregated["by_generation"]
-        print(f"    Generations: {agg_by_gen.groups}")
-        print("    Mean per generation (mass, growth):")
-        for i, gen in enumerate(agg_by_gen.groups):
-            print(f"        Gen {gen}: mass={agg_by_gen.mean[i, 0]:.4f}, growth={agg_by_gen.mean[i, 1]:.6f}")
-        # Strategy 3: By Lineage Seed
-        print("\n3c. Strategy 3 - BY_LINEAGE_SEED:")
-        print('    "Stratified by lineage seed (control of exogenous variance)"')
-        agg_by_seed = aggregated["by_lineage_seed"]
-        print(f"    Seeds: {agg_by_seed.groups}")
-        print("    Mean per seed (mass, growth):")
-        for i, seed in enumerate(agg_by_seed.groups):
-            print(f"        Seed {seed}: mass={agg_by_seed.mean[i, 0]:.4f}, growth={agg_by_seed.mean[i, 1]:.6f}")
-        # Strategy 4: By Cell Cycle Stage
-        print("\n3d. Strategy 4 - BY_CELL_CYCLE:")
-        print('    "Stratified by cell cycle stage, according to a physiological variable"')
-
-    agg = {
-        "uniform": agg_uniform,
-        "by_generation": agg_by_gen,
-        "by_lineage_seed": agg_by_seed,
-    }
-    if report:
-        aggregation_report(agg)
-    return agg
-
-
-def compute_population_theta(sim_data: DataFrame, report: bool = True):
-    print("\n" + "=" * 80)
-    print("STEP 3b: Compute and bin cell cycle stages (theta)")
-    print("\n    Computing cell cycle variable (mass-based)...")
-    print("=" * 80)
-
-    # Group by agent and compute normalized cell cycle position
-    cell_cycle_data = []
-    for (agent_id,), group in sim_data.group_by(["agent_id"]):
-        masses = group["listeners__mass__dry_mass"].to_numpy()
-        if len(masses) > 1:
-            # Normalize mass within this cell's lifespan
-            log_mass = np.log(masses)
-            cc_var = (log_mass - log_mass[0]) / (log_mass[-1] - log_mass[0] + 1e-10)
-            cc_var = np.clip(cc_var, 0, 1)
-
-            for i, row in enumerate(group.iter_rows(named=True)):
-                cell_cycle_data.append({
-                    "cell_cycle_variable": cc_var[i],
-                    "mass": row["listeners__mass__dry_mass"],
-                    "growth": row["listeners__fba_results__growth"],
-                })
-
-    cc_df = pl.DataFrame(cell_cycle_data)
-
-    # Bin into 10 cell cycle stages
-    n_stages = 10
-    cc_df = cc_df.with_columns([
-        (pl.col("cell_cycle_variable") * n_stages).cast(pl.Int32).clip(0, n_stages - 1).alias("stage")
-    ])
-
-    by_stage = (
-        cc_df.group_by("stage")
-        .agg([
-            pl.col("mass").mean().alias("mass_mean"),
-            pl.col("mass").std().alias("mass_std"),
-            pl.col("growth").mean().alias("growth_mean"),
-            pl.col("growth").std().alias("growth_std"),
-            pl.count().alias("n"),
-        ])
-        .sort("stage")
-    )
-
-    if report:
-        print(f"    Cell cycle stages: {by_stage['stage'].to_list()}")
-        print("    Mean per stage:")
-        for row in by_stage.iter_rows(named=True):
-            print(f"        Stage {row['stage']}: mass={row['mass_mean']:.4f}, growth={row['growth_mean']:.6f}")
-    return by_stage, n_stages
-
-
-def variance_decomposition(agg_by_gen, agg_by_seed, agg_uniform):
-    decomposition = compute_variance_decomposition(
-        agg_by_gen,
-        agg_by_seed,
-        agg_uniform,
-    )
-    print(f"\n    Total Variance: {decomposition['total_variance']}")
-    print(f"\n    Between-Generation Variance: {decomposition['between_generation_variance']}")
-    print(f"    Generation Fraction: {decomposition['generation_fraction']}")
-    print("    (Variance attributable to convergence towards steady-state)")
-    print(f"\n    Between-Seed Variance: {decomposition['between_seed_variance']}")
-    print(f"    Seed Fraction: {decomposition['seed_fraction']}")
-    print("    (Variance attributable to stochastic seeding - exogenous variance)")
-    # Interpretation
-    gen_pct = np.mean(decomposition["generation_fraction"]) * 100
-    seed_pct = np.mean(decomposition["seed_fraction"]) * 100
-    residual_pct = 100 - gen_pct - seed_pct
-    print("\n    INTERPRETATION:")
-    print(f"    - Generation effects explain {gen_pct:.1f}% of variance")
-    print(f"    - Stochastic seeding explains {seed_pct:.1f}% of variance")
-    print(f"    - Residual (within-group) variance: {residual_pct:.1f}%")
-    return decomposition, gen_pct, seed_pct, residual_pct
-
-
-def pce_population(sim_data: DataFrame, param_space: XSpaceVecoli):
-    # =========================================================================
-    # STEP 5: PCE-Based Sensitivity Analysis
-    # CONTEXT.md: "Global sensitivity analysis methods (PCE surrogate)"
-    # =========================================================================
+    # ── Step 3: Aggregate outputs (uses uq.pipeline.workflow.aggregate_timeseries) ──
 
     print("\n" + "=" * 80)
-    print("STEP 5: PCE-Based Sensitivity Analysis")
+    print("STEP 3: Aggregate (Strategies 1-3)")
     print("=" * 80)
+    agg_result = aggregate_timeseries(sim_data, observable_columns)
+    print(f"    Strategy 1 (UNIFORM): mean={agg_result.uniform.mean}, n={agg_result.uniform.n_samples}")
+    print(f"    Strategy 2 (BY_GENERATION): {len(agg_result.generation.groups)} groups")
+    print(f"    Strategy 3 (BY_LINEAGE_SEED): {len(agg_result.seed.groups)} groups")
 
-    print("\nSetting up sensitivity analysis...")
-
-    # Extract parameter values and outputs from synthetic data
-    # Group by experiment to get parameter → output mapping
-    param_output_data = sim_data.group_by("experiment_id").agg([
-        pl.col("_param_vio_expression").first(),
-        pl.col("_param_mec_concentration").first(),
-        pl.col("listeners__mass__dry_mass").mean().alias("mean_mass"),
-        pl.col("listeners__fba_results__growth").mean().alias("mean_growth"),
-    ])
-
-    # Create X (inputs) and Y (outputs) matrices
-    X = np.column_stack([
-        param_output_data["_param_vio_expression"].to_numpy(),
-        np.zeros(len(param_output_data)),  # vio_trl_eff (constant in synthetic)
-        param_output_data["_param_mec_concentration"].to_numpy(),
-    ])
-
-    Y = np.column_stack([
-        param_output_data["mean_mass"].to_numpy(),
-        param_output_data["mean_growth"].to_numpy(),
-    ])
-
-    print(f"    Input matrix X shape: {X.shape} (n_samples, n_params)")
-    print(f"    Output matrix Y shape: {Y.shape} (n_samples, n_outputs)")
-    print(f"    Parameters: {param_space.parameter_names}")
-
-    # Compute pseudo-Sobol indices using correlation-based sensitivity
-    # (Full PCE requires UQPy which may not be installed)
-    # TODO: get surrogate
-    print("\n    Computing sensitivity indices...")
-
-    # Correlation-based sensitivity (demonstration)
-    sensitivities = {}
-    for i, param_name in enumerate(param_space.parameter_names):
-        correlations = []
-        for j in range(Y.shape[1]):
-            if np.std(X[:, i]) > 1e-10:
-                corr = np.corrcoef(X[:, i], Y[:, j])[0, 1]
-            else:
-                corr = 0.0
-            correlations.append(abs(corr))
-        sensitivities[param_name] = np.mean(correlations)
-
-    # Normalize to get pseudo-first-order indices
-    total_sens = sum(sensitivities.values()) + 1e-10
-    first_order = {k: v / total_sens for k, v in sensitivities.items()}
-
-    # Create SobolIndices object
-    sobol_indices = SobolIndices(
-        first_order=np.array(list(first_order.values())),
-        total_order=np.array(list(first_order.values())) * 1.1,  # Approximate
-        parameter_names=list(first_order.keys()),
-    )
-
-    print("\n    SOBOL SENSITIVITY INDICES:")
-    print("\n    First-Order Indices (Main Effects):")
-    for name, idx in zip(sobol_indices.parameter_names, sobol_indices.first_order):
-        bar = "█" * int(idx * 50)
-        print(f"        {name:30s}: {idx:.4f} {bar}")
-
-    print("\n    Total-Order Indices (Including Interactions):")
-    for name, idx in zip(sobol_indices.parameter_names, sobol_indices.total_order):
-        bar = "█" * int(idx * 50)
-        print(f"        {name:30s}: {idx:.4f} {bar}")
-
-    print("\n    Most Influential Parameters:")
-    for i, (name, value) in enumerate(sobol_indices.select(n=3)):
-        print(f"        {i + 1}. {name}: {value:.4f}")
-    return sobol_indices
-
-
-# TODO: make a nextflow workflow or Ray!
-def run_full_uq_workflow(
-    dataset_ids: list[int],  # TODO: enable xspace config from dataset read
-    xspace_config: XSpaceConfigVecoli,
-    random_seed: int = 111122,
-    data_dir: Optional[str] = None,
-    use_synthetic: bool = False,
-    output_dir: Path = Path("./uq_results"),
-):
-    """
-    Run the complete UQ workflow as specified in CONTEXT.md.
-
-    This demonstrates all components required for Milestone 08.4.2.
-    """
-    print("=" * 80)
-    print("vEcoli UQ Framework - Full End-to-End Workflow")
-    print("Milestone 08.4.2: Uncertainty Quantification Framework")
-    print("=" * 80)
-
-    # 0.) init uq outdir
-    initialize_output_dir(output_dir=output_dir)
-
-    # 1.) load datasets for many experiments, including simData.cPickle 's
-    sim_data = load_datasets(dataset_ids)
-
-    # 2.) define input parameter space
-    param_space: XSpaceVecoli = define_parameter_space(xspace_config=xspace_config, random_seed=random_seed)
-    # 3a.) create aggregated outputs stratified by 1-3
-    aggregated: dict[str, AggregatedOutput] = aggregate_outputs(sim_data, report=True)
-    agg_by_gen, agg_by_seed, agg_uniform = list(
-        map(lambda strat: aggregated[strat], ["by_generation", "by_lineage_seed", "uniform"])
-    )
-    # 3b.) create aggregated outputs stratified by 4 (theta)
-    by_stage, n_stages = compute_population_theta(sim_data=sim_data)
-
-    # 4.) variance decomposition
-    decomposition, gen_pct, seed_pct, residual_pct = variance_decomposition(agg_by_gen, agg_by_seed, agg_uniform)
-
-    # 5.) population level PCE:
-    sobol_indices = pce_population(sim_data, param_space)
-
-    # =========================================================================
-    # STEP 6: Cell Cycle Stratification Analysis
-    # CONTEXT.md: "Cell cycle variable" and "phenotypic sensitivity analysis"
-    # =========================================================================
+    # ── Step 4: Variance decomposition (uses uq.pipeline.workflow.get_variance_decomposition) ──
 
     print("\n" + "=" * 80)
-    print("STEP 6: Cell Cycle Stratification Analysis (Phase 2)")
+    print("STEP 4: Variance Decomposition")
     print("=" * 80)
+    decomp = get_variance_decomposition(agg_result)
+    gen_pct = np.mean(decomp["generation_fraction"]) * 100
+    seed_pct = np.mean(decomp["seed_fraction"]) * 100
+    residual_pct = max(0, 100 - gen_pct - seed_pct)
+    print(f"    Generation effects:  {gen_pct:.1f}% of variance")
+    print(f"    Stochastic seeding:  {seed_pct:.1f}% of variance")
+    print(f"    Residual (cell cycle): {residual_pct:.1f}% of variance")
+    print("    (Residual fraction → feeds into Phase 2 observable selection)")
 
-    print("\n6a. Available Cell Cycle Variables:")
-
-    # Mass-based
-    mass_var = MassBasedCellCycleVariable()
-    print("    1. MassBasedCellCycleVariable")
-    print("       Formula: (log(M) - log(M_birth)) / (log(M_div) - log(M_birth))")
-    print(f"       Required columns: {mass_var.required_columns}")
-
-    # DNA replication-based
-    dna_var = DNAReplicationCellCycleVariable()
-    print("\n    2. DNAReplicationCellCycleVariable")
-    print("       Phases: B_period → C_period → D_period")
-    print(f"       Required columns: {dna_var.required_columns}")
-
-    # Cell angle
-    angle_var = CellAngleCellCycleVariable()
-    print("\n    3. CellAngleCellCycleVariable")
-    print("       2D projection in (mass, growth_rate) space")
-    print(f"       Required columns: {angle_var.required_columns}")
-
-    print("\n6b. Cell Cycle Profile (from Step 3d):")
-    print(f"    Using mass-based cell cycle variable with {n_stages} stages")
-
-    # Show profile
-    print("\n    Cell Cycle Profile of Mass:")
-    print("    " + "-" * 60)
-    for row in by_stage.iter_rows(named=True):
-        stage = row["stage"]
-        mean = row["mass_mean"]
-        std = row["mass_std"]
-        n = row["n"]
-        bar = "█" * int(mean * 10)
-        print(f"    Stage {stage:2d} | {bar:20s} | mean={mean:.3f} ± {std:.3f} (n={n})")
-
-    print("\n    Cell Cycle Profile of Growth Rate:")
-    print("    " + "-" * 60)
-    for row in by_stage.iter_rows(named=True):
-        stage = row["stage"]
-        mean = row["growth_mean"]
-        std = row["growth_std"]
-        bar = "█" * int(mean * 1000)
-        print(f"    Stage {stage:2d} | {bar:20s} | mean={mean:.6f} ± {std:.6f}")
-
-    # =========================================================================
-    # STEP 7: Koopman Spectral Analysis (BONUS)
-    # =========================================================================
+    # ── Phase 1: Population-level GSA (uses uq.pipeline.workflow.run_phase1) ──
 
     print("\n" + "=" * 80)
-    print("STEP 7: Koopman Spectral Analysis (Bonus)")
+    print("PHASE 1: Population-Level Sensitivity Analysis")
+    print("=" * 80)
+    wrapper_bulk = SyntheticBulkWrapper(param_space.parameter_names)
+    print(f"    Building PCE surrogate (order={polynomial_order}, samples={n_samples})...")
+    sobol_bulk, surrogate_bulk = run_phase1(
+        param_space=param_space,
+        simulation_func=wrapper_bulk,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+    )
+
+    print("\n    Phase 1 Sobol Indices (bulk):")
+    print(f"    {'Parameter':<30s} {'S_i (first)':>12s} {'S_Ti (total)':>12s}")
+    print("    " + "-" * 56)
+    fo = sobol_bulk.first_order.flatten()
+    to = sobol_bulk.total_order.flatten()
+    for i, name in enumerate(sobol_bulk.parameter_names):
+        si = fo[i] if i < len(fo) else 0.0
+        sti = to[i] if i < len(to) else 0.0
+        bar = "█" * int(abs(sti) * 40)
+        print(f"    {name:<30s} {si:>12.4f} {sti:>12.4f}  {bar}")
+    print(
+        f"\n    PCE surrogate: R² = {surrogate_bulk.r_squared:.4f}, "
+        f"dim = {surrogate_bulk.input_dim}→{surrogate_bulk.output_dim}"
+    )
+
+    # ── Phase 2: Cell-cycle-stratified GSA (Steps 5b-7b) ──
+    #
+    # Uses uq.pipeline.workflow.compute_strategy4_sobol and
+    # uq.pipeline.workflow._split_multi_output_sobol for Sobol splitting.
+    #
+    # Note: With real data, you'd use uq.pipeline.workflow.run_phase2() which
+    # chains Steps 5b → 6b → 6d → 7b automatically. Here we use a synthetic
+    # Strategy4Wrapper instead of the real one (which requires Koopman DMD).
+
+    print("\n" + "=" * 80)
+    print("PHASE 2: Cell-Cycle-Stratified Sensitivity Analysis")
     print("=" * 80)
 
-    print("\nExtracting dynamical modes from simulation trajectory...")
+    # Step 5b: GSA-informed observable selection
+    relevance = identify_cell_cycle_relevant_observables(
+        aggregated_uniform=agg_result.uniform,
+        aggregated_by_gen=agg_result.generation,
+        aggregated_by_seed=agg_result.seed,
+        observable_names=observable_columns,
+    )
+    print(f"    Step 5b: GSA-informed observable selection")
+    print(f"        Relevant observables: {relevance.relevant_observables}")
+    for obs, score in relevance.relevance_scores.items():
+        print(f"        {obs}: residual_fraction = {score:.4f}")
 
-    # Create trajectory from first experiment's first seed
+    selected_obs = relevance.relevant_observables or observable_columns
+    print(f"\n    Step 6b: Koopman cell cycle variable")
+    print(f"        Using observables: {selected_obs}")
+    print(f"        θ(x) = arg(φ_cc) / 2π  ∈ [0, 1]")
+
+    # Step 6d + 7b: Strategy 4 wrapper → PCE + Sobol
+    print(f"\n    Step 6d: Strategy 4 Wrapper (params → {n_bins} stage means)")
+    f_stage4 = SyntheticStrategy4Wrapper(param_names=param_space.parameter_names, n_bins=n_bins)
+    print(f"\n    Step 7b: PCE + Sobol on Strategy 4 (order={polynomial_order}, samples={n_samples})")
+    per_stage_sobol, surrogate_cc = compute_strategy4_sobol(
+        param_space=param_space,
+        f_stage4=f_stage4,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+    )
+
+    # Print per-stage results
+    print(f"\n    Phase 2 Sobol Indices ({len(per_stage_sobol)} stages):")
+    print(f"    {'Stage':<8s} ", end="")
+    for name in param_space.parameter_names:
+        print(f"{name:>20s} ", end="")
+    print()
+    print("    " + "-" * (8 + 21 * len(param_space.parameter_names)))
+    for i, s in enumerate(per_stage_sobol):
+        vals = s.total_order.flatten()
+        print(f"    {f'θ={i / len(per_stage_sobol):.1f}':<8s} ", end="")
+        for j in range(len(param_space.parameter_names)):
+            v = vals[j] if j < len(vals) else 0.0
+            print(f"{v:>20.4f} ", end="")
+        print()
+    print(
+        f"\n    PCE surrogate (phenotypic): R² = {surrogate_cc.r_squared:.4f}, "
+        f"dim = {surrogate_cc.input_dim}→{surrogate_cc.output_dim}"
+    )
+
+    # ── Assemble PipelineResult ──
+
+    pipeline_result = PipelineResult(
+        population=UqProfile(
+            stratification=StratificationLens.POPULATION,
+            sobol_indices=[sobol_bulk],
+            surrogate=surrogate_bulk,
+        ),
+        cell_cycle=UqProfile(
+            stratification=StratificationLens.CELL_CYCLE,
+            sobol_indices=per_stage_sobol,
+            surrogate=surrogate_cc,
+        ),
+    )
+
+    # ── Bonus: Koopman spectral analysis ──
+
+    print("\n" + "=" * 80)
+    print("BONUS: Koopman Spectral Analysis")
+    print("=" * 80)
     trajectory_data = (
         sim_data.filter((pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0))
         .sort("time")
-        .select([
-            "listeners__mass__dry_mass",
-            "listeners__fba_results__growth",
-        ])
+        .select(observable_columns)
         .to_numpy()
     )
-
     print(f"    Trajectory shape: {trajectory_data.shape}")
-
-    # Apply DMD
     dmd = DynamicModeDecomposition(rank=5)
     dmd.fit(trajectory_data)
     spectrum = dmd.get_spectrum(observable_names=["mass", "growth_rate"])
+    print(f"    Extracted {len(spectrum.modes)} Koopman modes:")
+    for i, mode in enumerate(spectrum.get_dominant_modes(3)):
+        print(
+            f"      Mode {i + 1}: freq={mode.frequency:.6f} Hz, "
+            f"|amplitude|={abs(mode.amplitude):.4f}, "
+            f"{'oscillatory' if mode.is_oscillatory else 'non-oscillatory'}"
+        )
 
-    print(f"\n    Extracted {len(spectrum.modes)} Koopman modes:")
-    print("    " + "-" * 70)
-    for i, mode in enumerate(spectrum.modes):
-        print(f"    Mode {i + 1}:")
-        print(f"        Eigenvalue: {mode.eigenvalue:.4f}")
-        print(f"        Frequency: {mode.frequency:.6f} Hz")
-        if mode.frequency != 0:
-            print(f"        Period: {abs(1 / mode.frequency):.1f} time steps")
-        print(f"        Growth rate: {mode.growth_rate:.6f}")
-        print(f"        Amplitude: {abs(mode.amplitude):.4f}")
-
-    # Identify cell cycle modes
-    print("\n    Identifying cell cycle harmonics...")
-    cc_analyzer = CellCycleKoopmanAnalyzer(
-        expected_cycle_time=400.0,  # Approximate from synthetic data
-        dt=1.0,
-        frequency_tolerance=0.2,
-    )
-    cc_modes = cc_analyzer.identify_cell_cycle_modes(spectrum)
-
-    if cc_modes:
-        print(f"    Found {len(cc_modes)} cell cycle-related modes:")
-        for mode in cc_modes:
-            harmonic = mode.frequency * 400.0
-            print(f"        {harmonic:.1f}× harmonic, amplitude={abs(mode.amplitude):.4f}")
-    else:
-        print("    No clear cell cycle harmonics identified (expected with synthetic data)")
-
-    # =========================================================================
-    # SUMMARY
-    # =========================================================================
+    # ── Summary ──
 
     print("\n" + "=" * 80)
-    print("SUMMARY: Milestone 08.4.2 Requirements Fulfilled")
+    print("PIPELINE RESULT")
     print("=" * 80)
 
-    summary = """
-    ✅ REQUIREMENT 1: Track prediction confidence
-       - Implemented via aggregation strategies and Sobol sensitivity indices
+    print(f"""
+    PipelineResult assembled:
 
-    ✅ REQUIREMENT 2: Characterize uncertainty by cell
-       - AggregationStrategy.UNIFORM provides baseline across all cells
+    ┌─ Population (Phase 1, bulk) ──────────────────────────────────────┐
+    │  Stratification: {pipeline_result.population.stratification}
+    │  SobolIndices:   {len(pipeline_result.population.sobol_indices)} set (S_i, S_Ti for {len(sobol_bulk.parameter_names)} params)
+    │  PCESurrogate:   order={surrogate_bulk.polynomial_order}, R²={surrogate_bulk.r_squared:.4f}
+    │  Answer:         "Which parameters drive bulk output variance?"
+    └───────────────────────────────────────────────────────────────────┘
 
-    ✅ REQUIREMENT 3: Characterize uncertainty by lineage
-       - AggregationStrategy.BY_LINEAGE_SEED isolates stochastic seeding effects
+    ┌─ Cell Cycle (Phase 2, phenotypic) ────────────────────────────────┐
+    │  Stratification: {pipeline_result.cell_cycle.stratification}
+    │  SobolIndices:   {len(pipeline_result.cell_cycle.sobol_indices)} sets (one per θ-bin)
+    │  PCESurrogate:   order={surrogate_cc.polynomial_order}, R²={surrogate_cc.r_squared:.4f}
+    │  Answer:         "Which parameters drive variance WITHIN each
+    │                   cell cycle stage?"
+    └───────────────────────────────────────────────────────────────────┘
 
-    ✅ REQUIREMENT 4: Characterize uncertainty by generation
-       - AggregationStrategy.BY_GENERATION tracks convergence to steady-state
+    Example interpretation:
+      Phase 1: "vio_expression drives {abs(sobol_bulk.total_order.flatten()[0]):.0%} of bulk mass variance"
+      Phase 2: "During early cell cycle (θ≈0), parameter importance shifts —
+                see per-stage Sobol table above"
+    """)
 
-    ✅ REQUIREMENT 5: Characterize uncertainty by cell cycle
-       - AggregationStrategy.BY_CELL_CYCLE with configurable cell cycle variables
-       - Three built-in variables: mass-based, DNA-based, cell angle
+    # ── Save results via PipelineResult.export() ──
 
-    ✅ REQUIREMENT 6: Map single-cell to bulk simulations
-       - Aggregator class computes population statistics from individual cells
-       - Variance decomposition reveals contribution of different factors
+    print(f"    Exporting PipelineResult to: {output_dir}")
+    pipeline_result.export(output_dir)
+    print(f"    Export complete. Contents:")
+    for p in sorted(output_dir.rglob("*")):
+        if p.is_file():
+            print(f"      {p.relative_to(output_dir)}")
 
-    ✅ REQUIREMENT 7: Enable population-level perturbation analysis
-       - PCE-based sensitivity analysis identifies most influential parameters
-       - Sobol indices quantify parameter importance
-       - Foundation for Milestone 10.2.3
-
-    ✅ BONUS: Koopman spectral analysis
-       - Dynamic Mode Decomposition extracts system harmonics
-       - Cell cycle modes identified from spectrum
-       - Complementary "musical" perspective on dynamics
-    """
-    print(summary)
-
-    # Save results
+    # Also save human-readable JSON summary
     results = {
         "variance_decomposition": {
-            "total_variance": decomposition["total_variance"].tolist(),
-            "generation_fraction": decomposition["generation_fraction"].tolist(),
-            "seed_fraction": decomposition["seed_fraction"].tolist(),
+            "generation_fraction": decomp["generation_fraction"].tolist(),
+            "seed_fraction": decomp["seed_fraction"].tolist(),
         },
-        "sensitivity_indices": {
-            "first_order": dict(zip(sobol_indices.parameter_names, sobol_indices.first_order.tolist())),
-            "total_order": dict(zip(sobol_indices.parameter_names, sobol_indices.total_order.tolist())),
+        "phase1_sobol": {
+            "first_order": dict(zip(sobol_bulk.parameter_names, sobol_bulk.first_order.flatten().tolist())),
+            "total_order": dict(zip(sobol_bulk.parameter_names, sobol_bulk.total_order.flatten().tolist())),
         },
-        "cell_cycle_profile": {
-            "stages": by_stage["stage"].to_list(),
-            "mass_mean": by_stage["mass_mean"].to_list(),
-            "growth_mean": by_stage["growth_mean"].to_list(),
+        "phase2_sobol_per_stage": [
+            {
+                "stage": i,
+                "total_order": dict(zip(s.parameter_names, s.total_order.flatten().tolist())),
+            }
+            for i, s in enumerate(per_stage_sobol)
+        ],
+        "pipeline_summary": {
+            "population_surrogate_r2": surrogate_bulk.r_squared,
+            "cell_cycle_surrogate_r2": surrogate_cc.r_squared,
+            "n_cell_cycle_stages": len(per_stage_sobol),
+            "n_parameters": len(param_space.parameter_names),
+            "parameter_names": param_space.parameter_names,
         },
     }
-
-    results_path = output_path / "uq_results.json"
+    results_path = output_dir / "uq_results.json"
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
+    print(f"    Human-readable results: {results_path}")
 
-    print(f"\n    Results saved to: {results_path}")
+    # ── Verify round-trip: PipelineResult.from_export() ──
+
+    print("\n    Verifying PipelineResult.from_export() round-trip...")
+    loaded = PipelineResult.from_export(output_dir)
+    assert len(loaded.population.sobol_indices) == 1
+    assert len(loaded.cell_cycle.sobol_indices) == len(per_stage_sobol)
+    print("    Round-trip verification passed.")
+
     print("\n" + "=" * 80)
-    print("UQ Workflow Complete")
+    print("RFC006 Pipeline Complete")
     print("=" * 80)
 
-    return results
+    return pipeline_result
 
 
 # =============================================================================
@@ -709,33 +438,23 @@ def run_full_uq_workflow(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run full UQ workflow for vEcoli simulations")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        help="Directory containing simulation outputs",
-    )
-    parser.add_argument(
-        "--synthetic",
-        action="store_true",
-        help="Use synthetic data for demonstration",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="./uq_results",
-        help="Directory to save results",
-    )
-
+    parser = argparse.ArgumentParser(description="Run full RFC006 UQ pipeline")
+    parser.add_argument("--output-dir", type=str, default="./uq_results", help="Output directory")
     args = parser.parse_args()
 
-    # Default to synthetic if no data dir provided
-    use_synthetic = args.synthetic or args.data_dir is None
+    xspace_config = XSpaceConfigVecoli(
+        vio_params=VioPathwayParams(expression=2.5, translation_efficiency=1.2),
+        mec_params=MecillinamParams(times=[0.0, 3600.0], concentrations=[0.0, 5.0]),
+        ko_params=GeneKnockoutParams(),
+        vio_expression_bounds=(0.0, 5.0),
+        vio_trl_eff_bounds=(0.0, 2.0),
+        mecillinam_conc_bounds=(0.0, 10.0),
+        generations=8,
+    )
 
     run_full_uq_workflow(
-        data_dir=args.data_dir,
-        use_synthetic=use_synthetic,
-        output_dir=args.output_dir,
+        xspace_config=xspace_config,
+        output_dir=Path(args.output_dir),
     )
 
 

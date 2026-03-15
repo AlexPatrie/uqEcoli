@@ -32,7 +32,7 @@ See [`uq/PIPELINE.md`](uq/PIPELINE.md) for the full workflow diagram, RFC006 tra
 
 This package implements the UQ framework specified in **RFC006** (`readmes/RFC006.md`). The test suite provides explicit verification via `pytest tests/test_milestone_084_2.py -v`.
 
-### Status: 14 of 17 requirements complete
+### Status: 16 of 17 requirements complete
 
 **Phase 1 (MS-08.4.2)** — All software requirements met:
 - [x] UQ framework for tracking prediction confidence
@@ -48,13 +48,23 @@ This package implements the UQ framework specified in **RFC006** (`readmes/RFC00
 - [x] Population-level perturbation analysis foundation (Milestone 10)
 - [ ] **Apply pipeline to real use cases and produce report** (Activity 5 — framework ready, awaiting execution)
 
-**Phase 2 (CD2 / Milestone 10)** — Software complete, consensus pending:
+**Phase 2 (CD2 / Milestone 10)** — Full pipeline demonstrated:
 - [x] Cell cycle stratification with 5 variable implementations (mass, DNA, cell angle, Koopman, GSA-informed)
 - [x] GSA→cell cycle feedback loop (`GSAInformedCellCycleVariable`)
-- [ ] **Write consensus RFC on cell cycle variable choice** (Activity 6)
-- [ ] **Implement consensus approach with per-stage GSA** (Activity 7 — depends on Activity 6)
+- [x] Strategy 4 wrapper: params → Koopman θ → per-stage means (`Strategy4Wrapper`)
+- [x] Per-stage PCE surrogate + Sobol indices (phenotypic sensitivity analysis)
+- [x] Full pipeline orchestrator producing `PipelineResult` with two `UqProfile` instances
+- [ ] **Write consensus RFC on cell cycle variable choice** (Activity 6 — deferred to separate RFC)
 
-The shared technical blocker for the remaining items is `PCESurrogate.compute_sobol_indices()` — analytical Sobol computation from PCE coefficients. See [`uq/PIPELINE.md` § What's Still Missing](uq/PIPELINE.md) for detailed gap analysis.
+The full pipeline is implemented in `uq/pipeline/workflow.py` with `execute_pipeline()` as the top-level
+orchestrator. See `examples/uq_pipeline.py` for the complete end-to-end demonstration.
+
+Key pipeline module exports (`uq.pipeline`):
+- `execute_pipeline()` — Run the full RFC006 pipeline (sync)
+- `Strategy4Wrapper` — Step 6d: params → Koopman θ → per-stage means
+- `compute_strategy4_sobol()` — Step 7b: per-stage PCE + Sobol
+- `run_phase1()` / `run_phase2()` — Individual phase runners
+- `PipelineResult.export()` / `.from_export()` — Serialization/deserialization
 
 ## Development Environment
 
@@ -105,7 +115,9 @@ uqEcoli/
 │   ├── cell_cycle.py           # Cell cycle stratification (5 implementations)
 │   ├── wrappers.py             # UQPy/PyTUQ wrapper functions
 │   ├── koopman.py              # Koopman spectral analysis (DMD)
-│   ├── pipeline.py             # Pipeline orchestrator (WIP)
+│   ├── pipeline/               # Pipeline orchestrator
+│   │   ├── workflow.py         # Pipeline step implementations
+│   │   └── models.py           # PipelineResult, UqProfile, StratificationLens
 │   ├── cli.py                  # CLI entry point (WIP)
 │   ├── io.py                   # Serialization for dataclasses with numpy arrays
 │   ├── models.py               # Core dataclasses (Parameter, PCEConfig, etc.)

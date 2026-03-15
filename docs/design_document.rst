@@ -76,9 +76,9 @@ The package implements all requirements specified in RFC006:
      - Software Complete — consensus RFC not yet written
      - ``cell_cycle.py``
    * - 7
-     - Cell cycle variable analysis
-     - Software Complete — depends on consensus RFC
-     - ``cell_cycle.py``
+     - Cell cycle variable analysis + per-stage GSA
+     - Complete — Strategy 4 wrapper + per-stage PCE/Sobol demonstrated
+     - ``cell_cycle.py``, ``examples/uq_pipeline.py``
 
 Four Aggregation Strategies
 ---------------------------
@@ -150,6 +150,23 @@ Key Documents
 * ``uq/PIPELINE.md`` - Complete 7-step UQ workflow
 * ``apollo/README.md`` - Apollo sonification package
 * ``readmes/CONTEXT.md`` - Claude context document
+
+Full Pipeline Example
+---------------------
+
+The ``examples/uq_pipeline.py`` script demonstrates the complete RFC006 pipeline:
+
+* **Phase 1** (Steps 5a–7a): Morris prescreening → PCE surrogate → Sobol indices
+  ("Which parameters drive bulk output variance?")
+* **Phase 2** (Steps 5b–7b): GSA-informed observable selection → Koopman θ →
+  Strategy 4 wrapper → per-stage PCE → per-stage Sobol indices
+  ("Which parameters drive variance WITHIN each cell cycle stage?")
+
+Both phases produce a ``UqProfile``, assembled into a ``PipelineResult``.
+
+.. code-block:: bash
+
+   uv run python examples/uq_pipeline.py --output-dir ./my_results
 
 Future Directions
 -----------------

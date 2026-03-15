@@ -188,3 +188,5 @@ Next Steps
 * Try the :doc:`tutorials/basic_sensitivity` tutorial
 * See the :doc:`api/inputs` API reference
 * See :doc:`../uq/PIPELINE` for the complete 7-step workflow
+* Run ``uv run python examples/uq_pipeline.py`` for the full RFC006 pipeline
+  (Phase 1 population GSA + Phase 2 cell-cycle-stratified GSA)

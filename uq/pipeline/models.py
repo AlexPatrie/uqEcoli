@@ -671,6 +671,70 @@ class PipelineResult:
     population: UqProfile
     cell_cycle: UqProfile
 
+    def export(self, path: str | Path) -> None:
+        """Serialize the full pipeline result to disk.
+
+        Creates:
+            path/population_surrogate/   — PCESurrogate export
+            path/cell_cycle_surrogate/   — PCESurrogate export
+            path/population_sobol/       — DataclassIO export
+            path/cell_cycle_sobol_stage_N/ — DataclassIO export per stage
+            path/metadata.json           — Pipeline metadata
+        """
+        from uq.io import DataclassIO
+
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+
+        # Export surrogates
+        self.population.surrogate.export(path / "population_surrogate")
+        self.cell_cycle.surrogate.export(path / "cell_cycle_surrogate")
+
+        # Export Sobol indices
+        DataclassIO.save(self.population.sobol_indices[0], path / "population_sobol")
+        for i, sobol in enumerate(self.cell_cycle.sobol_indices):
+            DataclassIO.save(sobol, path / f"cell_cycle_sobol_stage_{i}")
+
+        # Metadata
+        meta = {
+            "n_cell_cycle_stages": len(self.cell_cycle.sobol_indices),
+            "population_params": self.population.sobol_indices[0].parameter_names,
+            "population_stratification": self.population.stratification.value,
+            "cell_cycle_stratification": self.cell_cycle.stratification.value,
+        }
+        (path / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+    @classmethod
+    def from_export(cls, path: str | Path) -> "PipelineResult":
+        """Load a PipelineResult from a previously exported directory."""
+        from uq.io import DataclassIO
+        from uq.sensitivity import PCESurrogate, SobolIndices
+
+        path = Path(path)
+        meta = json.loads((path / "metadata.json").read_text())
+
+        pop_surrogate = PCESurrogate.from_export(path / "population_surrogate")
+        pop_sobol = DataclassIO.load(path / "population_sobol", SobolIndices)
+
+        cc_surrogate = PCESurrogate.from_export(path / "cell_cycle_surrogate")
+        cc_sobols = [
+            DataclassIO.load(path / f"cell_cycle_sobol_stage_{i}", SobolIndices)
+            for i in range(meta["n_cell_cycle_stages"])
+        ]
+
+        return cls(
+            population=UqProfile(
+                stratification=StratificationLens.POPULATION,
+                sobol_indices=[pop_sobol],
+                surrogate=pop_surrogate,
+            ),
+            cell_cycle=UqProfile(
+                stratification=StratificationLens.CELL_CYCLE,
+                sobol_indices=cc_sobols,
+                surrogate=cc_surrogate,
+            ),
+        )
+
 
 @dataclass
 class PipelineConfig:
@@ -683,7 +747,7 @@ class Pipeline:
     """
     Attributes:
         database_id: int
-        config: UqPipelineConfig consisting of pipleine name, and pce config.
+        config: PipelineConfig consisting of pipeline name and dataset_id.
         dataset: Timeseries dataset containing the following attributes: timeseries data(y), parameter dataset (x), database_id, and simulation. Simulation itself
             has a database_id, and a config (vecoli config/api request config?)
         result: PipelineResult object containing 2 `UqProfile` instances, one for
@@ -693,7 +757,46 @@ class Pipeline:
     database_id: int
     config: PipelineConfig
     dataset: TimeseriesDataset
-    result: PipelineResult
+    result: Optional[PipelineResult] = None
 
-    def build(self, *args):
-        pass
+    def build(
+        self,
+        param_space,
+        simulation_func,
+        observable_columns: list[str],
+        n_bins: int = 10,
+        polynomial_order: int = 3,
+        n_samples: int = 200,
+        expected_cycle_time: float = 3600.0,
+        export_path: Optional[Path] = None,
+    ) -> "Pipeline":
+        """Execute the full UQ pipeline and populate self.result.
+
+        Args:
+            param_space: Input parameter space Ξ.
+            simulation_func: Callable with evaluate_batch(X) → Y.
+            observable_columns: Column names of observables to analyze.
+            n_bins: Number of cell cycle stage bins for Phase 2.
+            polynomial_order: PCE polynomial order for both phases.
+            n_samples: Number of LHS samples for PCE fitting.
+            expected_cycle_time: Expected cell cycle period in seconds.
+            export_path: If provided, export surrogates and results here.
+
+        Returns:
+            self, with self.result populated.
+        """
+        from uq.pipeline.workflow import execute_pipeline
+
+        timeseries = self.dataset.y
+        self.result = execute_pipeline(
+            param_space=param_space,
+            simulation_func=simulation_func,
+            timeseries=timeseries,
+            observable_columns=observable_columns,
+            n_bins=n_bins,
+            polynomial_order=polynomial_order,
+            n_samples=n_samples,
+            expected_cycle_time=expected_cycle_time,
+            export_path=export_path,
+        )
+        return self

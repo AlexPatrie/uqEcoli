@@ -2,106 +2,43 @@
 Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 
 Workflow:
-      Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: InputParameterSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
+      Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
 
-      1. Define Parameter Space — param_space = InputParameterSpaceVecoli(include_vio=True, include_mecillinam=True) → n parameters with
-      bounds
+      1. Define Parameter Space — param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True) → n parameters with bounds
       2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
-      3. Aggregation Strategies 1-3 (parallel) — aggregator = Aggregator(conn, history_sql, config_sql) → 3 × AggregatedOutput
+      3. Aggregation Strategies 1-3 — aggregator runs 3 strategies → 3 × AggregatedOutput
         - 3a. Strategy 1: UNIFORM — mean, std across all cells/times
         - 3b. Strategy 2: BY_GENERATION — per-gen stats (convergence)
         - 3c. Strategy 3: BY_LINEAGE_SEED — per-seed stats (exogenous variance)
       4. Variance Decomposition — compute_variance_decomposition(agg_uniform, agg_by_gen, agg_by_seed) → per observable:
-      generation_fraction, seed_fraction, residual_fraction (cell-cycle-related, key output)
+         generation_fraction, seed_fraction, residual_fraction (cell-cycle-related, key output)
 
       Branches into Phase 1 and Phase 2 (parallel):
 
       Phase 1 (Strategies 1-3 GSA):
 
-      5a. Morris Prescreening — prescreen_parameters(param_space, f) → n params → K params (K << n) → selected: list[Parameter],
-      MorrisIndices
-
-      6a. PCE Surrogate (Strategies 1-3) — generate_surrogate(param_space, f, sample_size) — internally: X = create_samples(), Y =
-      process_samples(X, f), fit_pce_coefficients(X, Y, order) → PCESurrogate, PCEFitResult
-
-      7a. Sobol Indices (from PCE) — S_i, S_Ti from PCE coefficients — "Which parameters drive bulk output variance?" → SobolIndices
+      5a. Morris Prescreening → n params → K params (K << n) → selected: list[Parameter], MorrisIndices
+      6a. PCE Surrogate (Strategies 1-3) → PCESurrogate, PCEFitResult
+      7a. Sobol Indices (from PCE) — S_i, S_Ti from PCE coefficients → SobolIndices
 
       Phase 2 (Strategy 4 — Cell Cycle):
 
-      5b. GSA-Informed Observable Selection — identify_cell_cycle_relevant_observables(decomp) — filter by high residual_fraction →
-      relevant_obs: list[str]
-
-      6b. Koopman DMD — KoopmanCellCycleVariable(observable_columns=relevant_obs) — DMD/EDMD → find eigenvalue at ω_cc → extract φ_cc(x) →
-      θ(x) = arg(φ)/2π → θ ∈ [0, 1]
-
-      6c. Strategy 4 Aggregation — CellCycleAggregator — bin by θ → per-stage mean, std → stage_stats
-
-      6d. Stage4 Wrapper (MISSING) — f_stage4(params): raw = f(params), θ = koopman(raw), bin by θ, return stage_means
-
-      7b. PCE + Sobol on Strategy 4 (MISSING) — generate_surrogate(param_space, f_stage4, sample_size) — "Which parameters drive variation
-      WITHIN each cell cycle stage?" → PCESurrogate, SobolIndices
+      5b. GSA-Informed Observable Selection — identify_cell_cycle_relevant_observables(decomp)
+      6b. Koopman DMD — KoopmanCellCycleVariable(observable_columns=relevant_obs) → θ(x) ∈ [0, 1]
+      6c. Strategy 4 Aggregation — CellCycleAggregator — bin by θ → per-stage mean, std
+      6d. Strategy4Wrapper — f_stage4(params): raw = f(params), θ = koopman(raw), bin by θ, return stage_means
+      7b. PCE + Sobol on Strategy 4 → per-stage PCESurrogate, list[SobolIndices]
 
       Phases converge:
 
       Pipeline Outputs:
-      - From Phase 1: AggregatedOutput × 3, variance decomposition (fractions), MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
-      - From Phase 2: CellCycleResult (θ, stages), per-stage statistics, PCESurrogate (phenotypic) [MISSING], SobolIndices (phenotypic)
-      [MISSING]
-      - Feedback loop: Step 4 residual_fraction → Step 5b observable selection → Step 6b Koopman ("Strategies 1-3 tell you WHICH
-      observables to give to Koopman")
+      - From Phase 1: AggregatedOutput × 3, variance decomposition, MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
+      - From Phase 2: CellCycleResult (θ, stages), per-stage statistics, PCESurrogate (phenotypic), list[SobolIndices] (phenotypic)
+      - Feedback loop: Step 4 residual_fraction → Step 5b observable selection → Step 6b Koopman
 
-      In other words, final user-facing outputs:
+      Final user-facing outputs:
         1. Phase 1 Sobol: "vio_expression drives 60% of bulk mass variance, mecillinam_conc drives 25%, ..."
-        2. Phase 2 Sobol: "During C-period (DNA replication), mecillinam_conc drives 80% of variance; during D-period, vio_expression
-      dominates"
-
-    1. dataset = db.get_dataset(config.dataset_id)
-    2. x = dataset.load_simdata(); y = dataset.load_timeseries()
-    3. agg = aggregate(y)
-    4. decomp = variance_decomp(agg)
-    5. start_stategies(decomp, x) --> concurrently runs phase1() -> phase1_outputs -> phase2()
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-  │  PIPELINE OUTPUTS                                                           │
-  │  ────────────────                                                           │
-  │                                                                             │
-  │  • PCESurrogate: Instant predictions for any parameter combination          │
-  │  • SobolIndices: Which parameters matter most                               │
-  │  • VarianceDecomposition: Sources of uncertainty                            │
-  │  • CellCycleResult: Phenotypic variation across cell cycle                  │
-  │  • MorrisIndices: Parameter screening results                               │
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-Key points:
-
-  - Steps 1-4 are sequential and shared by both phases
-  - Phase 1 (left) and Phase 2 (right) run in parallel after Step 4 — they're independent analyses on the same data
-  - The feedback loop is Step 4 → Step 5b: variance decomposition residuals select observables for Koopman
-  - Steps 6d and 7b are the two missing pieces — the wrapper and the Strategy 4 PCE/Sobol
-  - Phase 1 answers "which parameters drive bulk output variance?"
-  - Phase 2 answers "which parameters drive variation within each cell-cycle stage?" — this is the "phenotypic sensitivity analysis"
-  RFC006 §3 describes
-Phase 1 asks: "Across all cells, all times, all generations — which parameters drive the most variance in bulk output?" This
-collapses time. It's not a "static version" of Phase 2 — it's measuring different variance. Specifically, Phase 1's three strategies
-decompose variance into generation effects (convergence), seed effects (exogenous stochasticity), and residual (everything else,
-including cell cycle).
-
-Phase 2 asks: "Within a single cell cycle stage — say, during DNA replication specifically — which parameters drive variance?" This
-doesn't add temporal resolution to Phase 1's answer. It's asking about a different slice of the data that Phase 1 couldn't access at
-all, because Phase 1 had no notion of "where in the cell cycle are we."
-
-A concrete example of why they're not static-vs-temporal versions of each other:
-
-  - Phase 1 might say: "vio_expression explains 40% of total mass variance"
-  - Phase 2 might say: "vio_expression explains 5% of mass variance during B-period, but 85% during D-period"
-
-  Phase 1's "40%" is not the time-average of Phase 2's stage-specific numbers. It's computed from a differently aggregated dataset (all
-   cells pooled uniformly vs. binned by θ). The populations being analyzed are literally different subsets organized differently.
-
-The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-(phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-orthogonal decompositions.
+        2. Phase 2 Sobol: "During C-period (DNA replication), mecillinam_conc drives 80% of variance; during D-period, vio_expression dominates"
 
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │  PIPELINE OUTPUTS                                                                   │
@@ -109,8 +46,8 @@ orthogonal decompositions.
   │  From Phase 1 (Strategies 1-3):              From Phase 2 (Strategy 4):             │
   │  ├─ AggregatedOutput × 3                     ├─ CellCycleResult (θ, stages)         │
   │  ├─ variance decomposition (fractions)       ├─ per-stage statistics                │
-  │  ├─ MorrisIndices (parameter screening)      ├─ PCESurrogate (phenotypic) ◄ MISSING │
-  │  ├─ PCESurrogate (bulk)                      └─ SobolIndices (phenotypic) ◄ MISSING │
+  │  ├─ MorrisIndices (parameter screening)      ├─ PCESurrogate (phenotypic)           │
+  │  ├─ PCESurrogate (bulk)                      └─ list[SobolIndices] (phenotypic)     │
   │  └─ SobolIndices (bulk)                                                             │
   │                                                                                     │
   │  ┌───────────────────────────────────────────────────────────────────────────┐       │
@@ -123,30 +60,25 @@ orthogonal decompositions.
   └─────────────────────────────────────────────────────────────────────────────────────┘
 """
 
-import abc
-import os
+from __future__ import annotations
 
-# TODO: Implement the above!!! THEN update tutorials/docs!!!
-from dataclasses import dataclass, field
-from enum import StrEnum
+import asyncio
+import json
+import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import numpy as np
 import polars
-from ecoli.library.sim_data import LoadSimData
-from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq import (
     AggregatedOutput,
-    PCESurrogate,
     SensitivityAnalyzer,
-    SimulationWrapper,
     SobolIndices,
-    WrapperConfig,
     XSpaceVecoli,
-    cell_cycle,
     compute_variance_decomposition,
+    identify_cell_cycle_relevant_observables,
     inputs,
 )
 from uq import (
@@ -154,67 +86,140 @@ from uq import (
 )
 from uq.inputs import XSpace
 from uq.pce.models import PCEParameterSelectionConfig
-from uq.pce.surrogate import generate_surrogate, prescreen_parameters
-from uq.pipeline.models import Pipeline, PipelineConfig
+from uq.pce.surrogate import generate_surrogate as _generate_surrogate
+from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
 
-# TODO: make process-bigraph steps out of this and use Nextflow py to run
+if TYPE_CHECKING:
+    from uq.sensitivity import PCESurrogate
 
 
-# 1.)
+# === Type Aliases === #
+
+VarianceDecomposition = dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
+
+
+# === Step 1: Define Parameter Space === #
+
+
 def define_parameter_space(
-    sim_data_path: Path | None = None,
-    include_vio=True,
-    include_mecillinam=True,
-    vio_expression_bounds=(0.0, 5.0),
-    vio_trl_eff_bounds=(0.0, 2.0),
-    mecillinam_conc_bounds=(0.0, 10.0),
-) -> XSpace | XSpaceVecoli:
-    """
-    Creates an instance of InputParameterSpace for pipeline from SimData.
-    """
-    # TODO: first load SimulationDataEcoli, then extract list[Parameter],
-    #  where bounds are inferred from initial condition/parca?
+    include_vio: bool = True,
+    include_mecillinam: bool = True,
+    vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
+    vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
+    mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
+) -> XSpaceVecoli:
+    """Step 1: Create input parameter space Ξ for the pipeline."""
     return XSpaceVecoli(
-        include_vio,
-        include_mecillinam,
-        vio_expression_bounds,
-        vio_expression_bounds,
-        vio_trl_eff_bounds,
-        mecillinam_conc_bounds,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+        vio_expression_bounds=vio_expression_bounds,
+        vio_trl_eff_bounds=vio_trl_eff_bounds,
+        mecillinam_conc_bounds=mecillinam_conc_bounds,
     )
 
 
-# 2.)
+# === Step 2: Load Data === #
+
+
 def load_timeseries(
-    experiment_id: str, outdir_root: Path, observables: list[str] | None = None, include_metadata: bool = True
+    experiment_id: str,
+    outdir_root: Path,
+    observables: list[str] | None = None,
+    include_metadata: bool = True,
 ) -> polars.DataFrame:
+    """Step 2: Load simulation timeseries data from hive-partitioned Parquet."""
     return inputs.load_dataset(experiment_id, outdir_root, observables, include_metadata)
+
+
+# === Step 3: Aggregate Timeseries === #
 
 
 @dataclass
 class AggregationResult:
+    """Container for the three aggregation strategy outputs (steps 3a-3c)."""
+
     uniform: AggregatedOutput
     generation: AggregatedOutput
     seed: AggregatedOutput
 
 
-# 3.)
-async def aggregate_timeseries(timeseries) -> AggregationResult:
+def aggregate_timeseries(
+    timeseries: polars.DataFrame,
+    observable_columns: list[str],
+) -> AggregationResult:
     """
-    This function should call Aggregator(conn, history_sql, config_sql)
-    with queries tailored to each level of stratification in (cell, generation, seed).
+    Step 3: Run aggregation strategies 1-3 on timeseries data.
+
+    Aggregates the given observable columns uniformly (strategy 1),
+    by generation (strategy 2), and by lineage seed (strategy 3).
+
+    Args:
+        timeseries: Polars DataFrame with simulation timeseries data.
+            Must contain columns: observable_columns + 'generation' + 'lineage_seed'.
+        observable_columns: Column names of the observables to aggregate.
+
+    Returns:
+        AggregationResult with uniform, generation, and seed AggregatedOutput instances.
     """
-    # aggregator = Aggregator(conn, history_sql, config_sql)
-    pass
+    # Strategy 1: UNIFORM — mean, std across all cells/times
+    uniform_mean = timeseries.select(observable_columns).mean().to_numpy().flatten()
+    uniform_std = timeseries.select(observable_columns).std().to_numpy().flatten()
+    agg_uniform = AggregatedOutput(
+        mean=uniform_mean,
+        std=uniform_std,
+        n_samples=len(timeseries),
+        groups=None,
+    )
+
+    # Strategy 2: BY_GENERATION — per-generation stats
+    gen_aggs = []
+    for col in observable_columns:
+        gen_aggs.extend([
+            polars.col(col).mean().alias(f"{col}__mean"),
+            polars.col(col).std().alias(f"{col}__std"),
+        ])
+    gen_aggs.append(polars.count().alias("n"))
+
+    by_gen = timeseries.group_by("generation").agg(gen_aggs).sort("generation")
+    gen_means = np.column_stack([by_gen[f"{c}__mean"].to_numpy() for c in observable_columns])
+    gen_stds = np.column_stack([by_gen[f"{c}__std"].to_numpy() for c in observable_columns])
+    agg_by_gen = AggregatedOutput(
+        mean=gen_means,
+        std=gen_stds,
+        n_samples=by_gen["n"].to_numpy(),
+        groups=by_gen["generation"].to_numpy(),
+    )
+
+    # Strategy 3: BY_LINEAGE_SEED — per-seed stats
+    seed_aggs = []
+    for col in observable_columns:
+        seed_aggs.extend([
+            polars.col(col).mean().alias(f"{col}__mean"),
+            polars.col(col).std().alias(f"{col}__std"),
+        ])
+    seed_aggs.append(polars.count().alias("n"))
+
+    by_seed = timeseries.group_by("lineage_seed").agg(seed_aggs).sort("lineage_seed")
+    seed_means = np.column_stack([by_seed[f"{c}__mean"].to_numpy() for c in observable_columns])
+    seed_stds = np.column_stack([by_seed[f"{c}__std"].to_numpy() for c in observable_columns])
+    agg_by_seed = AggregatedOutput(
+        mean=seed_means,
+        std=seed_stds,
+        n_samples=by_seed["n"].to_numpy(),
+        groups=by_seed["lineage_seed"].to_numpy(),
+    )
+
+    return AggregationResult(uniform=agg_uniform, generation=agg_by_gen, seed=agg_by_seed)
 
 
-VarianceDecomposition = dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
+# === Step 4: Variance Decomposition === #
 
 
-# 4.)
 def get_variance_decomposition(agg: AggregationResult) -> VarianceDecomposition:
     """
-    Returns Total variance from uniform aggregation
+    Step 4: Compute variance decomposition across strategies 1-3.
+
+    Returns dict with keys:
     - 'between_generation_variance': Variance between generations
     - 'between_seed_variance': Variance between lineage seeds
     - 'within_group_variance': Residual variance
@@ -224,34 +229,421 @@ def get_variance_decomposition(agg: AggregationResult) -> VarianceDecomposition:
     return compute_variance_decomposition(agg.generation, agg.seed, agg.uniform)
 
 
-# 5. )
-async def phase1(
-    input_parameter_space: XSpaceVecoli,
-    simulation_func: Callable,
-    sample_size: int,
-    export_surrogate: bool = True,
-    prescreen_config: PCEParameterSelectionConfig | None = None,
-    **kwargs,
-):
-    async def generate_surrogate():
-        return create_surrogate(
-            full_space=input_parameter_space,
-            f=simulation_func,
-            sample_size=sample_size,
-            prescreen_config=prescreen_config,
-            export=export_surrogate,
-            **kwargs,
-        )
+# === Step 6d: Strategy 4 Wrapper (previously MISSING) === #
 
-    async def get_sobol_indices():
-        wrapper = SimulationWrapper(config=WrapperConfig(**kwargs["simulation"]), parameter_space=input_parameter_space)
-        analyzer = SensitivityAnalyzer(
-            parameter_space=input_parameter_space,
-            wrapper=wrapper,
-            # TODO: pick samples?,
-            # TODO: pick outputs?
-        )
-        pass
+
+class Strategy4Wrapper:
+    """
+    Strategy 4 wrapper (Step 6d): params → per-stage output.
+
+    Wraps a base simulation function to produce cell-cycle-stratified output:
+      1. Run the simulation with given parameters → raw timeseries
+      2. Compute cell cycle variable θ via Koopman DMD
+      3. Bin timesteps by θ into n_bins stages
+      4. Return per-stage means as the output vector
+
+    This wrapper is then fed into generate_surrogate() / SensitivityAnalyzer
+    to produce Strategy 4 PCE surrogate and per-stage Sobol indices.
+
+    Args:
+        base_wrapper: Callable that takes params (np.ndarray) and returns
+            raw simulation output (np.ndarray of shape (n_timesteps,) or (n_timesteps, n_obs)).
+        koopman_cc: KoopmanCellCycleVariable instance for computing θ(x).
+        n_bins: Number of cell cycle stage bins.
+        timeseries_to_dataframe: Optional callable to convert raw output array
+            to a polars DataFrame suitable for koopman_cc.compute().
+            If None, a default conversion is used.
+    """
+
+    def __init__(
+        self,
+        base_wrapper: Callable[[np.ndarray], np.ndarray],
+        koopman_cc: Any,
+        n_bins: int = 10,
+        timeseries_to_dataframe: Callable[[np.ndarray], polars.DataFrame] | None = None,
+        observable_columns: list[str] | None = None,
+    ):
+        self.base_wrapper = base_wrapper
+        self.koopman_cc = koopman_cc
+        self.n_bins = n_bins
+        self.stage_edges = np.linspace(0, 1, n_bins + 1)
+        self._to_df = timeseries_to_dataframe
+        self._observable_columns = observable_columns
+
+    def _raw_to_dataframe(self, raw_output: np.ndarray) -> polars.DataFrame:
+        """Convert raw simulation output array to a polars DataFrame for Koopman."""
+        if self._to_df is not None:
+            return self._to_df(raw_output)
+
+        if raw_output.ndim == 1:
+            raw_output = raw_output.reshape(-1, 1)
+
+        cols = self._observable_columns or [f"obs_{i}" for i in range(raw_output.shape[1])]
+        return polars.DataFrame({col: raw_output[:, i] for i, col in enumerate(cols)})
+
+    def __call__(self, params: np.ndarray) -> np.ndarray:
+        """params → run sim → compute θ → bin by θ → per-stage means."""
+        raw_output = self.base_wrapper(params)
+
+        # Compute θ via Koopman
+        df = self._raw_to_dataframe(raw_output)
+        cc_var = self.koopman_cc.compute(df)
+        theta = cc_var.values
+
+        # Bin by θ
+        bins = np.digitize(theta, self.stage_edges) - 1
+        bins = np.clip(bins, 0, self.n_bins - 1)
+
+        # Compute per-stage means
+        if raw_output.ndim == 1:
+            return np.array([raw_output[bins == s].mean() if np.any(bins == s) else 0.0 for s in range(self.n_bins)])
+        else:
+            # Multi-observable: flatten to (n_bins * n_obs,)
+            n_obs = raw_output.shape[1]
+            stage_means = np.zeros(self.n_bins * n_obs)
+            for s in range(self.n_bins):
+                mask = bins == s
+                if np.any(mask):
+                    stage_means[s * n_obs : (s + 1) * n_obs] = raw_output[mask].mean(axis=0)
+            return stage_means
+
+    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+        """Evaluate Strategy 4 wrapper for a batch of parameter vectors."""
+        return np.vstack([self(x) for x in X])
+
+
+# === Steps 7b: Strategy 4 Sobol (previously MISSING) === #
+
+
+def compute_strategy4_sobol(
+    param_space: XSpace,
+    f_stage4: Strategy4Wrapper,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+) -> tuple[list[SobolIndices], PCESurrogate]:
+    """
+    Step 7b: Phenotypic sensitivity analysis — Sobol indices per cell-cycle stage.
+
+    Builds a PCE surrogate for the Strategy 4 wrapper and computes Sobol indices.
+    Returns one SobolIndices per θ-bin, answering:
+    "During DNA replication, mecillinam_conc drives 80% of variance"
+
+    Args:
+        param_space: Input parameter space Ξ.
+        f_stage4: Strategy4Wrapper instance (has evaluate_batch()).
+        polynomial_order: PCE polynomial order.
+        n_samples: Number of LHS samples for PCE fitting.
+
+    Returns:
+        Tuple of (list[SobolIndices], PCESurrogate).
+    """
+    analyzer = SensitivityAnalyzer(
+        parameter_space=param_space,
+        wrapper=f_stage4,
+    )
+    sobol_multi, surrogate = analyzer.analyze_with_pce(
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+    )
+
+    # Split multi-output Sobol into per-stage SobolIndices
+    per_stage_sobol = _split_multi_output_sobol(sobol_multi)
+    return per_stage_sobol, surrogate
+
+
+def _split_multi_output_sobol(sobol: SobolIndices) -> list[SobolIndices]:
+    """Split a multi-output SobolIndices into a list of per-output SobolIndices."""
+    fo = sobol.first_order
+    to = sobol.total_order
+
+    if fo.ndim > 1:
+        n_outputs = fo.shape[0]
+        per_output = []
+        for i in range(n_outputs):
+            stage_sobol = SobolIndices(
+                first_order=fo[i],
+                total_order=to[i],
+                parameter_names=sobol.parameter_names,
+                output_names=[f"stage_{i}"],
+            )
+            per_output.append(stage_sobol)
+        return per_output
+    else:
+        return [sobol]
+
+
+# === Phase 1: Population-Level GSA (Steps 5a-7a) === #
+
+
+def run_phase1(
+    param_space: XSpace,
+    simulation_func: Callable,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
+    export_path: Path | None = None,
+) -> tuple[SobolIndices, PCESurrogate]:
+    """
+    Phase 1: Population-level GSA (Steps 5a-7a).
+
+    Morris prescreening → PCE surrogate → Sobol indices.
+    Answers: "Which parameters drive bulk output variance?"
+
+    Args:
+        param_space: Input parameter space Ξ.
+        simulation_func: Callable with evaluate_batch(X) → Y.
+        polynomial_order: PCE polynomial order.
+        n_samples: Number of LHS samples for PCE fitting.
+        prescreen_config: Optional Morris prescreening config.
+        export_path: If provided, export surrogate to this path.
+
+    Returns:
+        Tuple of (SobolIndices, PCESurrogate).
+    """
+    analyzer = SensitivityAnalyzer(
+        parameter_space=param_space,
+        wrapper=simulation_func,
+    )
+    sobol, surrogate = analyzer.analyze_with_pce(
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+    )
+
+    if export_path is not None:
+        surrogate.export(export_path / "population_surrogate")
+
+    return sobol, surrogate
+
+
+# === Phase 2: Cell-Cycle-Stratified GSA (Steps 5b-7b) === #
+
+
+def run_phase2(
+    param_space: XSpace,
+    simulation_func: Callable,
+    agg_result: AggregationResult,
+    observable_names: list[str],
+    n_bins: int = 10,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+    expected_cycle_time: float = 3600.0,
+    export_path: Path | None = None,
+) -> tuple[list[SobolIndices], PCESurrogate]:
+    """
+    Phase 2: Cell-cycle-stratified GSA (Steps 5b-7b).
+
+    GSA-informed observable selection → Koopman θ → Strategy 4 wrapper
+    → per-stage PCE → per-stage Sobol indices.
+    Answers: "Which parameters drive variance WITHIN each cell cycle stage?"
+
+    Args:
+        param_space: Input parameter space Ξ.
+        simulation_func: Base simulation callable (params → raw output).
+        agg_result: AggregationResult from step 3.
+        observable_names: Names of observables in the simulation output.
+        n_bins: Number of cell cycle stage bins.
+        polynomial_order: PCE polynomial order.
+        n_samples: Number of LHS samples for PCE fitting.
+        expected_cycle_time: Expected cell cycle period in seconds.
+        export_path: If provided, export surrogate to this path.
+
+    Returns:
+        Tuple of (list[SobolIndices], PCESurrogate).
+    """
+    from uq.cell_cycle import KoopmanCellCycleVariable
+
+    # Step 5b: GSA-informed observable selection
+    relevance = identify_cell_cycle_relevant_observables(
+        aggregated_uniform=agg_result.uniform,
+        aggregated_by_gen=agg_result.generation,
+        aggregated_by_seed=agg_result.seed,
+        observable_names=observable_names,
+    )
+
+    # Use relevant observables, or fall back to all observables
+    selected_obs = relevance.relevant_observables or observable_names
+
+    # Step 6b: Koopman cell cycle variable
+    koopman_cc = KoopmanCellCycleVariable(
+        observable_columns=selected_obs,
+        expected_cycle_time=expected_cycle_time,
+    )
+
+    # Step 6d: Strategy 4 wrapper
+    f_stage4 = Strategy4Wrapper(
+        base_wrapper=simulation_func,
+        koopman_cc=koopman_cc,
+        n_bins=n_bins,
+        observable_columns=selected_obs,
+    )
+
+    # Step 7b: PCE + Sobol on Strategy 4
+    per_stage_sobol, surrogate = compute_strategy4_sobol(
+        param_space=param_space,
+        f_stage4=f_stage4,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+    )
+
+    if export_path is not None:
+        surrogate.export(export_path / "cell_cycle_surrogate")
+
+    return per_stage_sobol, surrogate
+
+
+# === Pipeline Orchestration === #
+
+
+def execute_pipeline(
+    param_space: XSpace,
+    simulation_func: Callable,
+    timeseries: polars.DataFrame,
+    observable_columns: list[str],
+    n_bins: int = 10,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+    expected_cycle_time: float = 3600.0,
+    export_path: Path | None = None,
+) -> PipelineResult:
+    """
+    Execute the full RFC006 UQ pipeline.
+
+    Runs steps 1-4 (sequential, shared), then Phase 1 and Phase 2,
+    producing a PipelineResult with two UqProfile instances.
+
+    Args:
+        param_space: Input parameter space Ξ (step 1).
+        simulation_func: Callable with evaluate_batch(X) → Y.
+        timeseries: Polars DataFrame of simulation timeseries (step 2 output).
+        observable_columns: Column names of observables to aggregate/analyze.
+        n_bins: Number of cell cycle stage bins for Phase 2.
+        polynomial_order: PCE polynomial order for both phases.
+        n_samples: Number of LHS samples for PCE fitting.
+        expected_cycle_time: Expected cell cycle period in seconds.
+        export_path: If provided, export surrogates and results here.
+
+    Returns:
+        PipelineResult with population and cell_cycle UqProfile instances.
+    """
+    # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
+    agg_result = aggregate_timeseries(timeseries, observable_columns)
+    decomp = get_variance_decomposition(agg_result)
+
+    # --- Phase 1: Population-level GSA ---
+    sobol_bulk, surrogate_bulk = run_phase1(
+        param_space=param_space,
+        simulation_func=simulation_func,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+        export_path=export_path,
+    )
+
+    # --- Phase 2: Cell-cycle-stratified GSA ---
+    per_stage_sobol, surrogate_cc = run_phase2(
+        param_space=param_space,
+        simulation_func=simulation_func,
+        agg_result=agg_result,
+        observable_names=observable_columns,
+        n_bins=n_bins,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+        expected_cycle_time=expected_cycle_time,
+        export_path=export_path,
+    )
+
+    # --- Assemble PipelineResult ---
+    result = PipelineResult(
+        population=UqProfile(
+            stratification=StratificationLens.POPULATION,
+            sobol_indices=[sobol_bulk],
+            surrogate=surrogate_bulk,
+        ),
+        cell_cycle=UqProfile(
+            stratification=StratificationLens.CELL_CYCLE,
+            sobol_indices=per_stage_sobol,
+            surrogate=surrogate_cc,
+        ),
+    )
+
+    if export_path is not None:
+        result.export(export_path)
+
+    return result
+
+
+async def execute_pipeline_async(
+    param_space: XSpace,
+    simulation_func: Callable,
+    timeseries: polars.DataFrame,
+    observable_columns: list[str],
+    n_bins: int = 10,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+    expected_cycle_time: float = 3600.0,
+    export_path: Path | None = None,
+) -> PipelineResult:
+    """
+    Async version of execute_pipeline — runs Phase 1 and Phase 2 concurrently.
+
+    Same interface as execute_pipeline but uses asyncio to run the two
+    independent phases in parallel after the shared steps 3-4.
+    """
+    # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
+    agg_result = aggregate_timeseries(timeseries, observable_columns)
+    decomp = get_variance_decomposition(agg_result)
+
+    # --- Phase 1 || Phase 2 (parallel) ---
+    loop = asyncio.get_event_loop()
+
+    phase1_future = loop.run_in_executor(
+        None,
+        lambda: run_phase1(
+            param_space=param_space,
+            simulation_func=simulation_func,
+            polynomial_order=polynomial_order,
+            n_samples=n_samples,
+            export_path=export_path,
+        ),
+    )
+
+    phase2_future = loop.run_in_executor(
+        None,
+        lambda: run_phase2(
+            param_space=param_space,
+            simulation_func=simulation_func,
+            agg_result=agg_result,
+            observable_names=observable_columns,
+            n_bins=n_bins,
+            polynomial_order=polynomial_order,
+            n_samples=n_samples,
+            expected_cycle_time=expected_cycle_time,
+            export_path=export_path,
+        ),
+    )
+
+    (sobol_bulk, surrogate_bulk), (per_stage_sobol, surrogate_cc) = await asyncio.gather(phase1_future, phase2_future)
+
+    # --- Assemble PipelineResult ---
+    result = PipelineResult(
+        population=UqProfile(
+            stratification=StratificationLens.POPULATION,
+            sobol_indices=[sobol_bulk],
+            surrogate=surrogate_bulk,
+        ),
+        cell_cycle=UqProfile(
+            stratification=StratificationLens.CELL_CYCLE,
+            sobol_indices=per_stage_sobol,
+            surrogate=surrogate_cc,
+        ),
+    )
+
+    if export_path is not None:
+        result.export(export_path)
+
+    return result
+
+
+# === Convenience: create_surrogate === #
 
 
 def create_surrogate(
@@ -262,80 +654,34 @@ def create_surrogate(
     export: bool = True,
     **kwargs,
 ) -> PCESurrogate:
-    surrogate = generate_surrogate(space=full_space, generator=f, sample_size=sample_size, config=config)
+    """Build a PCE surrogate from a parameter space and simulation function."""
+    surrogate = _generate_surrogate(space=full_space, generator=f, sample_size=sample_size, config=config)
     if export:
         path = kwargs.get("path", Path(os.getcwd()).absolute())
         surrogate.export(path)
     return surrogate
 
 
+# === Convenience: calculate_cell_cycle === #
+
+
 def calculate_cell_cycle(
     experiment_id: str,
     outdir_root: str,
-    variable_type: Literal["mass_based", "dna_replication", "cell_angle", "koopman"],
-    n_bins: int,
-    output_column: str,
+    variable_type: Literal["mass_based", "dna_replication", "cell_angle", "koopman"] = "mass_based",
+    n_bins: int = 10,
+    output_column: str = "listeners__mass__dry_mass",
     verbose: bool = True,
 ):
+    """Convenience wrapper for cell cycle computation."""
     result = _cell_cycle(
-        experiment_id="api_simulation_default",
-        outdir_root="/path/to/sims",
-        variable_type="mass_based",  # or "dna_replication", "cell_angle", "koopman"
-        n_bins=10,
-        output_column="listeners__mass__dry_mass",
-        verbose=True,
+        experiment_id=experiment_id,
+        outdir_root=outdir_root,
+        variable_type=variable_type,
+        n_bins=n_bins,
+        output_column=output_column,
+        verbose=verbose,
     )
-    # Access results
-    result.print_summary()
-    print(f"Phenotypic CV: {result.phenotypic_variation_cv}")
-    print(f"Cell cycle values: {result.cell_cycle_variable.values}")
+    if verbose:
+        result.print_summary()
     return result
-
-
-def execute_pipeline(config: PipelineConfig) -> Pipeline:
-    """
-    The missing steps pick up after step 4 (variance decomposition) and run a second, parallel analysis:
-
-      4. Variance decomposition (already computed)
-             │
-             ▼
-      4a. GSA-informed observable selection (DONE — identify_cell_cycle_relevant_observables())
-             │
-             ▼
-      4b. Koopman DMD on selected observables → θ(x) ∈ [0,1] (DONE — GSAInformedCellCycleVariable)
-             │
-             ▼
-      4c. Bin by θ, compute per-stage statistics (DONE — CellCycleAggregator)
-             │
-             ▼
-      4d. ← THIS IS MISSING: wrap "params → per-stage output" as a callable
-             │
-             ▼
-      4e. ← THIS IS MISSING: feed that callable into generate_surrogate() (or manual PCE flow)
-             │
-             ▼
-      4f. ← THIS IS MISSING: Sobol indices from Strategy 4 PCE → "phenotypic sensitivity"
-
-      So the three missing things (4d, 4e, 4f) are exactly what I listed before. But they come after the existing Phase 1 pipeline, not
-      before it. The prescreening code you highlighted would still run first — it's just that its results (the selected parameters) would
-      also be used as inputs to the Strategy 4 PCE, not only the Strategy 1-3 PCE.
-
-      In concrete terms, the missing wrapper (4d) would look roughly like:
-
-      def strategy4_generator(params: np.ndarray) -> np.ndarray:
-          # params → run sim → compute θ via Koopman → bin → return per-stage means
-          raw_output = simulation_func(params)          # existing wrapper
-          theta = koopman_cc.compute(raw_output).values  # existing: θ(x)
-          bins = np.digitize(theta, stage_edges)          # existing: to_stage_bins()
-          return np.array([raw_output[bins == s].mean() for s in range(n_stages)])
-
-      Then you'd call generate_surrogate(space, generator=strategy4_generator, ...) — the exact same PCE machinery, just with a different
-      f.
-    """
-    # Whats missing:
-    #     1. A wrapper that takes a parameter vector, runs (or looks up) the simulation, computes the Koopman/GSA-informed cell cycle variable,
-    #     bins by θ, and returns per-stage statistics as the output vector Y
-    #     2. Feed that wrapper into generate_surrogate() or the manual create_samples → process_samples → fit_pce_coefficients flow
-    #     3. Compute Sobol indices from the resulting PCE — this gives you "phenotypic sensitivity analysis" (which parameters drive variation
-    #     within each cell-cycle stage)
-    pass
