@@ -134,6 +134,9 @@ class VariantConfig(BaseClass):
         return variant
 
 
+# TODO: make a to_param() -> Param method!
+
+
 @dataclass
 class VecoliParams(BaseClass, abc.ABC):
     variants: list[VariantConfig] = field(default_factory=list)
@@ -190,14 +193,14 @@ class VioPathwayParams(VecoliParams):
     translation_efficiency: float = 1.0
     rel_exp_adj_list: list[float] = field(default_factory=lambda: [1.0])
     rel_trl_eff_adj_list: list[float] = field(default_factory=lambda: [1.0])
-    condition: MediaCondition = MediaCondition.BASAL
+    condition: MediaCondition | str = MediaCondition.BASAL
 
     def __post_init__(self):
         pass
 
     def get_default_perturbations(self):
         d = {
-            "condition": self.condition.value,
+            "condition": self.condition,
             "induction_gen": self.induction_gen,
             "exp_trl_eff": {
                 "exp": self.expression,
@@ -370,12 +373,26 @@ class SimulationConfigVecoli(SimulationConfig):
 
 @dataclass
 class Simulation(BaseClass):
+    """
+    Attributes:
+        database_id: int
+        config: SimulationConfigVecoli
+    """
+
     database_id: int
     config: SimulationConfigVecoli
 
 
 @dataclass
 class TimeseriesDataset(BaseClass):
+    """
+    Attributes:
+        database_id: int
+        simulation: Simulation
+        metadata_included: bool
+        selections: list[str] | None (observables to select)
+    """
+
     database_id: int  # TODO: used to perform loookup dataset from db/s3 (cross-reference with simulation attr)
     simulation: Simulation  # or simulation_id
     metadata_included: bool = True
