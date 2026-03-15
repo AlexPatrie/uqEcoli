@@ -1,11 +1,24 @@
-"""Tutorial 07: Full Sensitivity Analysis Workflow
+"""Tutorial 07: Full RFC006 UQ Pipeline Workflow
 
-This tutorial demonstrates the complete workflow for sensitivity analysis:
-1. Morris screening (cheap) to identify important parameters
-2. Detailed PCE analysis on the screened subset
-3. Reactive parameter exploration with sliders
+This tutorial demonstrates the **complete UQ framework workflow** as specified by
+RFC006, verifying each requirement against its implementation in the `uq` package.
 
-This is the recommended approach for high-dimensional parameter spaces.
+RFC006 Activities:
+  Phase 1 (MS-08.4.2):
+    1. Identify input/output variables         → uq.inputs, uq.outputs
+    2. Enable output via emitter               → ParquetEmitter + hive partitioning
+    3. Implement wrapper functions              → uq.wrappers
+    4. Implement PCE-based sensitivity (1-3)    → uq.sensitivity, uq.pce
+    5. Apply to representative simulations      → this tutorial
+
+  Phase 2 (CD2 / Milestone 10):
+    6. Cell cycle stratification strategy       → uq.cell_cycle
+    7. Cell cycle variable + per-stage GSA      → uq.pipeline.workflow
+
+  RFC006 §4 parametrized steps:
+    A. Selection/extraction of variables        → uq.outputs.OutputExtractor
+    B. Temporal aggregation into Y              → uq.aggregation.Aggregator
+    C. Sensitivity analysis method              → uq.sensitivity.SensitivityAnalyzer
 
 Run with: uv run marimo run tutorials/07_full_workflow.py
 """
@@ -26,28 +39,30 @@ def _():
 @app.cell
 def _(mo):
     mo.md("""
-    # Full Sensitivity Analysis Workflow
+    # Full RFC006 UQ Pipeline
 
-    This tutorial demonstrates the **complete workflow** for sensitivity analysis
-    on high-dimensional parameter spaces:
+    This tutorial walks through the **complete 7-step workflow** specified by RFC006,
+    verifying that each requirement is satisfied by the `uq` package.
 
     ```
-    ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-    │  Many Params    │ ──► │ Morris Screening│ ──► │  Top K Params   │
-    │  (10-100+)      │     │  (O(n) cheap)   │     │  (3-10)         │
-    └─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                            │
-                                                            ▼
-    ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-    │ Reactive Explore│ ◄── │  PCE Surrogate  │ ◄── │ Detailed PCE    │
-    │ (sliders + viz) │     │  (instant pred) │     │ (Sobol indices) │
-    └─────────────────┘     └─────────────────┘     └─────────────────┘
+    ┌──────────────────────────────────────────────────────────────────────────────────────┐
+    │  RFC006 Pipeline                                                                     │
+    │                                                                                      │
+    │  Steps 1-4 (shared):                                                                 │
+    │  Parameter Space → Load Data → Aggregate (strategies 1-3) → Variance Decomposition   │
+    │                                                                       │               │
+    │                                                    ┌──────────────────┼──────────┐    │
+    │                                                    │                  │          │    │
+    │  Phase 1 (bulk):                                   │  Phase 2 (cell cycle):      │    │
+    │  Morris → PCE → Sobol                              │  GSA obs → Koopman θ →      │    │
+    │  "Which params drive bulk variance?"               │  Strategy4 → per-stage Sobol │    │
+    │                                                    │  "Which params drive         │    │
+    │                                                    │   within-stage variance?"    │    │
+    │                                                    └─────────────────────────────┘    │
+    │                                                                                      │
+    │  Output: PipelineResult(population=UqProfile, cell_cycle=UqProfile)                   │
+    └──────────────────────────────────────────────────────────────────────────────────────┘
     ```
-
-    **Why this workflow?**
-    - Morris screening is O(n) - feasible for 50+ parameters
-    - PCE/Sobol is O(n²) - only practical for <20 parameters
-    - Screening identifies which parameters to focus on
     """)
     return
 
@@ -55,558 +70,590 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
+    import polars as pl
 
-    return (np,)
+    return np, pl
 
 
 # =============================================================================
-# STEP 1: DEFINE A HIGH-DIMENSIONAL PARAMETER SPACE
+# RFC006 ACTIVITY 1: Identify Input/Output Variables
 # =============================================================================
 @app.cell
 def _(mo):
     mo.md("""
-    ## Step 1: Define High-Dimensional Parameter Space
+    ## Activity 1: Identify Input/Output Variables
 
-    We'll simulate a system with **15 parameters** - too many for direct PCE
-    analysis, but perfect for Morris screening.
+    **RFC006 requirement:** *"Identify the scientifically most relevant input and output
+    variables. Expected: Inputs: vio pathway presence, mecillinam condition, gene knockouts.
+    Outputs: transcriptome, proteome, metabolic fluxes, and higher order properties."*
+
+    **Satisfied by:** `uq.inputs.XSpaceVecoli` (input parameter space) and
+    `uq.outputs.OutputExtractor` (output variable extraction).
     """)
     return
 
 
 @app.cell
-def _(np):
-    # Simulate a high-dimensional parameter space
-    # In practice, this would come from InputParameterSpace
+def _():
+    from uq import XSpaceVecoli, OutputType, get_output_variable_info
+    from uq.pipeline.models import VioPathwayParams, MecillinamParams, GeneKnockoutParams
 
-    FULL_PARAM_NAMES = [
-        "gene_expression_A",
-        "gene_expression_B",
-        "gene_expression_C",
-        "translation_eff_A",
-        "translation_eff_B",
-        "translation_eff_C",
-        "degradation_rate",
-        "diffusion_coeff",
-        "binding_affinity",
-        "inhibitor_conc",
-        "activator_conc",
-        "temperature_factor",
-        "pH_factor",
-        "nutrient_level",
-        "stress_response",
-    ]
+    # Define the input parameter space (Ξ)
+    param_space = XSpaceVecoli(
+        include_vio=True,
+        include_mecillinam=True,
+        vio_expression_bounds=(0.0, 5.0),
+        vio_trl_eff_bounds=(0.0, 2.0),
+        mecillinam_conc_bounds=(0.0, 10.0),
+    )
 
-    FULL_PARAM_BOUNDS = [
-        (0.1, 5.0),  # gene_expression_A (strong effect)
-        (0.1, 5.0),  # gene_expression_B (medium effect)
-        (0.1, 5.0),  # gene_expression_C (weak effect)
-        (0.5, 2.0),  # translation_eff_A (strong effect)
-        (0.5, 2.0),  # translation_eff_B (weak effect)
-        (0.5, 2.0),  # translation_eff_C (negligible)
-        (0.01, 0.5),  # degradation_rate (medium effect)
-        (0.001, 0.1),  # diffusion_coeff (negligible)
-        (0.1, 10.0),  # binding_affinity (medium effect)
-        (0.0, 10.0),  # inhibitor_conc (strong negative effect)
-        (0.0, 5.0),  # activator_conc (medium effect)
-        (0.8, 1.2),  # temperature_factor (negligible)
-        (0.9, 1.1),  # pH_factor (negligible)
-        (0.1, 2.0),  # nutrient_level (weak effect)
-        (0.0, 1.0),  # stress_response (weak effect)
-    ]
+    print("=== Activity 1: Input/Output Variables ===")
+    print(f"Input parameters (Ξ): {param_space.parameter_names}")
+    print(f"Parameter bounds: {param_space.parameter_bounds}")
+    print(f"Dimension: {param_space.n_parameters}")
+    print()
 
-    N_PARAMS = len(FULL_PARAM_NAMES)
-    print(f"Total parameters: {N_PARAMS}")
-    print(f"Direct PCE would need ~{(N_PARAMS + 1) * (N_PARAMS + 2) // 2} terms (order 2)")
-    return FULL_PARAM_BOUNDS, FULL_PARAM_NAMES, N_PARAMS
+    # Output variable types per RFC006
+    print("Output variable types:")
+    for ot in OutputType:
+        print(f"  {ot.name}: {ot.value}")
+
+    print()
+    print("Vio pathway params:", VioPathwayParams())
+    print("Mecillinam params:", MecillinamParams())
+    print("Gene knockout params:", GeneKnockoutParams())
+
+    return (
+        GeneKnockoutParams,
+        MecillinamParams,
+        OutputType,
+        VioPathwayParams,
+        get_output_variable_info,
+        param_space,
+    )
 
 
 # =============================================================================
-# STEP 2: DEFINE A SYNTHETIC MODEL
+# RFC006 ACTIVITY 2-3: Emitter + Wrapper Functions
 # =============================================================================
 @app.cell
 def _(mo):
     mo.md("""
-    ## Step 2: Define Model Function
+    ## Activities 2-3: Output Emitter + Wrapper Functions
 
-    We define a synthetic model where we **know** which parameters are important.
-    This lets us verify that Morris screening correctly identifies them.
+    **Activity 2:** *"Enable output of relevant variables via emitter"*
+    — Uses `ParquetEmitter` + Polars hive partitioning (deviation from `XarrayEmitter`).
 
-    **Ground truth** (built into our model):
-    - Strong effects: `gene_expression_A`, `translation_eff_A`, `inhibitor_conc`
-    - Medium effects: `gene_expression_B`, `degradation_rate`, `binding_affinity`, `activator_conc`
-    - Weak effects: `gene_expression_C`, `translation_eff_B`, `nutrient_level`, `stress_response`
-    - Negligible: `translation_eff_C`, `diffusion_coeff`, `temperature_factor`, `pH_factor`
+    **Activity 3:** *"Implement input→output wrapper functions that can be called from
+    numerical libraries"*
+    — `uq.wrappers.SimulationWrapper` and `uq.wrappers.PrecomputedWrapper`.
+
+    For this tutorial, we use **synthetic data** and a **synthetic wrapper**.
     """)
     return
 
 
 @app.cell
-def _(np):
-    def synthetic_model(params: np.ndarray) -> np.ndarray:
-        """
-        Synthetic model with known parameter sensitivities.
+def _(np, param_space):
+    from uq.synthetic import generate_signal, generate_synthetic_simulation_data
 
-        Returns a scalar output representing some biological observable.
-        """
-        if params.ndim == 1:
-            params = params.reshape(1, -1)
+    # Load synthetic simulation data (stands in for real ParquetEmitter output)
+    sim_data = generate_synthetic_simulation_data()
+    observable_columns = ["listeners__mass__dry_mass", "listeners__fba_results__growth"]
 
-        outputs = []
-        for p in params:
-            # Unpack parameters
-            expr_A, expr_B, expr_C = p[0], p[1], p[2]
-            trl_A, trl_B, trl_C = p[3], p[4], p[5]
-            deg_rate, diff_coeff, bind_aff = p[6], p[7], p[8]
-            inhib, activ = p[9], p[10]
-            temp, ph, nutrient, stress = p[11], p[12], p[13], p[14]
+    print("=== Activities 2-3: Data Loading + Wrapper ===")
+    print(f"Loaded {len(sim_data)} rows of synthetic simulation data")
+    print(f"Columns: {sim_data.columns}")
+    print(f"Experiments: {sim_data['experiment_id'].unique().to_list()}")
+    print(f"Seeds: {sim_data['lineage_seed'].unique().to_list()}")
+    print(f"Generations: {sorted(sim_data['generation'].unique().to_list())}")
 
-            # Model with known sensitivities
-            # Strong effects
-            y = 2.0 * expr_A * trl_A  # Strong positive
-            y -= 0.3 * inhib  # Strong negative
+    # Synthetic bulk wrapper: params → scalar output (stands in for SimulationWrapper)
+    class SyntheticBulkWrapper:
+        def __init__(self, param_names):
+            self.param_names = param_names
 
-            # Medium effects
-            y += 0.5 * expr_B
-            y -= 0.2 * deg_rate * 10  # Scale up
-            y += 0.3 * np.log1p(bind_aff)
-            y += 0.4 * activ
+        def __call__(self, x):
+            signal = generate_signal(x, self.param_names, baseline_value=1.5, n_timesteps=400)
+            return np.array([signal.mean()])
 
-            # Weak effects
-            y += 0.1 * expr_C
-            y += 0.05 * trl_B
-            y += 0.08 * nutrient
-            y -= 0.05 * stress
+        def evaluate_batch(self, X):
+            return np.vstack([self(x) for x in X])
 
-            # Negligible effects (< 1% of output variance)
-            y += 0.01 * trl_C
-            y += 0.005 * diff_coeff * 100
-            y += 0.01 * (temp - 1.0) * 10
-            y += 0.01 * (ph - 1.0) * 10
+    bulk_wrapper = SyntheticBulkWrapper(param_space.parameter_names)
+    print(f"\nBulk wrapper test: f([2.5, 1.0, 5.0]) = {bulk_wrapper(np.array([2.5, 1.0, 5.0]))}")
 
-            # Add small interaction term
-            y += 0.1 * expr_A * inhib  # Nonlinear interaction
-
-            outputs.append(y)
-
-        return np.array(outputs)
-
-    # Test it
-    test_params = np.array([1.0] * 15)
-    test_output = synthetic_model(test_params)
-    print(f"Test output at all-ones params: {test_output[0]:.4f}")
-    return (synthetic_model,)
+    return (
+        SyntheticBulkWrapper,
+        bulk_wrapper,
+        generate_signal,
+        generate_synthetic_simulation_data,
+        observable_columns,
+        sim_data,
+    )
 
 
 # =============================================================================
-# STEP 3: MORRIS SCREENING
+# RFC006 §4 STEP A+B: Aggregation Strategies 1-3
 # =============================================================================
 @app.cell
 def _(mo):
     mo.md("""
-    ## Step 3: Morris Screening
+    ## RFC006 §4 Steps A+B: Aggregation Strategies 1-3
 
-    Now we run Morris screening to identify which parameters are most influential.
-    This requires only **O(n_trajectories × (n_params + 1))** model evaluations.
+    **RFC006 §1:** *"Capture statistics across four types of aggregation:
+    1) Uniformly across all simulated cells, 2) Stratified by generation,
+    3) Stratified by lineage seed, 4) Stratified by cell cycle stage."*
 
-    For 15 parameters with 20 trajectories: **320 evaluations**
-    (vs ~2000+ for full PCE analysis)
+    **RFC006 §4:** *"Parametrise: A) Selection/extraction, B) Temporal aggregation,
+    C) Sensitivity analysis method."*
+
+    **Satisfied by:** `uq.pipeline.workflow.aggregate_timeseries()` — runs strategies
+    1-3 on a Polars DataFrame, returning an `AggregationResult`.
     """)
     return
 
 
 @app.cell
-def _(FULL_PARAM_BOUNDS, FULL_PARAM_NAMES, np, synthetic_model):
-    from uq.sensitivity import MorrisIndices
+def _(observable_columns, sim_data):
+    from uq.pipeline.workflow import aggregate_timeseries
 
-    def run_morris_screening(
-        model_func,
-        param_names: list[str],
-        param_bounds: list[tuple[float, float]],
-        n_trajectories: int = 20,
-        n_levels: int = 4,
-        seed: int = 42,
-    ) -> MorrisIndices:
-        """
-        Run Morris screening on a model function.
+    # Step 3: Aggregate via strategies 1-3
+    agg_result = aggregate_timeseries(sim_data, observable_columns)
 
-        This is a simplified implementation for demonstration.
-        In practice, use SensitivityAnalyzer.analyze_with_morris().
-        """
-        np.random.seed(seed)
-        n_params = len(param_names)
-        bounds = np.array(param_bounds)
-        lb, ub = bounds[:, 0], bounds[:, 1]
+    print("=== Step 3: Aggregation Strategies 1-3 ===")
+    print(f"Strategy 1 (UNIFORM): mean={agg_result.uniform.mean}, n={agg_result.uniform.n_samples}")
+    print(f"Strategy 2 (BY_GENERATION): {len(agg_result.generation.groups)} groups")
+    print(f"Strategy 3 (BY_LINEAGE_SEED): {len(agg_result.seed.groups)} groups")
 
-        # Grid step size
-        delta = n_levels / (2 * (n_levels - 1))
+    return agg_result, aggregate_timeseries
 
-        elementary_effects = np.zeros((n_trajectories, n_params))
 
-        for traj in range(n_trajectories):
-            # Random starting point on grid
-            x_base = np.random.randint(0, n_levels - 1, n_params) / (n_levels - 1)
+# =============================================================================
+# RFC006: VARIANCE DECOMPOSITION (Step 4)
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Step 4: Variance Decomposition
 
-            # Random permutation of parameters
-            perm = np.random.permutation(n_params)
+    **RFC006 §1:** *"Enable us to deconvolve different types of uncertainty."*
 
-            # Build trajectory
-            trajectory = np.zeros((n_params + 1, n_params))
-            trajectory[0] = x_base.copy()
+    Variance decomposition splits total variance into:
+    - **Generation effects** — convergence toward steady-state growth
+    - **Seed effects** — exogenous stochastic variance
+    - **Residual** — cell-cycle-related dynamics (feeds into Phase 2)
+    """)
+    return
 
-            for i, param_idx in enumerate(perm):
-                trajectory[i + 1] = trajectory[i].copy()
-                if trajectory[i, param_idx] + delta <= 1.0:
-                    trajectory[i + 1, param_idx] += delta
-                else:
-                    trajectory[i + 1, param_idx] -= delta
 
-            # Scale to actual bounds
-            trajectory_scaled = lb + trajectory * (ub - lb)
+@app.cell
+def _(agg_result, np):
+    from uq.pipeline.workflow import get_variance_decomposition
 
-            # Evaluate model
-            outputs = model_func(trajectory_scaled).flatten()
+    decomp = get_variance_decomposition(agg_result)
 
-            # Compute elementary effects
-            for i, param_idx in enumerate(perm):
-                dy = outputs[i + 1] - outputs[i]
-                dx = trajectory[i + 1, param_idx] - trajectory[i, param_idx]
-                param_range = ub[param_idx] - lb[param_idx]
-                elementary_effects[traj, param_idx] = dy / (dx * param_range) if dx != 0 else 0
+    gen_pct = np.mean(decomp["generation_fraction"]) * 100
+    seed_pct = np.mean(decomp["seed_fraction"]) * 100
+    residual_pct = max(0, 100 - gen_pct - seed_pct)
 
-        # Compute statistics
-        mu = np.mean(elementary_effects, axis=0)
-        mu_star = np.mean(np.abs(elementary_effects), axis=0)
-        sigma = np.std(elementary_effects, axis=0)
+    print("=== Step 4: Variance Decomposition ===")
+    print(f"Generation effects:    {gen_pct:.1f}% of variance")
+    print(f"Stochastic seeding:    {seed_pct:.1f}% of variance")
+    print(f"Residual (cell cycle): {residual_pct:.1f}% of variance")
+    print()
+    print("The residual fraction feeds into Phase 2 observable selection.")
 
-        return MorrisIndices(
-            mu=mu,
-            mu_star=mu_star,
-            sigma=sigma,
-            parameter_names=param_names,
-            elementary_effects=elementary_effects,
-            n_trajectories=n_trajectories,
-            n_levels=n_levels,
+    return decomp, gen_pct, get_variance_decomposition, residual_pct, seed_pct
+
+
+# =============================================================================
+# RFC006 ACTIVITY 4 / PHASE 1: PCE-Based Sensitivity (Steps 5a-7a)
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Phase 1: Population-Level GSA (Activity 4)
+
+    **RFC006 Activity 4:** *"Implement well established global sensitivity analysis
+    methods based on the aggregation strategies (1-3). Expected to use PCE surrogate
+    method for the stochastic function `(sim_data → SIM output)`."*
+
+    **Satisfied by:** `uq.pipeline.workflow.run_phase1()` which calls
+    `SensitivityAnalyzer.analyze_with_pce()` → PyTUQ `PCSobol` →
+    Sobol indices from PCE coefficients.
+
+    Steps:
+    - **5a.** Morris prescreening → identify top-K parameters
+    - **6a.** PCE surrogate construction (Legendre basis, LHS sampling)
+    - **7a.** Sobol indices from PCE coefficients
+    """)
+    return
+
+
+@app.cell
+def _(bulk_wrapper, param_space):
+    from uq.pipeline.workflow import run_phase1
+
+    sobol_bulk, surrogate_bulk, _morris = run_phase1(
+        param_space=param_space,
+        simulation_func=bulk_wrapper,
+        polynomial_order=2,
+        n_samples=50,
+    )
+
+    print("=== Phase 1: Population-Level Sobol Indices ===")
+    print(f"{'Parameter':<30s} {'S_i (first)':>12s} {'S_Ti (total)':>12s}")
+    print("-" * 56)
+    _fo = sobol_bulk.first_order.flatten()
+    _to = sobol_bulk.total_order.flatten()
+    for _i, _name in enumerate(sobol_bulk.parameter_names):
+        _si = _fo[_i] if _i < len(_fo) else 0.0
+        _sti = _to[_i] if _i < len(_to) else 0.0
+        _bar = "█" * int(abs(_sti) * 40)
+        print(f"{_name:<30s} {_si:>12.4f} {_sti:>12.4f}  {_bar}")
+
+    print(f"\nPCE surrogate: R² = {surrogate_bulk.r_squared:.4f}")
+    print(f"Dimensions: {surrogate_bulk.input_dim} → {surrogate_bulk.output_dim}")
+    print("\nPhase 1 answers: 'Which parameters drive BULK output variance?'")
+
+    return run_phase1, sobol_bulk, surrogate_bulk
+
+
+# =============================================================================
+# RFC006 ACTIVITY 5b-7b / PHASE 2: Cell Cycle Stratified GSA
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Phase 2: Cell-Cycle-Stratified GSA (Activities 6-7)
+
+    **RFC006 §3:** *"A second type of analysis will need to be generated for the
+    aggregation strategy (4), and will involve the definition of a low-dimensional
+    'cell cycle variable' computed from omics variables. This variable will be used
+    for deterministically binning simulation data into cell stages, in order to then
+    perform a 'phenotypic' sensitivity analysis across the physiological time dimension.
+    The choice of the 'cell cycle variable' will be informed by the sensitivity
+    analyses (1-3)."*
+
+    **Satisfied by:** `uq.pipeline.workflow.run_phase2()` which chains:
+    - **5b.** `identify_cell_cycle_relevant_observables()` — GSA-informed obs selection
+    - **6b.** `KoopmanCellCycleVariable` — DMD → θ(x) = arg(φ)/2π ∈ [0,1]
+    - **6d.** `Strategy4Wrapper` — params → sim → θ-binning → per-stage means
+    - **7b.** `compute_strategy4_sobol()` — per-stage PCE + Sobol indices
+    """)
+    return
+
+
+@app.cell
+def _(agg_result, np, observable_columns, param_space):
+    from uq import identify_cell_cycle_relevant_observables
+    from uq.pipeline.workflow import compute_strategy4_sobol
+    from uq.synthetic import generate_signal as _gen_signal
+
+    # Step 5b: GSA-informed observable selection
+    relevance = identify_cell_cycle_relevant_observables(
+        aggregated_uniform=agg_result.uniform,
+        aggregated_by_gen=agg_result.generation,
+        aggregated_by_seed=agg_result.seed,
+        observable_names=observable_columns,
+    )
+    print("=== Step 5b: GSA-Informed Observable Selection ===")
+    print(f"Relevant observables: {relevance.relevant_observables}")
+    for _obs, _score in relevance.relevance_scores.items():
+        print(f"  {_obs}: residual_fraction = {_score:.4f}")
+
+    # Steps 6d + 7b: Strategy 4 wrapper → per-stage PCE + Sobol
+    # Using synthetic wrapper (in production: uq.pipeline.workflow.Strategy4Wrapper)
+    N_BINS = 10
+
+    class _SyntheticStrategy4:
+        def __init__(self, param_names, n_bins):
+            self.param_names = param_names
+            self.n_bins = n_bins
+
+        def __call__(self, params):
+            signal = _gen_signal(
+                params,
+                self.param_names,
+                baseline_value=1.5,
+                n_timesteps=self.n_bins * 40,
+                random_seed=int(abs(params.sum() * 1000)) % (2**31),
+            )
+            _n_per_bin = len(signal) // self.n_bins
+            return np.array([signal[s * _n_per_bin : (s + 1) * _n_per_bin].mean() for s in range(self.n_bins)])
+
+        def evaluate_batch(self, X):
+            return np.vstack([self(x) for x in X])
+
+    _f_stage4 = _SyntheticStrategy4(param_space.parameter_names, N_BINS)
+
+    print(f"\n=== Step 6d: Strategy 4 Wrapper (params → {N_BINS} stage means) ===")
+    print(f"Test: f_stage4([2.5, 1.0, 5.0]) shape = {_f_stage4(np.array([2.5, 1.0, 5.0])).shape}")
+
+    per_stage_sobol, surrogate_cc = compute_strategy4_sobol(
+        param_space=param_space,
+        f_stage4=_f_stage4,
+        polynomial_order=2,
+        n_samples=50,
+    )
+
+    print(f"\n=== Step 7b: Per-Stage Sobol Indices ({len(per_stage_sobol)} stages) ===")
+    print(f"{'Stage':<8s} ", end="")
+    for _name in param_space.parameter_names:
+        print(f"{_name:>20s} ", end="")
+    print()
+    print("-" * (8 + 21 * len(param_space.parameter_names)))
+    for _i, _s in enumerate(per_stage_sobol):
+        _vals = _s.total_order.flatten()
+        print(f"{'θ=' + f'{_i / len(per_stage_sobol):.1f}':<8s} ", end="")
+        for _j in range(len(param_space.parameter_names)):
+            _v = _vals[_j] if _j < len(_vals) else 0.0
+            print(f"{_v:>20.4f} ", end="")
+        print()
+
+    print(f"\nPCE surrogate (phenotypic): R² = {surrogate_cc.r_squared:.4f}")
+    print("\nPhase 2 answers: 'Which parameters drive variance WITHIN each cell cycle stage?'")
+
+    return (
+        N_BINS,
+        compute_strategy4_sobol,
+        identify_cell_cycle_relevant_observables,
+        per_stage_sobol,
+        relevance,
+        surrogate_cc,
+    )
+
+
+# =============================================================================
+# ASSEMBLE PipelineResult
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Pipeline Result Assembly
+
+    Both phases produce a `UqProfile`, assembled into a `PipelineResult`.
+
+    - **Population profile:** 1 × SobolIndices + 1 × PCESurrogate (bulk)
+    - **Cell cycle profile:** n_bins × SobolIndices + 1 × PCESurrogate (phenotypic)
+
+    `PipelineResult` supports serialization via `export()` / `from_export()`.
+    """)
+    return
+
+
+@app.cell
+def _(per_stage_sobol, sobol_bulk, surrogate_bulk, surrogate_cc):
+    from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
+
+    pipeline_result = PipelineResult(
+        population=UqProfile(
+            stratification=StratificationLens.POPULATION,
+            sobol_indices=[sobol_bulk],
+            surrogate=surrogate_bulk,
+        ),
+        cell_cycle=UqProfile(
+            stratification=StratificationLens.CELL_CYCLE,
+            sobol_indices=per_stage_sobol,
+            surrogate=surrogate_cc,
+        ),
+    )
+
+    print("=== PipelineResult ===")
+    print(f"Population: {pipeline_result.population.stratification}")
+    print(f"  SobolIndices: {len(pipeline_result.population.sobol_indices)} set")
+    print(f"  Surrogate R²: {surrogate_bulk.r_squared:.4f}")
+    print(f"Cell Cycle: {pipeline_result.cell_cycle.stratification}")
+    print(f"  SobolIndices: {len(pipeline_result.cell_cycle.sobol_indices)} sets (per θ-bin)")
+    print(f"  Surrogate R²: {surrogate_cc.r_squared:.4f}")
+
+    return PipelineResult, StratificationLens, UqProfile, pipeline_result
+
+
+# =============================================================================
+# SERIALIZATION
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Serialization: Export / Import
+
+    `PipelineResult.export(path)` persists surrogates (via `PCESurrogate.export()`),
+    Sobol indices (via `DataclassIO.save()`), and metadata to disk.
+
+    `PipelineResult.from_export(path)` reconstructs the full result.
+    """)
+    return
+
+
+@app.cell
+def _(PipelineResult, per_stage_sobol, pipeline_result):
+    import tempfile
+    from pathlib import Path
+
+    _export_dir = Path(tempfile.mkdtemp()) / "uq_pipeline_result"
+
+    print("=== Serialization Round-Trip ===")
+    pipeline_result.export(_export_dir)
+    print(f"Exported to: {_export_dir}")
+    for _p in sorted(_export_dir.rglob("*")):
+        if _p.is_file():
+            print(f"  {_p.relative_to(_export_dir)}")
+
+    # Round-trip verification
+    loaded = PipelineResult.from_export(_export_dir)
+    assert len(loaded.population.sobol_indices) == 1
+    assert len(loaded.cell_cycle.sobol_indices) == len(per_stage_sobol)
+    print("\nRound-trip verification: PASSED")
+
+    return Path, loaded, tempfile
+
+
+# =============================================================================
+# KOOPMAN SPECTRAL ANALYSIS (Bonus)
+# =============================================================================
+@app.cell
+def _(mo):
+    mo.md("""
+    ## Bonus: Koopman Spectral Analysis
+
+    The `uq.koopman` module provides DMD-based spectral decomposition for
+    identifying cell cycle harmonics and dynamical modes.
+    """)
+    return
+
+
+@app.cell
+def _(observable_columns, pl, sim_data):
+    from uq import CellCycleKoopmanAnalyzer, DynamicModeDecomposition
+
+    _trajectory = (
+        sim_data.filter((pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0))
+        .sort("time")
+        .select(observable_columns)
+        .to_numpy()
+    )
+
+    _dmd = DynamicModeDecomposition(rank=5)
+    _dmd.fit(_trajectory)
+    _spectrum = _dmd.get_spectrum(observable_names=["mass", "growth_rate"])
+
+    print("=== Koopman Spectral Analysis ===")
+    print(f"Trajectory shape: {_trajectory.shape}")
+    print(f"Extracted {len(_spectrum.modes)} modes:")
+    for _i, _mode in enumerate(_spectrum.get_dominant_modes(3)):
+        print(
+            f"  Mode {_i + 1}: freq={_mode.frequency:.6f} Hz, "
+            f"|amp|={abs(_mode.amplitude):.4f}, "
+            f"{'oscillatory' if _mode.is_oscillatory else 'non-oscillatory'}"
         )
 
-    # Run Morris screening
-    morris_results = run_morris_screening(
-        model_func=synthetic_model,
-        param_names=FULL_PARAM_NAMES,
-        param_bounds=FULL_PARAM_BOUNDS,
-        n_trajectories=30,
-        n_levels=6,
-    )
-
-    print(morris_results.summary())
-    return MorrisIndices, morris_results, run_morris_screening
+    return CellCycleKoopmanAnalyzer, DynamicModeDecomposition
 
 
 # =============================================================================
-# STEP 4: IDENTIFY IMPORTANT PARAMETERS
+# REACTIVE PARAMETER EXPLORATION
 # =============================================================================
 @app.cell
 def _(mo):
     mo.md("""
-    ## Step 4: Identify Important Parameters
+    ## Reactive Parameter Exploration
 
-    Based on Morris screening, we select the **top parameters** for detailed analysis.
+    Once we have a PCE surrogate, we can explore the parameter space interactively.
+    The surrogate evaluates in microseconds — fast enough for reactive UI.
+
+    **Drag the sliders** to see how each parameter affects the bulk output.
     """)
     return
 
 
 @app.cell
-def _(FULL_PARAM_BOUNDS, morris_results):
-    # Get top 5 most influential parameters
-    TOP_N = 5
-    important_params = morris_results.get_screening_candidates(top_n=TOP_N)
-    print(f"Top {TOP_N} parameters for detailed analysis:")
-    for name, mu_star in morris_results.select(n=TOP_N):
-        print(f"  {name}: μ*={mu_star:.4f}")
-
-    # Classify all parameters
-    classification = morris_results.classify_parameters()
-    print(f"\nClassification:")
-    print(f"  Negligible (can fix): {classification['negligible']}")
-    print(f"  Linear effects: {classification['linear']}")
-    print(f"  Nonlinear/interactions: {classification['nonlinear']}")
-
-    # Convert to PARAMETER_CONFIG format
-    PARAMETER_CONFIG = morris_results.to_parameter_config(
-        parameter_bounds=FULL_PARAM_BOUNDS,
-        top_n=TOP_N,
-    )
-
-    print(f"\nGenerated PARAMETER_CONFIG for reactive tutorial:")
-    for cfg in PARAMETER_CONFIG:
-        print(f"  {cfg['name']}: bounds={cfg['bounds']}")
-    return PARAMETER_CONFIG, TOP_N, classification, important_params
-
-
-# =============================================================================
-# STEP 4b: VARIANCE DECOMPOSITION
-# =============================================================================
-@app.cell
-def _(mo):
-    mo.md("""
-    ## Step 4b: Variance Decomposition
-
-    In the full RFC006 pipeline, after aggregation with strategies 1-3,
-    variance decomposition reveals *where* uncertainty comes from:
-    generation effects, stochastic seeding, or intrinsic cell-cycle dynamics.
-    """)
-    return
-
-
-@app.cell
-def _(np):
-    # Synthetic variance decomposition (in practice, from Aggregator)
-    variance_decomposition = {
-        "total_variance": np.array([1.0, 0.8, 0.5]),
-        "between_generation_variance": np.array([0.5, 0.3, 0.2]),
-        "between_seed_variance": np.array([0.3, 0.3, 0.1]),
-        "generation_fraction": np.array([0.5, 0.375, 0.4]),
-        "seed_fraction": np.array([0.3, 0.375, 0.2]),
-    }
-
-    for i, name in enumerate(["transcriptome", "proteome", "fluxes"]):
-        gen = variance_decomposition["generation_fraction"][i]
-        seed = variance_decomposition["seed_fraction"][i]
-        residual = 1 - gen - seed
-        print(f"{name:15s}  generation={gen:.0%}  seed={seed:.0%}  residual(CC)={residual:.0%}")
-    return (variance_decomposition,)
-
-
-# =============================================================================
-# STEP 5: REACTIVE EXPLORATION WITH SLIDERS
-# =============================================================================
-@app.cell
-def _(mo):
-    mo.md("""
-    ## Step 5: Reactive Parameter Exploration
-
-    Now we create sliders for only the **important parameters** identified by
-    Morris screening. The other parameters are fixed at their default values.
-
-    **Drag the sliders** to see how the output changes!
-    """)
-    return
-
-
-@app.cell
-def _(PARAMETER_CONFIG, mo, np):
-    # Create sliders dynamically from PARAMETER_CONFIG
+def _(mo, param_space, surrogate_bulk):
     _slider_list = []
-    for _cfg in PARAMETER_CONFIG:
+    for _i, _name in enumerate(param_space.parameter_names):
+        _lb, _ub = param_space.parameter_bounds[_i]
+        _mid = (_lb + _ub) / 2
         _slider = mo.ui.slider(
-            start=_cfg["bounds"][0],
-            stop=_cfg["bounds"][1],
-            step=_cfg["step"],
-            value=_cfg["default"],
-            label=_cfg["name"],
+            start=_lb,
+            stop=_ub,
+            step=(_ub - _lb) / 100,
+            value=_mid,
+            label=_name,
             show_value=True,
         )
         _slider_list.append(_slider)
 
-    param_sliders = mo.ui.array(_slider_list)
+    reactive_sliders = mo.ui.array(_slider_list)
 
-    # Fixed values for non-important parameters (at midpoint)
-    FIXED_DEFAULTS = {
-        "gene_expression_C": 2.55,
-        "translation_eff_B": 1.25,
-        "translation_eff_C": 1.25,
-        "diffusion_coeff": 0.05,
-        "temperature_factor": 1.0,
-        "pH_factor": 1.0,
-        "nutrient_level": 1.05,
-        "stress_response": 0.5,
-    }
-    return FIXED_DEFAULTS, param_sliders
+    return (reactive_sliders,)
 
 
 @app.cell
-def _(
-    FIXED_DEFAULTS,
-    FULL_PARAM_BOUNDS,
-    FULL_PARAM_NAMES,
-    PARAMETER_CONFIG,
-    mo,
-    np,
-    param_sliders,
-    synthetic_model,
-):
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
-    # Build full parameter vector from sliders + fixed values
-    _full_params = []
-    _slider_idx = 0
-    _slider_names = [cfg["name"] for cfg in PARAMETER_CONFIG]
-
-    for _i, _name in enumerate(FULL_PARAM_NAMES):
-        if _name in _slider_names:
-            _full_params.append(param_sliders.value[_slider_names.index(_name)])
-        elif _name in FIXED_DEFAULTS:
-            _full_params.append(FIXED_DEFAULTS[_name])
-        else:
-            # Use midpoint of bounds
-            _lb, _ub = FULL_PARAM_BOUNDS[_i]
-            _full_params.append((_lb + _ub) / 2)
-
-    current_params = np.array(_full_params)
-    current_output = synthetic_model(current_params)[0]
-
-    # Also compute baseline (all at defaults)
-    _baseline_params = []
-    for _i, _name in enumerate(FULL_PARAM_NAMES):
-        _lb, _ub = FULL_PARAM_BOUNDS[_i]
-        _baseline_params.append((_lb + _ub) / 2)
-    baseline_output = synthetic_model(np.array(_baseline_params))[0]
-
-    # Generate a timeseries (synthetic dynamics)
-    _t = np.arange(100)
-    _baseline_ts = baseline_output * np.exp(0.01 * _t) + 0.5 * np.sin(0.1 * _t)
-    _current_ts = current_output * np.exp(0.01 * _t) + 0.5 * np.sin(0.1 * _t)
-
-    # Create figure
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        row_heights=[0.7, 0.3],
-        subplot_titles=["Output Trajectory", "Difference from Baseline"],
-        vertical_spacing=0.12,
+def _(mo, np, param_space, reactive_sliders, surrogate_bulk):
+    _params = np.array(reactive_sliders.value)
+    _prediction = surrogate_bulk.predict(_params.reshape(1, -1))
+    _baseline = surrogate_bulk.predict(
+        np.array([(lb + ub) / 2 for lb, ub in param_space.parameter_bounds]).reshape(1, -1)
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=_t,
-            y=_baseline_ts,
-            name="Baseline",
-            line=dict(color="gray", dash="dot"),
-        ),
-        row=1,
-        col=1,
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=_t,
-            y=_current_ts,
-            name="Current",
-            line=dict(color="cyan", width=2),
-            fill="tonexty",
-            fillcolor="rgba(0, 255, 255, 0.1)",
-        ),
-        row=1,
-        col=1,
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=_t,
-            y=_current_ts - _baseline_ts,
-            name="Difference",
-            line=dict(color="magenta"),
-            fill="tozeroy",
-            fillcolor="rgba(255, 0, 255, 0.2)",
-        ),
-        row=2,
-        col=1,
-    )
-
-    fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3, row=2, col=1)
-
-    fig.update_layout(
-        height=500,
-        template="plotly_dark",
-        showlegend=True,
-        legend=dict(x=0.02, y=0.98),
-    )
-
-    # Parameter info panel
-    _param_info = "\n".join([
-        f"- **{cfg['name']}**: `{param_sliders.value[i]:.3f}`" for i, cfg in enumerate(PARAMETER_CONFIG)
-    ])
-
-    _info_panel = mo.vstack([
-        mo.md("### Important Parameters"),
-        mo.md("*Identified by Morris screening*"),
-        param_sliders,
+    _info = mo.vstack([
+        mo.md("### Parameter Controls"),
+        reactive_sliders,
         mo.md("---"),
         mo.md(f"""
-**Current output:** `{current_output:.4f}`
+**Surrogate prediction:** `{_prediction.flatten()[0]:.4f}`
 
-**Baseline output:** `{baseline_output:.4f}`
+**Baseline (midpoint):** `{_baseline.flatten()[0]:.4f}`
 
-**Change:** `{current_output - baseline_output:+.4f}` ({100 * (current_output - baseline_output) / baseline_output:+.1f}%)
+**Change:** `{(_prediction - _baseline).flatten()[0]:+.4f}`
 
----
-
-**Fixed parameters** (negligible influence):
-{", ".join(FIXED_DEFAULTS.keys())}
+*Instant evaluation via PCE surrogate (R² = {surrogate_bulk.r_squared:.4f})*
         """),
     ])
 
-    mo.hstack([_info_panel, fig], widths=[1, 3], gap=2)
-    return (
-        baseline_output,
-        current_output,
-        current_params,
-        fig,
-        go,
-        make_subplots,
-    )
+    mo.hstack([_info], widths=[1])
+    return
 
 
 # =============================================================================
-# SUMMARY
+# RFC006 VERIFICATION SUMMARY
 # =============================================================================
 @app.cell
 def _(mo):
     mo.md("""
-    ## Summary: The Complete Workflow
+    ## RFC006 Verification Summary
 
-    ### What We Did
+    | # | Activity | RFC006 Ref | Status | Implementation |
+    |---|----------|-----------|--------|----------------|
+    | 1 | Identify input/output variables | §4 Act. 1 | COMPLETE | `XSpaceVecoli`, `OutputType` |
+    | 2 | Enable output via emitter | §4 Act. 2 | COMPLETE | `ParquetEmitter` + hive partitioning |
+    | 3 | Implement wrapper functions | §4 Act. 3 | COMPLETE | `SimulationWrapper`, `PrecomputedWrapper` |
+    | 4 | PCE-based sensitivity (strategies 1-3) | §4 Act. 4 | COMPLETE | `SensitivityAnalyzer.analyze_with_pce()` |
+    | 5 | Apply to representative simulations | §4 Act. 5 | DEMONSTRATED | This tutorial + `examples/uq_pipeline.py` |
+    | 6 | Cell cycle stratification | §4 Act. 6 | COMPLETE | `KoopmanCellCycleVariable`, `GSAInformedCellCycleVariable` |
+    | 7 | Cell cycle variable + per-stage GSA | §4 Act. 7 | COMPLETE | `Strategy4Wrapper`, `compute_strategy4_sobol()` |
 
-    1. **Started with 15 parameters** - too many for direct PCE/Sobol
-    2. **Ran Morris screening** - 320 evaluations (vs ~2000+ for full PCE)
-    3. **Identified top 5 parameters** - reduced problem dimensionality by 3x
-    4. **Generated PARAMETER_CONFIG** - ready for reactive exploration
-    5. **Created reactive sliders** - instant exploration of important parameters
+    **RFC006 §4 parametrized steps:**
 
-    ### Key Takeaways
+    | Step | Description | Implementation |
+    |------|-------------|----------------|
+    | A | Selection/extraction | `uq.outputs.OutputExtractor` |
+    | B | Temporal aggregation | `uq.pipeline.workflow.aggregate_timeseries()` |
+    | C | Sensitivity analysis | `uq.sensitivity.SensitivityAnalyzer` |
 
-    | Step | Method | Cost | Output |
-    |------|--------|------|--------|
-    | Screening | Morris | O(n) | Important param names |
-    | Detailed | PCE/Sobol | O(n²) | Sensitivity indices |
-    | Exploration | PCE predict | O(1) | Instant predictions |
+    **Pipeline module (`uq.pipeline`):**
 
-    ### In Practice
-
-    ```python
-    from uq import SensitivityAnalyzer, InputParameterSpace
-
-    # 1. Full parameter space
-    full_space = InputParameterSpace(include_vio=True, include_mecillinam=True, ...)
-
-    # 2. Morris screening
-    analyzer = SensitivityAnalyzer(full_space, wrapper)
-    morris = analyzer.analyze_with_morris(n_trajectories=20)
-
-    # 3. Get PARAMETER_CONFIG for tutorial
-    PARAMETER_CONFIG = morris.to_parameter_config(
-        parameter_bounds=full_space.parameter_bounds,
-        top_n=5,
-    )
-
-    # 4. Use in 03c_reactive_sensitivity_generalized.py
-    ```
-
-    ### Next Steps
-
-    - Use `morris.classify_parameters()` to understand effect types
-    - Run detailed PCE on the reduced parameter space
-    - Analyze interactions between important parameters
+    | Function | Description |
+    |----------|-------------|
+    | `execute_pipeline()` | Full orchestrator: steps 3-7 → `PipelineResult` |
+    | `run_phase1()` | Phase 1: bulk PCE + Sobol |
+    | `run_phase2()` | Phase 2: GSA obs → Koopman → Strategy4 → per-stage Sobol |
+    | `Strategy4Wrapper` | Step 6d: params → Koopman θ → per-stage means |
+    | `compute_strategy4_sobol()` | Step 7b: per-stage PCE + Sobol |
+    | `aggregate_timeseries()` | Step 3: strategies 1-3 on Polars DataFrame |
+    | `PipelineResult.export()` | Serialize surrogates + Sobol + metadata |
+    | `PipelineResult.from_export()` | Deserialize from disk |
     """)
     return
 

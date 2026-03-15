@@ -21,7 +21,7 @@ from uq.pce.models import Parameter
 from uq.synthetic import generate_synthetic_simulation_data
 
 if TYPE_CHECKING:
-    from uq.sensitivity import PCESurrogate, SobolIndices
+    from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate, SobolIndices
 
 
 # === Simulator: where and how to obtain the function that will be fit by UQ === #
@@ -662,14 +662,35 @@ class UqProfile:
 @dataclass
 class PipelineResult:
     """
-    The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-    (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-    human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-    orthogonal decompositions.
+    Complete output of the RFC006 UQ pipeline.
+
+    Phase 1 gives the population-level view (bulk). Phase 2 gives the
+    within-cell-lifecycle view (phenotypic). They decompose the same total
+    variance into different components — like decomposing the total variance
+    of human height into "between countries" vs "within countries."
+
+    Attributes:
+        population: Phase 1 UqProfile (bulk Sobol + PCE surrogate).
+        cell_cycle: Phase 2 UqProfile (per-stage Sobol + PCE surrogate).
+        variance_decomposition: Step 4 output — generation/seed/residual
+            fractions per observable. Keys: 'generation_fraction',
+            'seed_fraction', 'between_generation_variance',
+            'between_seed_variance', 'within_group_variance'.
+        aggregation: Step 3 output — AggregatedOutput for strategies 1-3.
+            None if not retained (e.g., loaded from export).
+        morris_indices: Step 5a output — Morris prescreening results.
+            None if prescreening was skipped.
+        cell_cycle_relevance: Step 5b output — GSA-informed observable
+            selection for Koopman cell cycle variable.
+            None if not retained (e.g., loaded from export).
     """
 
     population: UqProfile
     cell_cycle: UqProfile
+    variance_decomposition: dict[str, Any] = field(default_factory=dict)
+    aggregation: Any = None  # AggregationResult from workflow, not serialized
+    morris_indices: Optional["MorrisIndices"] = None
+    cell_cycle_relevance: Optional["CellCycleRelevanceResult"] = None
 
     def export(self, path: str | Path) -> None:
         """Serialize the full pipeline result to disk.
@@ -679,6 +700,7 @@ class PipelineResult:
             path/cell_cycle_surrogate/   — PCESurrogate export
             path/population_sobol/       — DataclassIO export
             path/cell_cycle_sobol_stage_N/ — DataclassIO export per stage
+            path/variance_decomposition.json — Step 4 fractions
             path/metadata.json           — Pipeline metadata
         """
         from uq.io import DataclassIO
@@ -695,6 +717,17 @@ class PipelineResult:
         for i, sobol in enumerate(self.cell_cycle.sobol_indices):
             DataclassIO.save(sobol, path / f"cell_cycle_sobol_stage_{i}")
 
+        # Export variance decomposition (Step 4)
+        if self.variance_decomposition:
+            decomp_serializable = {
+                k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in self.variance_decomposition.items()
+            }
+            (path / "variance_decomposition.json").write_text(json.dumps(decomp_serializable, indent=2))
+
+        # Export Morris indices (Step 5a)
+        if self.morris_indices is not None:
+            DataclassIO.save(self.morris_indices, path / "morris_indices")
+
         # Metadata
         meta = {
             "n_cell_cycle_stages": len(self.cell_cycle.sobol_indices),
@@ -708,7 +741,7 @@ class PipelineResult:
     def from_export(cls, path: str | Path) -> "PipelineResult":
         """Load a PipelineResult from a previously exported directory."""
         from uq.io import DataclassIO
-        from uq.sensitivity import PCESurrogate, SobolIndices
+        from uq.sensitivity import MorrisIndices, PCESurrogate, SobolIndices
 
         path = Path(path)
         meta = json.loads((path / "metadata.json").read_text())
@@ -722,6 +755,18 @@ class PipelineResult:
             for i in range(meta["n_cell_cycle_stages"])
         ]
 
+        # Load variance decomposition if available
+        decomp_path = path / "variance_decomposition.json"
+        variance_decomposition = {}
+        if decomp_path.exists():
+            raw = json.loads(decomp_path.read_text())
+            variance_decomposition = {k: np.array(v) if isinstance(v, list) else v for k, v in raw.items()}
+
+        # Load Morris indices if available
+        morris_indices = None
+        if (path / "morris_indices").exists():
+            morris_indices = DataclassIO.load(path / "morris_indices", MorrisIndices)
+
         return cls(
             population=UqProfile(
                 stratification=StratificationLens.POPULATION,
@@ -733,6 +778,8 @@ class PipelineResult:
                 sobol_indices=cc_sobols,
                 surrogate=cc_surrogate,
             ),
+            variance_decomposition=variance_decomposition,
+            morris_indices=morris_indices,
         )
 
 
@@ -763,7 +810,10 @@ class Pipeline:
         self,
         param_space,
         simulation_func,
-        observable_columns: list[str],
+        observable_columns: list[str] | None = None,
+        output_types: list[str] | None = None,
+        generation_lower_bound: int | None = 2,
+        time_lower_bound: float | None = 100.0,
         n_bins: int = 10,
         polynomial_order: int = 3,
         n_samples: int = 200,
@@ -772,10 +822,16 @@ class Pipeline:
     ) -> "Pipeline":
         """Execute the full UQ pipeline and populate self.result.
 
+        Uses the dataset's simulation config to resolve experiment_id and
+        sim_base_path, then delegates to ``execute_pipeline``.
+
         Args:
             param_space: Input parameter space Ξ.
             simulation_func: Callable with evaluate_batch(X) → Y.
             observable_columns: Column names of observables to analyze.
+            output_types: List of OutputType values to extract.
+            generation_lower_bound: Skip initial generations (default: 2).
+            time_lower_bound: Skip transient period in seconds (default: 100.0).
             n_bins: Number of cell cycle stage bins for Phase 2.
             polynomial_order: PCE polynomial order for both phases.
             n_samples: Number of LHS samples for PCE fitting.
@@ -787,12 +843,15 @@ class Pipeline:
         """
         from uq.pipeline.workflow import execute_pipeline
 
-        timeseries = self.dataset.y
         self.result = execute_pipeline(
             param_space=param_space,
             simulation_func=simulation_func,
-            timeseries=timeseries,
+            experiment_id=self.dataset.simulation.config.experiment_id,
+            sim_base_path=self.dataset.outdir_root,
             observable_columns=observable_columns,
+            output_types=output_types,
+            generation_lower_bound=generation_lower_bound,
+            time_lower_bound=time_lower_bound,
             n_bins=n_bins,
             polynomial_order=polynomial_order,
             n_samples=n_samples,

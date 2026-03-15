@@ -6,17 +6,17 @@ app = marimo.App(width="full")
 
 @app.cell
 def _():
-    import numpy as np
-    import plotly.graph_objects as go
     from itertools import product
 
+    import numpy as np
+    import plotly.graph_objects as go
 
     def compute_dissonance(
-            note1_freq: float,
-            note2_freq: float,
-            n_overtones: int = 8,
-            n_points: int = 800,
-            freq_range: tuple[float, float] = None,
+        note1_freq: float,
+        note2_freq: float,
+        n_overtones: int = 8,
+        n_points: int = 800,
+        freq_range: tuple[float, float] = None,
     ) -> dict:
         """
         Computes the summed dissonance curve across all pairs of
@@ -49,14 +49,14 @@ def _():
         def critical_bandwidth(f: float) -> float:
             return 25 + 75 * (1 + 1.4 * (f / 1000) ** 2) ** 0.69
 
-        def sethares_roughness(f1: float, f2: float, a1: float, a2: float,
-                               freqs: np.ndarray) -> np.ndarray:
+        def sethares_roughness(f1: float, f2: float, a1: float, a2: float, freqs: np.ndarray) -> np.ndarray:
             f_low = min(f1, f2)
-            cbw   = critical_bandwidth(f_low)
-            peak  = 0.25 * cbw
-            beat  = np.abs(freqs - f2)
+            cbw = critical_bandwidth(f_low)
+            peak = 0.25 * cbw
+            beat = np.abs(freqs - f2)
             roughness = (
-                a1 * a2
+                a1
+                * a2
                 * (np.exp(-3.5 * beat / peak) - np.exp(-5.75 * beat / peak))
                 * np.where(beat < cbw * 1.2, 1.0, 0.0)
             )
@@ -70,7 +70,7 @@ def _():
         hi = freq_range[1] if freq_range else max(all_freqs) * 1.5
         freqs = np.linspace(lo, hi, n_points)
 
-        summed   = np.zeros(n_points)
+        summed = np.zeros(n_points)
         partials = []
 
         for (f1, a1), (f2, a2) in product(note1_partials, note2_partials):
@@ -84,16 +84,15 @@ def _():
         coincidences = n1_freqs & n2_freqs
 
         return dict(
-            freqs          = freqs,
-            roughness      = summed,
-            partials       = partials,
-            note1_partials = note1_partials,
-            note2_partials = note2_partials,
-            note1_freq     = note1_freq,
-            note2_freq     = note2_freq,
-            coincidences   = coincidences,
+            freqs=freqs,
+            roughness=summed,
+            partials=partials,
+            note1_partials=note1_partials,
+            note2_partials=note2_partials,
+            note1_freq=note1_freq,
+            note2_freq=note2_freq,
+            coincidences=coincidences,
         )
-
 
     def plot_dissonance(dissonance_data: dict, show_partials: bool = False, partial_points: int = 200) -> go.Figure:
         """
@@ -107,11 +106,11 @@ def _():
         show_partials   : bool  — overlay individual partial-pair curves
         partial_points  : int   — downsample resolution for partial curves
         """
-        freqs        = dissonance_data['freqs']
-        roughness    = dissonance_data['roughness']
-        n1           = dissonance_data['note1_freq']
-        n2           = dissonance_data['note2_freq']
-        coincidences = dissonance_data['coincidences']
+        freqs = dissonance_data["freqs"]
+        roughness = dissonance_data["roughness"]
+        n1 = dissonance_data["note1_freq"]
+        n2 = dissonance_data["note2_freq"]
+        coincidences = dissonance_data["coincidences"]
 
         step = max(1, len(freqs) // partial_points)
         f_ds = freqs[::step]
@@ -120,54 +119,60 @@ def _():
 
         # --- individual partial pair curves (faint, downsampled) ---
         if show_partials:
-            for p in dissonance_data['partials']:
-                if p['curve'].max() < 1e-6:
+            for p in dissonance_data["partials"]:
+                if p["curve"].max() < 1e-6:
                     continue
-                fig.add_trace(go.Scatter(
-                    x=f_ds,
-                    y=p['curve'][::step],
-                    mode='lines',
-                    line=dict(width=0.8, color='rgba(255,100,255,0.18)'),
-                    hovertemplate=f"f1={p['f1']:.1f}Hz × f2={p['f2']:.1f}Hz<extra></extra>",
-                    showlegend=False,
-                ))
+                fig.add_trace(
+                    go.Scatter(
+                        x=f_ds,
+                        y=p["curve"][::step],
+                        mode="lines",
+                        line=dict(width=0.8, color="rgba(255,100,255,0.18)"),
+                        hovertemplate=f"f1={p['f1']:.1f}Hz × f2={p['f2']:.1f}Hz<extra></extra>",
+                        showlegend=False,
+                    )
+                )
 
         # --- summed roughness curve ---
-        fig.add_trace(go.Scatter(
-            x=freqs,
-            y=roughness,
-            mode='lines',
-            name='Total roughness',
-            line=dict(color='magenta', width=2.5),
-            fill='tozeroy',
-            fillcolor='rgba(255,0,255,0.12)',
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=freqs,
+                y=roughness,
+                mode="lines",
+                name="Total roughness",
+                line=dict(color="magenta", width=2.5),
+                fill="tozeroy",
+                fillcolor="rgba(255,0,255,0.12)",
+            )
+        )
 
         # --- note1 overtone vlines (cyan) ---
-        for i, (f, a) in enumerate(dissonance_data['note1_partials']):
+        for i, (f, a) in enumerate(dissonance_data["note1_partials"]):
             if round(f, 2) in coincidences:
                 continue  # skip — will be drawn as coincidence instead
             fig.add_vline(
                 x=f,
-                line=dict(color='cyan', width=1.2, dash='dot'),
+                line=dict(color="cyan", width=1.2, dash="dot"),
                 annotation=dict(
-                    text=f"n1·{i+1}<br>{f:.0f}Hz",
-                    font=dict(color='cyan', size=10),
-                    yref='paper', y=0.98 - (i % 3) * 0.08,
+                    text=f"n1·{i + 1}<br>{f:.0f}Hz",
+                    font=dict(color="cyan", size=10),
+                    yref="paper",
+                    y=0.98 - (i % 3) * 0.08,
                 ),
             )
 
         # --- note2 overtone vlines (yellow) ---
-        for i, (f, a) in enumerate(dissonance_data['note2_partials']):
+        for i, (f, a) in enumerate(dissonance_data["note2_partials"]):
             if round(f, 2) in coincidences:
                 continue  # skip — will be drawn as coincidence instead
             fig.add_vline(
                 x=f,
-                line=dict(color='yellow', width=1.2, dash='dot'),
+                line=dict(color="yellow", width=1.2, dash="dot"),
                 annotation=dict(
-                    text=f"n2·{i+1}<br>{f:.0f}Hz",
-                    font=dict(color='yellow', size=10),
-                    yref='paper', y=0.88 - (i % 3) * 0.08,
+                    text=f"n2·{i + 1}<br>{f:.0f}Hz",
+                    font=dict(color="yellow", size=10),
+                    yref="paper",
+                    y=0.88 - (i % 3) * 0.08,
                 ),
             )
 
@@ -175,38 +180,39 @@ def _():
         for f in sorted(coincidences):
             fig.add_vline(
                 x=f,
-                line=dict(color='white', width=2.5, dash='solid'),
+                line=dict(color="white", width=2.5, dash="solid"),
                 annotation=dict(
                     text=f"⚡ {f:.0f}Hz<br>(shared)",
-                    font=dict(color='white', size=11),
-                    yref='paper', y=0.5,
+                    font=dict(color="white", size=11),
+                    yref="paper",
+                    y=0.5,
                 ),
             )
 
         fig.update_layout(
             title=dict(
                 text=f"Dissonance curve — {n1}Hz vs {n2}Hz  |  {len(coincidences)} shared overtone(s)",
-                font=dict(color='white', size=16),
+                font=dict(color="white", size=16),
             ),
-            plot_bgcolor='#0a0a0a',
-            paper_bgcolor='#0a0a0a',
+            plot_bgcolor="#0a0a0a",
+            paper_bgcolor="#0a0a0a",
             xaxis=dict(
-                title='Frequency (Hz)',
-                color='white',
+                title="Frequency (Hz)",
+                color="white",
                 showgrid=True,
-                gridcolor='rgba(255,255,255,0.07)',
+                gridcolor="rgba(255,255,255,0.07)",
                 zeroline=False,
             ),
             yaxis=dict(
-                title='Roughness (a.u.)',
-                color='white',
+                title="Roughness (a.u.)",
+                color="white",
                 showgrid=True,
-                gridcolor='rgba(255,255,255,0.07)',
+                gridcolor="rgba(255,255,255,0.07)",
                 zeroline=False,
             ),
-            legend=dict(font=dict(color='white')),
+            legend=dict(font=dict(color="white")),
             margin=dict(l=60, r=20, t=60, b=60),
-            hovermode='x unified',
+            hovermode="x unified",
         )
 
         return fig

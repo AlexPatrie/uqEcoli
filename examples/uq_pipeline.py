@@ -228,7 +228,7 @@ def run_full_uq_workflow(
     print("=" * 80)
     wrapper_bulk = SyntheticBulkWrapper(param_space.parameter_names)
     print(f"    Building PCE surrogate (order={polynomial_order}, samples={n_samples})...")
-    sobol_bulk, surrogate_bulk = run_phase1(
+    sobol_bulk, surrogate_bulk, _morris = run_phase1(
         param_space=param_space,
         simulation_func=wrapper_bulk,
         polynomial_order=polynomial_order,

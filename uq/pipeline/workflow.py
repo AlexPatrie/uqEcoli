@@ -88,6 +88,7 @@ from uq.inputs import XSpace
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
 from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
+from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices
 
 if TYPE_CHECKING:
     from uq.sensitivity import PCESurrogate
@@ -178,7 +179,7 @@ def aggregate_timeseries(
             polars.col(col).mean().alias(f"{col}__mean"),
             polars.col(col).std().alias(f"{col}__std"),
         ])
-    gen_aggs.append(polars.count().alias("n"))
+    gen_aggs.append(polars.len().alias("n"))
 
     by_gen = timeseries.group_by("generation").agg(gen_aggs).sort("generation")
     gen_means = np.column_stack([by_gen[f"{c}__mean"].to_numpy() for c in observable_columns])
@@ -197,7 +198,7 @@ def aggregate_timeseries(
             polars.col(col).mean().alias(f"{col}__mean"),
             polars.col(col).std().alias(f"{col}__std"),
         ])
-    seed_aggs.append(polars.count().alias("n"))
+    seed_aggs.append(polars.len().alias("n"))
 
     by_seed = timeseries.group_by("lineage_seed").agg(seed_aggs).sort("lineage_seed")
     seed_means = np.column_stack([by_seed[f"{c}__mean"].to_numpy() for c in observable_columns])
@@ -382,11 +383,15 @@ def run_phase1(
     n_samples: int = 200,
     prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
-) -> tuple[SobolIndices, PCESurrogate]:
+) -> tuple[SobolIndices, PCESurrogate, MorrisIndices | None]:
     """
     Phase 1: Population-level GSA (Steps 5a-7a).
 
-    Morris prescreening → PCE surrogate → Sobol indices.
+    Step 5a: Morris prescreening (if prescreen_config provided) to reduce
+        n parameters → K most influential parameters.
+    Step 6a: PCE surrogate construction on (screened) parameter space.
+    Step 7a: Sobol indices from PCE coefficients.
+
     Answers: "Which parameters drive bulk output variance?"
 
     Args:
@@ -394,12 +399,27 @@ def run_phase1(
         simulation_func: Callable with evaluate_batch(X) → Y.
         polynomial_order: PCE polynomial order.
         n_samples: Number of LHS samples for PCE fitting.
-        prescreen_config: Optional Morris prescreening config.
+        prescreen_config: Optional Morris prescreening config. When provided,
+            Morris screening runs first to identify the top-K parameters,
+            and PCE is built on the reduced space.
         export_path: If provided, export surrogate to this path.
 
     Returns:
-        Tuple of (SobolIndices, PCESurrogate).
+        Tuple of (SobolIndices, PCESurrogate, MorrisIndices | None).
     """
+    morris_indices: MorrisIndices | None = None
+
+    # Step 5a: Morris prescreening (optional but RFC006-recommended)
+    if prescreen_config is not None:
+        analyzer_morris = SensitivityAnalyzer(
+            parameter_space=param_space,
+            wrapper=simulation_func,
+        )
+        morris_indices = analyzer_morris.analyze_with_morris(
+            n_trajectories=prescreen_config.n_trajectories,
+        )
+
+    # Steps 6a-7a: PCE surrogate + Sobol indices
     analyzer = SensitivityAnalyzer(
         parameter_space=param_space,
         wrapper=simulation_func,
@@ -412,7 +432,7 @@ def run_phase1(
     if export_path is not None:
         surrogate.export(export_path / "population_surrogate")
 
-    return sobol, surrogate
+    return sobol, surrogate, morris_indices
 
 
 # === Phase 2: Cell-Cycle-Stratified GSA (Steps 5b-7b) === #
@@ -428,12 +448,16 @@ def run_phase2(
     n_samples: int = 200,
     expected_cycle_time: float = 3600.0,
     export_path: Path | None = None,
-) -> tuple[list[SobolIndices], PCESurrogate]:
+) -> tuple[list[SobolIndices], PCESurrogate, CellCycleRelevanceResult]:
     """
     Phase 2: Cell-cycle-stratified GSA (Steps 5b-7b).
 
-    GSA-informed observable selection → Koopman θ → Strategy 4 wrapper
-    → per-stage PCE → per-stage Sobol indices.
+    Step 5b: GSA-informed observable selection — uses variance decomposition
+        residuals to identify observables driven by cell cycle dynamics.
+    Step 6b: Koopman cell cycle variable θ from selected observables.
+    Step 6d: Strategy 4 wrapper (params → per-stage means via θ-binning).
+    Step 7b: PCE + Sobol on Strategy 4 → per-stage sensitivity.
+
     Answers: "Which parameters drive variance WITHIN each cell cycle stage?"
 
     Args:
@@ -448,7 +472,7 @@ def run_phase2(
         export_path: If provided, export surrogate to this path.
 
     Returns:
-        Tuple of (list[SobolIndices], PCESurrogate).
+        Tuple of (list[SobolIndices], PCESurrogate, CellCycleRelevanceResult).
     """
     from uq.cell_cycle import KoopmanCellCycleVariable
 
@@ -488,7 +512,7 @@ def run_phase2(
     if export_path is not None:
         surrogate.export(export_path / "cell_cycle_surrogate")
 
-    return per_stage_sobol, surrogate
+    return per_stage_sobol, surrogate, relevance
 
 
 # === Pipeline Orchestration === #
@@ -497,49 +521,110 @@ def run_phase2(
 def execute_pipeline(
     param_space: XSpace,
     simulation_func: Callable,
-    timeseries: polars.DataFrame,
-    observable_columns: list[str],
+    experiment_id: str,
+    sim_base_path: str | Path,
+    observable_columns: list[str] | None = None,
+    output_types: list[str] | None = None,
+    generation_lower_bound: int | None = 2,
+    time_lower_bound: float | None = 100.0,
     n_bins: int = 10,
     polynomial_order: int = 3,
     n_samples: int = 200,
     expected_cycle_time: float = 3600.0,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
 ) -> PipelineResult:
     """
     Execute the full RFC006 UQ pipeline.
 
-    Runs steps 1-4 (sequential, shared), then Phase 1 and Phase 2,
-    producing a PipelineResult with two UqProfile instances.
+    Steps 1-2 load simulation data via DuckDB from hive-partitioned Parquet.
+    Steps 3-4 aggregate and decompose variance. Then Phase 1
+    (population-level GSA) and Phase 2 (cell-cycle GSA) run.
+
+    All intermediate outputs specified by RFC006 are captured in the
+    returned PipelineResult: aggregation results, variance decomposition,
+    Morris indices, cell cycle relevance, Sobol indices, and PCE surrogates.
 
     Args:
         param_space: Input parameter space Ξ (step 1).
         simulation_func: Callable with evaluate_batch(X) → Y.
-        timeseries: Polars DataFrame of simulation timeseries (step 2 output).
+        experiment_id: Experiment identifier for data loading (e.g.,
+            "mecillinam"). Passed to ``dataset_sql``.
+        sim_base_path: Root directory containing simulation outputs
+            (e.g., ``/path/to/vEcoli/api_integration/sims``).
         observable_columns: Column names of observables to aggregate/analyze.
+            If None, defaults to higher-order properties
+            (dry_mass, growth_rate, volume, cell_mass).
+        output_types: List of OutputType values to extract (e.g.,
+            ["transcriptome", "exchange_fluxes"]). If None, extracts
+            higher-order properties only.
+        generation_lower_bound: Skip initial generations (default: 2).
+        time_lower_bound: Skip transient period in seconds (default: 100.0).
         n_bins: Number of cell cycle stage bins for Phase 2.
         polynomial_order: PCE polynomial order for both phases.
         n_samples: Number of LHS samples for PCE fitting.
         expected_cycle_time: Expected cell cycle period in seconds.
+        prescreen_config: Optional Morris prescreening config for Phase 1
+            (Step 5a). When provided, Morris screening identifies the most
+            influential parameters before PCE construction.
         export_path: If provided, export surrogates and results here.
 
     Returns:
-        PipelineResult with population and cell_cycle UqProfile instances.
+        PipelineResult with all RFC006 pipeline outputs.
     """
+    from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
+
+    from uq.outputs import OutputExtractor, OutputType
+
+    # --- Steps 1-2: Load simulation data via DuckDB + OutputExtractor ---
+    conn = create_duckdb_conn()
+    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), [experiment_id])
+    extractor = OutputExtractor(conn, history_sql, config_sql)
+
+    # Determine which output types to extract
+    if output_types is not None:
+        extract_types = [OutputType(t) for t in output_types]
+    else:
+        extract_types = [OutputType.HIGHER_ORDER_PROPERTIES]
+
+    outputs = extractor.extract_all(
+        output_types=extract_types,
+        generation_lower_bound=generation_lower_bound,
+        time_lower_bound=time_lower_bound,
+    )
+
+    # Also load the full timeseries DataFrame (with metadata columns for
+    # aggregation strategies 2-3 which need 'generation' and 'lineage_seed')
+    timeseries = load_timeseries(
+        experiment_id=experiment_id,
+        outdir_root=Path(sim_base_path),
+        observables=observable_columns,
+    )
+
+    # Resolve observable columns from extracted outputs if not specified
+    if observable_columns is None:
+        observable_columns = list(outputs.higher_order_properties.keys())
+        if not observable_columns:
+            # Fall back to available numeric columns in the timeseries
+            metadata_cols = {"experiment_id", "variant", "lineage_seed", "generation", "agent_id", "time"}
+            observable_columns = [c for c in timeseries.columns if c not in metadata_cols]
+
     # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
     agg_result = aggregate_timeseries(timeseries, observable_columns)
     decomp = get_variance_decomposition(agg_result)
 
-    # --- Phase 1: Population-level GSA ---
-    sobol_bulk, surrogate_bulk = run_phase1(
+    # --- Phase 1: Population-level GSA (Steps 5a-7a) ---
+    sobol_bulk, surrogate_bulk, morris_indices = run_phase1(
         param_space=param_space,
         simulation_func=simulation_func,
         polynomial_order=polynomial_order,
         n_samples=n_samples,
+        prescreen_config=prescreen_config,
         export_path=export_path,
     )
 
-    # --- Phase 2: Cell-cycle-stratified GSA ---
-    per_stage_sobol, surrogate_cc = run_phase2(
+    # --- Phase 2: Cell-cycle-stratified GSA (Steps 5b-7b) ---
+    per_stage_sobol, surrogate_cc, cc_relevance = run_phase2(
         param_space=param_space,
         simulation_func=simulation_func,
         agg_result=agg_result,
@@ -563,6 +648,10 @@ def execute_pipeline(
             sobol_indices=per_stage_sobol,
             surrogate=surrogate_cc,
         ),
+        variance_decomposition=decomp,
+        aggregation=agg_result,
+        morris_indices=morris_indices,
+        cell_cycle_relevance=cc_relevance,
     )
 
     if export_path is not None:
@@ -574,26 +663,82 @@ def execute_pipeline(
 async def execute_pipeline_async(
     param_space: XSpace,
     simulation_func: Callable,
-    timeseries: polars.DataFrame,
-    observable_columns: list[str],
+    experiment_id: str,
+    sim_base_path: str | Path,
+    observable_columns: list[str] | None = None,
+    output_types: list[str] | None = None,
+    generation_lower_bound: int | None = 2,
+    time_lower_bound: float | None = 100.0,
     n_bins: int = 10,
     polynomial_order: int = 3,
     n_samples: int = 200,
     expected_cycle_time: float = 3600.0,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
 ) -> PipelineResult:
     """
     Async version of execute_pipeline — runs Phase 1 and Phase 2 concurrently.
 
-    Same interface as execute_pipeline but uses asyncio to run the two
-    independent phases in parallel after the shared steps 3-4.
+    Same interface and outputs as execute_pipeline but uses asyncio to run
+    the two independent phases in parallel after the shared steps 1-4.
+
+    Args:
+        param_space: Input parameter space Ξ (step 1).
+        simulation_func: Callable with evaluate_batch(X) → Y.
+        experiment_id: Experiment identifier for data loading.
+        sim_base_path: Root directory containing simulation outputs.
+        observable_columns: Column names of observables to aggregate/analyze.
+        output_types: List of OutputType values to extract.
+        generation_lower_bound: Skip initial generations (default: 2).
+        time_lower_bound: Skip transient period in seconds (default: 100.0).
+        n_bins: Number of cell cycle stage bins for Phase 2.
+        polynomial_order: PCE polynomial order for both phases.
+        n_samples: Number of LHS samples for PCE fitting.
+        expected_cycle_time: Expected cell cycle period in seconds.
+        prescreen_config: Optional Morris prescreening config for Phase 1.
+        export_path: If provided, export surrogates and results here.
+
+    Returns:
+        PipelineResult with all RFC006 pipeline outputs.
     """
+    from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
+
+    from uq.outputs import OutputExtractor, OutputType
+
+    # --- Steps 1-2: Load simulation data via DuckDB + OutputExtractor ---
+    conn = create_duckdb_conn()
+    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), [experiment_id])
+    extractor = OutputExtractor(conn, history_sql, config_sql)
+
+    if output_types is not None:
+        extract_types = [OutputType(t) for t in output_types]
+    else:
+        extract_types = [OutputType.HIGHER_ORDER_PROPERTIES]
+
+    outputs = extractor.extract_all(
+        output_types=extract_types,
+        generation_lower_bound=generation_lower_bound,
+        time_lower_bound=time_lower_bound,
+    )
+
+    timeseries = load_timeseries(
+        experiment_id=experiment_id,
+        outdir_root=Path(sim_base_path),
+        observables=observable_columns,
+    )
+
+    if observable_columns is None:
+        observable_columns = list(outputs.higher_order_properties.keys())
+        if not observable_columns:
+            metadata_cols = {"experiment_id", "variant", "lineage_seed", "generation", "agent_id", "time"}
+            observable_columns = [c for c in timeseries.columns if c not in metadata_cols]
+
     # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
     agg_result = aggregate_timeseries(timeseries, observable_columns)
     decomp = get_variance_decomposition(agg_result)
 
     # --- Phase 1 || Phase 2 (parallel) ---
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     phase1_future = loop.run_in_executor(
         None,
@@ -602,6 +747,7 @@ async def execute_pipeline_async(
             simulation_func=simulation_func,
             polynomial_order=polynomial_order,
             n_samples=n_samples,
+            prescreen_config=prescreen_config,
             export_path=export_path,
         ),
     )
@@ -621,7 +767,9 @@ async def execute_pipeline_async(
         ),
     )
 
-    (sobol_bulk, surrogate_bulk), (per_stage_sobol, surrogate_cc) = await asyncio.gather(phase1_future, phase2_future)
+    (sobol_bulk, surrogate_bulk, morris_indices), (per_stage_sobol, surrogate_cc, cc_relevance) = await asyncio.gather(
+        phase1_future, phase2_future
+    )
 
     # --- Assemble PipelineResult ---
     result = PipelineResult(
@@ -635,6 +783,10 @@ async def execute_pipeline_async(
             sobol_indices=per_stage_sobol,
             surrogate=surrogate_cc,
         ),
+        variance_decomposition=decomp,
+        aggregation=agg_result,
+        morris_indices=morris_indices,
+        cell_cycle_relevance=cc_relevance,
     )
 
     if export_path is not None:

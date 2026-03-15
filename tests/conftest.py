@@ -696,3 +696,4 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: marks tests that take a long time to run")
     config.addinivalue_line("markers", "real_data: marks tests that use real simulation data")
     config.addinivalue_line("markers", "pce: marks tests related to PCE functionality")
+    config.addinivalue_line("markers", "pipeline: marks tests for the RFC006 pipeline module")

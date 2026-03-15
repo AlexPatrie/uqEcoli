@@ -110,6 +110,7 @@ Documentation Contents
    tutorials/variance_decomposition
    tutorials/cell_cycle_analysis
    tutorials/koopman_analysis
+   tutorials/full_pipeline
 
 .. toctree::
    :maxdepth: 2
