@@ -512,6 +512,17 @@ def run_phase2(
     if export_path is not None:
         surrogate.export(export_path / "cell_cycle_surrogate")
 
+        # Export Koopman spectrum visualization (Step 6b artifact)
+        if koopman_cc.spectrum is not None:
+            from uq.viz import plot_koopman_spectrum
+
+            fig = plot_koopman_spectrum(
+                spectrum=koopman_cc.spectrum,
+                expected_cycle_time=expected_cycle_time,
+                observable_names=selected_obs,
+            )
+            fig.write_image(str(export_path / "koopman_spectrum.pdf"))
+
     return per_stage_sobol, surrogate, relevance
 
 

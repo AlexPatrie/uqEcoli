@@ -30,7 +30,6 @@ from uq.pipeline.workflow import (
 )
 from uq.sensitivity import PCESurrogate
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -307,14 +306,10 @@ class TestRunPhase1:
     def test_returns_sobol_and_surrogate(self, input_parameter_space):
         from uq.pipeline.workflow import run_phase1
 
-        mock_sobol = _make_mock_sobol(
-            n_params=3, param_names=input_parameter_space.parameter_names
-        )
+        mock_sobol = _make_mock_sobol(n_params=3, param_names=input_parameter_space.parameter_names)
         mock_surrogate = _make_mock_surrogate(n_params=3)
 
-        with patch(
-            "uq.pipeline.workflow.SensitivityAnalyzer"
-        ) as MockAnalyzer:
+        with patch("uq.pipeline.workflow.SensitivityAnalyzer") as MockAnalyzer:
             instance = MockAnalyzer.return_value
             instance.analyze_with_pce.return_value = (mock_sobol, mock_surrogate)
 
@@ -337,9 +332,7 @@ class TestRunPhase1:
         mock_sobol = _make_mock_sobol(n_params=3)
         mock_surrogate = MagicMock(spec=PCESurrogate)
 
-        with patch(
-            "uq.pipeline.workflow.SensitivityAnalyzer"
-        ) as MockAnalyzer:
+        with patch("uq.pipeline.workflow.SensitivityAnalyzer") as MockAnalyzer:
             instance = MockAnalyzer.return_value
             instance.analyze_with_pce.return_value = (mock_sobol, mock_surrogate)
 
@@ -371,9 +364,7 @@ class TestComputeStrategy4Sobol:
         mock_surrogate = _make_mock_surrogate(n_params=3)
 
         # Mock the SensitivityAnalyzer that compute_strategy4_sobol creates
-        with patch(
-            "uq.pipeline.workflow.SensitivityAnalyzer"
-        ) as MockAnalyzer:
+        with patch("uq.pipeline.workflow.SensitivityAnalyzer") as MockAnalyzer:
             instance = MockAnalyzer.return_value
             instance.analyze_with_pce.return_value = (mock_multi_sobol, mock_surrogate)
 
@@ -417,9 +408,7 @@ class TestExecutePipeline:
 
         # Mock the DuckDB data loading path (Steps 1-2)
         mock_outputs = MagicMock()
-        mock_outputs.higher_order_properties = {
-            col: np.random.rand(100) for col in OBSERVABLE_COLUMNS
-        }
+        mock_outputs.higher_order_properties = {col: np.random.rand(100) for col in OBSERVABLE_COLUMNS}
         mock_extractor = MagicMock()
         mock_extractor.extract_all.return_value = mock_outputs
 
@@ -440,7 +429,9 @@ class TestExecutePipeline:
             }
 
     def test_returns_pipeline_result(
-        self, _mock_phases, input_parameter_space,
+        self,
+        _mock_phases,
+        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 
@@ -460,7 +451,9 @@ class TestExecutePipeline:
         assert isinstance(result.cell_cycle, UqProfile)
 
     def test_population_profile(
-        self, _mock_phases, input_parameter_space,
+        self,
+        _mock_phases,
+        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 
@@ -476,7 +469,9 @@ class TestExecutePipeline:
         assert len(result.population.sobol_indices) == 1
 
     def test_cell_cycle_profile(
-        self, _mock_phases, input_parameter_space,
+        self,
+        _mock_phases,
+        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 

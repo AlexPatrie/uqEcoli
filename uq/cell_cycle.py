@@ -445,8 +445,9 @@ class KoopmanCellCycleVariable(CellCycleVariableComputer):
             "listeners__mass__cell_mass",
         ]
 
-        # Store the identified cell cycle mode for inspection
+        # Store the identified cell cycle mode and spectrum for inspection
         self._cell_cycle_mode: Optional[KoopmanMode] = None
+        self._spectrum: Optional[KoopmanSpectrum] = None
 
     @property
     def name(self) -> str:
@@ -464,6 +465,11 @@ class KoopmanCellCycleVariable(CellCycleVariableComputer):
     def cell_cycle_mode(self) -> Optional[KoopmanMode]:
         """The identified cell cycle Koopman mode (available after compute())."""
         return self._cell_cycle_mode
+
+    @property
+    def spectrum(self) -> Optional["KoopmanSpectrum"]:
+        """The Koopman spectrum from DMD (available after compute())."""
+        return self._spectrum
 
     def compute(
         self,
@@ -516,6 +522,7 @@ class KoopmanCellCycleVariable(CellCycleVariableComputer):
 
             dmd.fit(X_normalized)
             spectrum = dmd.get_spectrum(obs_cols)
+            self._spectrum = spectrum
         except Exception as e:
             # If DMD fails, fall back to simple method
             return self._fallback_compute(data, error=str(e))
