@@ -21,6 +21,7 @@ dependencies = [
     "vl-convert-python",
     "pytuq[all]>=1.0.0",
     "kaleido>=1.2.0",
+    "process-bigraph>=1.0.6",
 ]
 
 [project.scripts]
@@ -30,14 +31,16 @@ uq = "uq.cli:app"
 include = [
     "uq",
     "apollo",
-    "tests"
+    "tests",
+    "flow"
 ]
 
 [tool.hatch.build.targets.wheel]
 include = [
     "uq",
     "apollo",
-    "tests"
+    "tests",
+    "flow"
 ]
 
 [build-system]
@@ -75,6 +78,10 @@ default-groups = [
     "dev",
     "docs"
 ]
+
+# ortools 9.10 lacks cp313 wheels; vecoli pins it transitively.
+# Override to a version that ships Python 3.13 wheels.
+override-dependencies = ["ortools>=9.11"]
 
 [tool.uv.sources]
 vecoli = { path = "../vEcoli-private", editable = true }

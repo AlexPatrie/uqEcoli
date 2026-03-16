@@ -488,7 +488,7 @@ class TimeseriesDataset(BaseClass):
 
 
 @dataclass
-class UQInputParameters(BaseClass, abc.ABC):
+class UQInputParametersInterface(BaseClass, abc.ABC):
     """
     Implementations of this interface should implement the `to_simulator_config()` method,
     in which the parameters defined in this class are formatted for the given
@@ -501,6 +501,18 @@ class UQInputParameters(BaseClass, abc.ABC):
     The naming scheme should be:
         `UQInputParameters<SIMULATOR NAME>`
     """
+
+    @abc.abstractmethod
+    def to_simulation_config(self, *args, **kwargs) -> SimulationConfig:
+        pass
+
+
+@dataclass
+class UQInputParameters(UQInputParametersInterface):
+    """
+
+    """
+    # params:
 
     @abc.abstractmethod
     def to_simulation_config(self, *args, **kwargs) -> SimulationConfig:

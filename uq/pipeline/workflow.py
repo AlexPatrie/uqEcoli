@@ -84,7 +84,7 @@ from uq import (
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
-from uq.inputs import XSpace
+from uq.inputs import XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
 from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
@@ -317,7 +317,7 @@ class Strategy4Wrapper:
 
 
 def compute_strategy4_sobol(
-    param_space: XSpace,
+    param_space: XSpaceInterface,
     f_stage4: Strategy4Wrapper,
     polynomial_order: int = 3,
     n_samples: int = 200,
@@ -377,7 +377,7 @@ def _split_multi_output_sobol(sobol: SobolIndices) -> list[SobolIndices]:
 
 
 def run_phase1(
-    param_space: XSpace,
+    param_space: XSpaceInterface,
     simulation_func: Callable,
     polynomial_order: int = 3,
     n_samples: int = 200,
@@ -439,7 +439,7 @@ def run_phase1(
 
 
 def run_phase2(
-    param_space: XSpace,
+    param_space: XSpaceInterface,
     simulation_func: Callable,
     agg_result: AggregationResult,
     observable_names: list[str],
@@ -530,7 +530,7 @@ def run_phase2(
 
 
 def execute_pipeline(
-    param_space: XSpace,
+    param_space: XSpaceInterface,
     simulation_func: Callable,
     experiment_id: str,
     sim_base_path: str | Path,
@@ -672,7 +672,7 @@ def execute_pipeline(
 
 
 async def execute_pipeline_async(
-    param_space: XSpace,
+    param_space: XSpaceInterface,
     simulation_func: Callable,
     experiment_id: str,
     sim_base_path: str | Path,
@@ -810,7 +810,7 @@ async def execute_pipeline_async(
 
 
 def create_surrogate(
-    full_space: XSpace,
+    full_space: XSpaceInterface,
     f: Callable,
     sample_size: int,
     config: PCEParameterSelectionConfig | None = None,

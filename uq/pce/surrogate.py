@@ -52,7 +52,7 @@ from pytuq.surrogates.pce import PCE as PyTUQ_PCE
 from pytuq.utils.maps import scale01ToDom, scaleDomTo01
 from scipy.stats import qmc
 
-from uq.inputs import XSpace, XSpaceVecoli
+from uq.inputs import XSpaceInterface, XSpaceVecoli
 from uq.pce.models import (
     Parameter,
     PCEConfig,
@@ -93,7 +93,7 @@ class FunctionWrapper:
 
 
 def prescreen_parameters(
-    full_space: XSpace,
+    full_space: XSpaceInterface,
     config: PCEParameterSelectionConfig | None = None,
     f: Callable[[np.ndarray], float | np.ndarray] | None = None,
 ) -> list[Parameter]:
@@ -471,7 +471,7 @@ def process_samples(
 
 
 def generate_surrogate(
-    space: XSpace,
+    space: XSpaceInterface,
     generator: Callable[[np.ndarray], np.ndarray],
     sample_size: int,
     prescreening_config: PCEParameterSelectionConfig | None = None,

@@ -161,7 +161,7 @@ class TestPCESurrogateConfig:
 
         config = PCESurrogateConfig(parameters=params, n_samples=100, polynomial_order=2)
 
-        assert len(config.parameters) == 2
+        assert len(config.values) == 2
         assert config.n_samples == 100
         assert config.polynomial_order == 2
 

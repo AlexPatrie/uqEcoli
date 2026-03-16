@@ -1,0 +1,13 @@
+{
+  "greeting": "hello from process-bigraph",
+  "count": 15,
+  "seed": 42,
+  "statistics": {
+    "n": 15,
+    "mean": 0.002488,
+    "std": 0.624089,
+    "min": -1.497353,
+    "max": 1.163559
+  },
+  "status": "complete"
+}
