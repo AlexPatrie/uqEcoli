@@ -62,14 +62,17 @@ Workflow:
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars
+from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq import (
     AggregatedOutput,
@@ -82,13 +85,23 @@ from uq import (
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
+from uq.common import BaseClass
+from uq.generators.vecoli import VecoliSimulationFunc
 from uq.inputs import XSpace, XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
 from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
 from uq.pipeline.output_loader import OutputVariables, TimeseriesDataset, TimeseriesLoaderParquet, load_timeseries
-from uq.pipeline.workflow import aggregate_timeseries, get_variance_decomposition, run_phase1, run_phase2
+from uq.pipeline.workflow import (
+    AggregationResult,
+    aggregate_timeseries,
+    get_variance_decomposition,
+    run_phase1,
+    run_phase2,
+)
+from uq.sampling import PrecomputedCache
 from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices
+from uq.wrappers import DataDrivenWrapper
 
 if TYPE_CHECKING:
     from uq.sensitivity import PCESurrogate
@@ -205,7 +218,252 @@ def test_initialize_data():
     print()
 
 
-def pipeline(
+@dataclass
+class System(BaseClass):
+    dataset: DatasetMultiExperiment
+    observable_cols: list[str]
+    simulation_func: VecoliSimulationFunc | DataDrivenWrapper
+    aggregation: AggregationResult
+    decomposition: dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
+    baseline_sim_data: SimulationDataEcoli | None = None
+
+
+@dataclass
+class Pipeline(BaseClass):
+    experiment_ids: list[str]
+    sim_base_path: str | Path
+    observable_columns: list[str] | None = None
+    lb_generation: int | None = 2
+    lb_time: float | None = 100.0
+    n_bins: int = 10
+    polynomial_order: int = 3
+    n_samples: int = 200
+    expected_cycle_time: float = 3600.0
+    max_duration: float = 10800.0
+    prescreen_config: PCEParameterSelectionConfig | None = None
+    export_path: Path | None = None
+    precomputed_path: Path | str | None = None
+    sim_config_path: str | None = None
+    init: bool = True
+    cache: PrecomputedCache | None = field(init=False, default=None)
+    system: System | None = field(init=False, default=None)
+    result: PipelineResult | None = field(init=False, default=None)
+    _ds: DatasetMultiExperiment | None = field(init=False, default=None)
+
+    def __post_init__(self):
+        self.initialize()
+        if self.system is None:
+            warnings.warn("Warning: You must first run initialize_system before use!")
+
+    def run(self):
+        """
+        Execute full pipeline initialization and gsa execution
+        """
+        self.result = self.gsa()
+
+    def initialize(self) -> None:
+        ds = self._initialize_data()
+        if self.init:
+            self.initialize_system(ds)
+            del self._ds
+        else:
+            self.init = True
+
+    def _initialize_data(self) -> tuple[DatasetMultiExperiment]:
+        # --- Step 1: Load x and y for given experiment ids ---
+        dataset = initialize_data(
+            experiment_ids=self.experiment_ids,
+            sim_base_path=self.sim_base_path,
+            observable_columns=self.observable_columns,
+            generation_lower_bound=self.lb_generation,
+            time_lower_bound=self.lb_time,
+        )
+        # param_space: XSpace = ds.parameter_space
+        # timeseries: polars.DataFrame = ds.y
+
+        # Resolve observable columns from loaded data if not provided
+        obs_cols: list[str] = self.observable_columns if self.observable_columns is not None else dataset.observables
+        self.observable_columns = obs_cols
+
+        # --- Resolve simulation data source ---
+        cache = None
+        if self.precomputed_path is not None:
+            from uq.sampling import PrecomputedCache
+
+            cache = PrecomputedCache.load(self.precomputed_path)
+        self._ds = dataset
+        self.cache = cache
+        return dataset
+
+    def initialize_system(self, ds: DatasetMultiExperiment | None = None):
+        if ds is None:
+            ds = copy.deepcopy(self._ds)
+
+        if ds is None:
+            raise ValueError()
+
+        obs_cols: list[str] = self.observable_columns
+
+        # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
+        agg_result: AggregationResult = aggregate_timeseries(timeseries=ds.y, observable_columns=obs_cols)
+        decomp: dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]] = get_variance_decomposition(agg_result)
+
+        # --- Instantiate simulation function from loaded sim_data ---
+        # ds.x is list[ParameterDataset], each with a .sim_data attribute.
+        # For live simulation mode, use the first experiment's sim_data as
+        # the baseline (single-cell runs are per-experiment).
+        simulation_func: Any = None
+        baseline_sim_data: SimulationDataEcoli | None = None
+        if self.cache is None:
+            baseline_sim_data = next(filter(lambda ds_i: "baseline" in ds_i.experiment_id, ds.x))
+            baseline_sim_data = ds.x[0].sim_data if ds.x else None
+            if baseline_sim_data is not None:
+                simulation_func = VecoliSimulationFunc(
+                    baseline_sim_data=baseline_sim_data,
+                    param_space=ds.parameter_space,
+                    sim_config_path=self.sim_config_path,
+                    max_duration=self.max_duration,
+                    output_keys=obs_cols,
+                )
+            else:
+                # Fallback: synthetic response surface for demos
+                simulation_func = DataDrivenWrapper(
+                    parameter_space=ds.parameter_space,
+                    observable_means=agg_result.uniform.mean,
+                    observable_stds=agg_result.uniform.std,
+                )
+        self.system = System(
+            dataset=ds,
+            observable_cols=obs_cols,
+            simulation_func=simulation_func,
+            baseline_sim_data=baseline_sim_data,
+            aggregation=agg_result,
+            decomposition=decomp,
+        )
+
+    def gsa(self) -> PipelineResult:
+        sobol_bulk, surrogate_bulk, morris_indices = self.gsa_bulk()
+        per_stage_sobol, surrogate_cc, cc_relevance = self.gsa_cell(sobol_bulk, surrogate_bulk, morris_indices)
+        return self.assemble_results(
+            sobol_bulk, surrogate_bulk, morris_indices, per_stage_sobol, surrogate_cc, cc_relevance
+        )
+
+    def gsa_bulk(self) -> tuple[SobolIndices, PCESurrogate, MorrisIndices | None]:
+        if self.system is None:
+            raise RuntimeError("First run .initialize_system()!")
+
+        param_space = self.system.dataset.parameter_space
+        f = self.system.simulation_func
+
+        # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
+        return run_phase1(
+            param_space=param_space,
+            simulation_func=f,
+            polynomial_order=self.polynomial_order,
+            n_samples=self.n_samples,
+            prescreen_config=self.prescreen_config if self.cache is None else None,
+            export_path=self.export_path,
+            precomputed_samples=self.cache.X if self.cache else None,
+            precomputed_outputs=self.cache.Y if self.cache else None,
+        )
+
+    def gsa_cell(
+        self, sobol_bulk, surrogate_bulk, morris_indices
+    ) -> tuple[list[SobolIndices], PCESurrogate, CellCycleRelevanceResult]:
+        param_space = self.system.dataset.parameter_space
+        f = self.system.simulation_func
+        return run_phase2(
+            param_space=param_space,
+            simulation_func=f,
+            agg_result=self.system.aggregation,
+            observable_names=self.system.observable_cols,
+            n_bins=self.n_bins,
+            polynomial_order=self.polynomial_order,
+            n_samples=self.n_samples,
+            expected_cycle_time=self.expected_cycle_time,
+            export_path=self.export_path,
+            precomputed_samples=self.cache.X if self.cache else None,
+            precomputed_timeseries=self.cache.Y_timeseries if self.cache else None,
+        )
+
+    def assemble_results(
+        self, sobol_bulk, surrogate_bulk, morris_indices, per_stage_sobol, surrogate_cc, cc_relevance
+    ) -> PipelineResult:
+        # --- Assemble PipelineResult ---
+        result = PipelineResult(
+            population=UqProfile(
+                stratification=StratificationLens.POPULATION,
+                sobol_indices=[sobol_bulk],
+                surrogate=surrogate_bulk,
+            ),
+            cell_cycle=UqProfile(
+                stratification=StratificationLens.CELL_CYCLE,
+                sobol_indices=per_stage_sobol,
+                surrogate=surrogate_cc,
+            ),
+            variance_decomposition=self.system.decomposition,
+            aggregation=self.system.aggregation,
+            morris_indices=morris_indices,
+            cell_cycle_relevance=cc_relevance,
+        )
+        if self.export_path is not None:
+            result.export(self.export_path)
+        return result
+
+    def _gsa(self):
+        param_space = self.system.dataset.parameter_space
+        f = self.system.simulation_func
+
+        # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
+        sobol_bulk, surrogate_bulk, morris_indices = run_phase1(
+            param_space=param_space,
+            simulation_func=f,
+            polynomial_order=self.polynomial_order,
+            n_samples=self.n_samples,
+            prescreen_config=self.prescreen_config if self.cache is None else None,
+            export_path=self.export_path,
+            precomputed_samples=self.cache.X if self.cache else None,
+            precomputed_outputs=self.cache.Y if self.cache else None,
+        )
+        per_stage_sobol, surrogate_cc, cc_relevance = run_phase2(
+            param_space=param_space,
+            simulation_func=f,
+            agg_result=self.system.aggregation,
+            observable_names=self.system.observable_cols,
+            n_bins=self.n_bins,
+            polynomial_order=self.polynomial_order,
+            n_samples=self.n_samples,
+            expected_cycle_time=self.expected_cycle_time,
+            export_path=self.export_path,
+            precomputed_samples=self.cache.X if self.cache else None,
+            precomputed_timeseries=self.cache.Y_timeseries if self.cache else None,
+        )
+
+        # --- Assemble PipelineResult ---
+        result = PipelineResult(
+            population=UqProfile(
+                stratification=StratificationLens.POPULATION,
+                sobol_indices=[sobol_bulk],
+                surrogate=surrogate_bulk,
+            ),
+            cell_cycle=UqProfile(
+                stratification=StratificationLens.CELL_CYCLE,
+                sobol_indices=per_stage_sobol,
+                surrogate=surrogate_cc,
+            ),
+            variance_decomposition=self.system.decomposition,
+            aggregation=self.system.aggregation,
+            morris_indices=morris_indices,
+            cell_cycle_relevance=cc_relevance,
+        )
+
+        if self.export_path is not None:
+            result.export(self.export_path)
+
+        return result
+
+
+def execute_pipeline(
     experiment_ids: str | list[str],
     sim_base_path: str | Path,
     observable_columns: list[str] | None = None,

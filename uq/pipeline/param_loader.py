@@ -72,6 +72,11 @@ class ParameterDataset:
     """Wraps a ``SimulationDataEcoli`` and exposes methods for
     programmatic parameter space construction.
 
+    Attributes:
+        sim_data_path: Path | str | None
+        sim_data: SimulationDataEcoli | None
+        experiment_id: str | None
+
     Provide *either* ``sim_data_path`` (a path to a ``simData.cPickle``)
     *or* an already-loaded ``sim_data`` instance.
 
