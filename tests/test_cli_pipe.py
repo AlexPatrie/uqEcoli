@@ -75,10 +75,10 @@ def pipeline_result():
             pytest.skip(f"history dir not found for {exp_id}: {history_path}")
 
     from uq.pce.models import PCEParameterSelectionConfig
-    from uq.pipe import pipeline
+    from uq.pipe import execute_pipeline
 
     prescreen_config = PCEParameterSelectionConfig(n_trajectories=N_TRAJECTORIES, n_top=N_TOP)
-    return pipeline(
+    return execute_pipeline(
         experiment_ids=EXPERIMENT_IDS,
         sim_base_path=str(SIM_BASE_PATH),
         observable_columns=OBSERVABLE_COLUMNS,
@@ -95,7 +95,7 @@ def pipeline_result():
 
 
 @pytest.mark.e2e
-@pytest.mark.pipeline
+@pytest.mark.execute_pipeline
 class TestInitializeData:
     """Tests for initialize_data — real sim data loading."""
 
@@ -133,7 +133,7 @@ class TestInitializeData:
 
 
 @pytest.mark.e2e
-@pytest.mark.pipeline
+@pytest.mark.execute_pipeline
 class TestAggregation:
     def test_aggregation_strategies(self, _skip_if_no_data):
         from uq.pipe import initialize_data
@@ -170,7 +170,7 @@ class TestAggregation:
 
 
 @pytest.mark.e2e
-@pytest.mark.pipeline
+@pytest.mark.execute_pipeline
 class TestFullPipeline:
     """End-to-end tests against the real pipeline result."""
 
@@ -258,7 +258,7 @@ class TestFullPipeline:
 
 
 @pytest.mark.e2e
-@pytest.mark.pipeline
+@pytest.mark.execute_pipeline
 class TestCliDemo:
     """Test the demo CLI command end-to-end with real data."""
 

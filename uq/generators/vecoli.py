@@ -35,7 +35,6 @@ from uq.common import BaseClass
 from uq.io import get_bucket
 from uq.pipeline.models import SimulationConfig
 
-
 # -- Helpers ----------------------------------------------------------------
 
 
@@ -82,10 +81,13 @@ def _fix_new_gene_rel_adj(
     if len(trl_list) == 1 and n_mono > 1:
         trl_list = trl_list * n_mono
 
-    params = {**params, "rel_adj": {
-        "rel_exp_adj_list": exp_list,
-        "rel_trl_eff_adj_list": trl_list,
-    }}
+    params = {
+        **params,
+        "rel_adj": {
+            "rel_exp_adj_list": exp_list,
+            "rel_trl_eff_adj_list": trl_list,
+        },
+    }
     return params
 
 
@@ -283,10 +285,7 @@ class VecoliSimulationFunc:
     def obs_names(self) -> list[str]:
         """Observable names determined after the first simulation run."""
         if self._obs_names is None:
-            raise RuntimeError(
-                "Observable names not yet known. Run at least one "
-                "simulation to populate obs_names."
-            )
+            raise RuntimeError("Observable names not yet known. Run at least one simulation to populate obs_names.")
         return self._obs_names
 
     def _mutate_sim_data(self, x: np.ndarray) -> SimulationDataEcoli:
@@ -417,7 +416,7 @@ class SimulationConfigVecoli(SimulationConfig):
         return True
 
     def model_dump(self) -> dict[str, Any]:
-        attrs = ['experiment_id', 'sim_data_path', 'n_init_sims', 'generations']
+        attrs = ["experiment_id", "sim_data_path", "n_init_sims", "generations"]
         config = dict(zip(attrs, [getattr(self, attr) for attr in attrs]))
         config.update(self._format_emitter())
         config.update({"variants": {variant.id: variant.config for variant in self.variants}})
