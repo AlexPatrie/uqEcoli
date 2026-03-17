@@ -610,8 +610,7 @@ class DataDrivenWrapper:
         # Create cell-cycle-like sinusoidal modulation over timesteps
         t = np.linspace(0, 2 * np.pi, self.n_timesteps)
         modulation = np.column_stack([
-            1.0 + 0.2 * np.sin(t + self._phase_offsets[j])
-            for j in range(self.n_outputs)
+            1.0 + 0.2 * np.sin(t + self._phase_offsets[j]) for j in range(self.n_outputs)
         ])  # shape (n_timesteps, n_outputs)
 
         return modulation * base[np.newaxis, :]  # (n_timesteps, n_outputs)

@@ -528,9 +528,15 @@ class SensitivityAnalyzer:
         """
         Perform PCE-based sensitivity analysis using PyTUQ's PCSobol.
 
-        This is the recommended method from the UQ framework RFC.
-        Builds a PCE surrogate and computes Sobol indices from the
-        PCE coefficients analytically.
+        Supports two modes:
+
+        1. **Wrapper mode** (default): generates LHS samples via PCSobol,
+           evaluates the wrapper at those points, fits PCE, computes Sobol.
+
+        2. **Precomputed mode** (when ``self.samples`` and ``self.outputs``
+           are set and ``self.wrapper is None``): fits PCE directly to the
+           pre-provided (X, Y) by building the Legendre basis at the
+           user-supplied sample locations.  No simulation calls are made.
 
         Args:
             polynomial_order: Maximum polynomial order for PCE
@@ -539,63 +545,168 @@ class SensitivityAnalyzer:
         Returns:
             Tuple of (SobolIndices, PCESurrogate)
         """
+        bounds = np.array(self.parameter_space.parameter_bounds)
+        precomputed = self.wrapper is None and self.samples is not None and self.outputs is not None
+
+        if precomputed:
+            return self._fit_pce_precomputed(
+                self.samples,
+                self.outputs,
+                bounds,
+                polynomial_order,
+            )
+        else:
+            return self._fit_pce_with_wrapper(
+                bounds,
+                polynomial_order,
+                n_samples,
+            )
+
+    # ------------------------------------------------------------------
+    # Internal: wrapper-based PCE fitting
+    # ------------------------------------------------------------------
+
+    def _fit_pce_with_wrapper(
+        self,
+        bounds: np.ndarray,
+        polynomial_order: int,
+        n_samples: Optional[int],
+    ) -> tuple[SobolIndices, PCESurrogate]:
         from pytuq.gsa.gsa import PCSobol
 
-        # Get or generate samples and outputs
         X, Y = self._get_samples_and_outputs(n_samples)
 
-        # Get domain bounds as (n_params, 2) array
-        bounds = np.array(self.parameter_space.parameter_bounds)
-
-        # PCSobol handles PCE fitting + Sobol computation
         pc_sobol = PCSobol(dom=bounds, pctype="LU", order=polynomial_order)
         xsam = pc_sobol.sample(X.shape[0])
 
-        # Evaluate model at PCSobol's own samples for correct germ-space alignment
         if self.wrapper is not None:
             ysam = self.wrapper.evaluate_batch(xsam)
-        elif self.outputs is not None:
-            # Use provided X/Y but through PCSobol's sample design
-            ysam = self.wrapper.evaluate_batch(xsam) if self.wrapper else Y
         else:
-            raise ValueError("Wrapper or outputs required for PCE analysis")
+            ysam = Y
 
-        # PyTUQ PCSobol requires 1D ysam — handle multi-output by
-        # computing Sobol per output column and variance-weighting.
+        return self._compute_sobol_from_ysam(
+            ysam,
+            bounds,
+            polynomial_order,
+            pc_sobol=pc_sobol,
+        )
+
+    # ------------------------------------------------------------------
+    # Internal: precomputed (X, Y) PCE fitting
+    # ------------------------------------------------------------------
+
+    def _fit_pce_precomputed(
+        self,
+        X: np.ndarray,
+        Y: np.ndarray,
+        bounds: np.ndarray,
+        polynomial_order: int,
+    ) -> tuple[SobolIndices, PCESurrogate]:
+        """Fit PCE directly to pre-provided (X, Y) without a wrapper.
+
+        Scales X to the germ space [-1, 1]^d, builds the Legendre basis
+        matrix at those points, and solves for PCE coefficients via
+        least-squares.  Sobol indices are computed analytically from the
+        fitted coefficients.
+        """
+        from pytuq.gsa.gsa import PCSobol
+        from pytuq.lreg.lreg import lsq
+
+        # Scale physical X -> germ space [-1, 1]
+        lb, ub = bounds[:, 0], bounds[:, 1]
+        span = ub - lb
+        span[span == 0] = 1.0
+        X_germ = 2.0 * (X - lb) / span - 1.0
+
+        if Y.ndim == 1:
+            Y = Y.reshape(-1, 1)
+
+        n_samples, n_outputs = Y.shape
+
+        # We need a PCSobol just for its PCRV basis machinery.
+        # Call sample() to initialise internal structures, then
+        # overwrite with our own germ samples.
+        pc_ref = PCSobol(dom=bounds, pctype="LU", order=polynomial_order)
+        pc_ref.sample(n_samples)
+
+        return self._compute_sobol_from_ysam(
+            Y,
+            bounds,
+            polynomial_order,
+            pc_sobol=pc_ref,
+            X_germ_override=X_germ,
+        )
+
+    # ------------------------------------------------------------------
+    # Shared: Sobol computation from (possibly multi-output) Y
+    # ------------------------------------------------------------------
+
+    def _compute_sobol_from_ysam(
+        self,
+        ysam: np.ndarray,
+        bounds: np.ndarray,
+        polynomial_order: int,
+        pc_sobol,
+        X_germ_override: np.ndarray | None = None,
+    ) -> tuple[SobolIndices, PCESurrogate]:
+        """Fit PCE and compute Sobol indices.
+
+        PyTUQ's ``PCSobol.compute()`` requires 1-D ``ysam``.  For
+        multi-output data we fit per-output and variance-weight the
+        Sobol indices.
+
+        When *X_germ_override* is provided the basis matrix is built at
+        those germ-space locations instead of PCSobol's internal samples
+        (used for precomputed data).
+        """
+        from pytuq.gsa.gsa import PCSobol
+        from pytuq.lreg.lreg import lsq
+
         if ysam.ndim == 1:
             ysam = ysam.reshape(-1, 1)
 
         n_outputs = ysam.shape[1]
 
+        def _fit_single(pc: PCSobol, y_col: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+            """Fit PCE for a single output column and return (S_i, S_Ti)."""
+            if X_germ_override is not None:
+                # Build basis at user-supplied germ points and solve
+                Amat = pc.pcrv.evalBases(X_germ_override, 0)
+                lr = lsq()
+                lr.fita(Amat, y_col)
+                pc.pcrv.setCfs([lr.cf])
+                main = pc.pcrv.computeSens()[0]
+                total = pc.pcrv.computeTotSens()[0]
+            else:
+                sens = pc.compute(y_col)
+                main = np.array(sens["main"]).squeeze()
+                total = np.array(sens["total"]).squeeze()
+            return main, total
+
         if n_outputs == 1:
-            # Single output — straightforward
-            sens = pc_sobol.compute(ysam[:, 0])
-            first_order = np.array(sens["main"]).squeeze()
-            total_order = np.array(sens["total"]).squeeze()
-            second_order = np.array(sens["jointt"]).squeeze() if "jointt" in sens else None
+            first_order, total_order = _fit_single(pc_sobol, ysam[:, 0])
+            second_order = None
         else:
-            # Multi-output — compute per-output Sobol, then variance-weight
             output_vars = np.var(ysam, axis=0)
             total_var = output_vars.sum()
             weights = output_vars / total_var if total_var > 0 else np.ones(n_outputs) / n_outputs
 
-            all_first = []
-            all_total = []
+            all_first, all_total = [], []
             for j in range(n_outputs):
-                # Each output needs a fresh PCSobol instance
                 pc_j = PCSobol(dom=bounds, pctype="LU", order=polynomial_order)
                 pc_j.sample(ysam.shape[0])
-                # Reuse the same germ samples
-                pc_j.germ_sam = pc_sobol.germ_sam
-                sens_j = pc_j.compute(ysam[:, j])
-                all_first.append(np.array(sens_j["main"]).squeeze())
-                all_total.append(np.array(sens_j["total"]).squeeze())
+                if X_germ_override is not None:
+                    pc_j.germ_sam = X_germ_override  # unused by _fit_single but keeps state consistent
+                else:
+                    pc_j.germ_sam = pc_sobol.germ_sam
+                fo, to = _fit_single(pc_j, ysam[:, j])
+                all_first.append(fo)
+                all_total.append(to)
 
             first_order = sum(w * fo for w, fo in zip(weights, all_first))
             total_order = sum(w * to for w, to in zip(weights, all_total))
             second_order = None
-            # Use the last PCSobol for surrogate extraction
-            pc_sobol = pc_j
+            pc_sobol = pc_j  # last one for surrogate extraction
 
         sobol = SobolIndices(
             first_order=first_order,
@@ -604,7 +715,6 @@ class SensitivityAnalyzer:
             parameter_names=self.parameter_space.parameter_names,
         )
 
-        # Extract the fitted PCE for use as a surrogate
         pce_obj = pc_sobol.pcrv
         surrogate = PCESurrogate(
             coefficients=pce_obj.pcrv[0].cfs if hasattr(pce_obj, "pcrv") else np.zeros(1),

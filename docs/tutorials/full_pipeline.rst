@@ -230,6 +230,38 @@ Export and Reload
    assert len(loaded.population.sobol_indices) == 1
    assert len(loaded.cell_cycle.sobol_indices) == 10
 
+Using Precomputed Samples (Two-Stage Workflow)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For expensive simulations, pre-generate and cache samples, then analyze without re-running:
+
+.. code-block:: bash
+
+   # Stage 1: generate and cache
+   uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200
+
+   # Stage 2: analyze from cache
+   uv run uq demo --precomputed-path ./cache --export-path ./results
+
+Or programmatically:
+
+.. code-block:: python
+
+   from uq.pipe import pipeline
+
+   result = pipeline(
+       experiment_ids=["api_simulation_default", "mecillinam"],
+       sim_base_path="/path/to/sims",
+       precomputed_path="./cache",
+       polynomial_order=3,
+       n_bins=10,
+       export_path="./results",
+   )
+
+When ``precomputed_path`` is provided, Morris screening is skipped (it requires a live
+wrapper for OAT trajectories). PCE is fit directly from cached ``(X, Y)`` data by scaling
+samples to germ space and building the Legendre basis at user-supplied points.
+
 Running the Example Script
 --------------------------
 

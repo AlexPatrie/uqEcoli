@@ -364,52 +364,70 @@ def _split_multi_output_sobol(sobol: SobolIndices) -> list[SobolIndices]:
 
 def run_phase1(
     param_space: XSpace,
-    simulation_func: Callable,
+    simulation_func: Callable | None = None,
     polynomial_order: int = 3,
     n_samples: int = 200,
     prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
+    precomputed_samples: np.ndarray | None = None,
+    precomputed_outputs: np.ndarray | None = None,
 ) -> tuple[SobolIndices, PCESurrogate, MorrisIndices | None]:
     """
     Phase 1: Population-level GSA (Steps 5a-7a).
 
-    Step 5a: Morris prescreening (if prescreen_config provided) to reduce
-        n parameters → K most influential parameters.
-    Step 6a: PCE surrogate construction on (screened) parameter space.
-    Step 7a: Sobol indices from PCE coefficients.
+    Supports two modes:
 
-    Answers: "Which parameters drive bulk output variance?"
+    1. **Wrapper mode** (``simulation_func`` provided): Morris prescreening
+       + PCE + Sobol via live simulation evaluations.
+
+    2. **Precomputed mode** (``precomputed_samples`` and
+       ``precomputed_outputs`` provided): fits PCE directly to cached
+       (X, Y) data.  Morris prescreening is skipped (not applicable
+       without a live wrapper).
 
     Args:
         param_space: Input parameter space Ξ.
         simulation_func: Callable with evaluate_batch(X) → Y.
         polynomial_order: PCE polynomial order.
         n_samples: Number of LHS samples for PCE fitting.
-        prescreen_config: Optional Morris prescreening config. When provided,
-            Morris screening runs first to identify the top-K parameters,
-            and PCE is built on the reduced space.
+        prescreen_config: Optional Morris prescreening config.
         export_path: If provided, export surrogate to this path.
+        precomputed_samples: Pre-evaluated input samples (n_samples, n_params).
+        precomputed_outputs: Pre-evaluated outputs (n_samples, n_outputs).
 
     Returns:
         Tuple of (SobolIndices, PCESurrogate, MorrisIndices | None).
     """
     morris_indices: MorrisIndices | None = None
+    use_precomputed = precomputed_samples is not None and precomputed_outputs is not None
 
-    # Step 5a: Morris prescreening (optional but RFC006-recommended)
-    if prescreen_config is not None:
-        analyzer_morris = SensitivityAnalyzer(
+    if use_precomputed:
+        # Precomputed mode — fit PCE directly, skip Morris
+        analyzer = SensitivityAnalyzer(
+            parameter_space=param_space,
+            samples=precomputed_samples,
+            outputs=precomputed_outputs,
+        )
+    else:
+        if simulation_func is None:
+            raise ValueError("Either simulation_func or precomputed data is required")
+
+        # Step 5a: Morris prescreening (optional, requires live wrapper)
+        if prescreen_config is not None:
+            analyzer_morris = SensitivityAnalyzer(
+                parameter_space=param_space,
+                wrapper=simulation_func,
+            )
+            morris_indices = analyzer_morris.analyze_with_morris(
+                n_trajectories=prescreen_config.n_trajectories,
+            )
+
+        analyzer = SensitivityAnalyzer(
             parameter_space=param_space,
             wrapper=simulation_func,
         )
-        morris_indices = analyzer_morris.analyze_with_morris(
-            n_trajectories=prescreen_config.n_trajectories,
-        )
 
     # Steps 6a-7a: PCE surrogate + Sobol indices
-    analyzer = SensitivityAnalyzer(
-        parameter_space=param_space,
-        wrapper=simulation_func,
-    )
     sobol, surrogate = analyzer.analyze_with_pce(
         polynomial_order=polynomial_order,
         n_samples=n_samples,
@@ -426,25 +444,25 @@ def run_phase1(
 
 def run_phase2(
     param_space: XSpace,
-    simulation_func: Callable,
-    agg_result: AggregationResult,
-    observable_names: list[str],
+    simulation_func: Callable | None = None,
+    agg_result: AggregationResult | None = None,
+    observable_names: list[str] | None = None,
     n_bins: int = 10,
     polynomial_order: int = 3,
     n_samples: int = 200,
     expected_cycle_time: float = 3600.0,
     export_path: Path | None = None,
+    precomputed_samples: np.ndarray | None = None,
+    precomputed_timeseries: list[np.ndarray] | None = None,
 ) -> tuple[list[SobolIndices], PCESurrogate, CellCycleRelevanceResult]:
     """
     Phase 2: Cell-cycle-stratified GSA (Steps 5b-7b).
 
-    Step 5b: GSA-informed observable selection — uses variance decomposition
-        residuals to identify observables driven by cell cycle dynamics.
-    Step 6b: Koopman cell cycle variable θ from selected observables.
-    Step 6d: Strategy 4 wrapper (params → per-stage means via θ-binning).
-    Step 7b: PCE + Sobol on Strategy 4 → per-stage sensitivity.
+    Supports two modes:
 
-    Answers: "Which parameters drive variance WITHIN each cell cycle stage?"
+    1. **Wrapper mode**: runs Strategy4Wrapper (sim → Koopman → θ-bin → PCE).
+    2. **Precomputed mode**: uses cached per-sample timeseries to compute
+       Strategy4 outputs offline, then fits PCE to those.
 
     Args:
         param_space: Input parameter space Ξ.
@@ -456,22 +474,36 @@ def run_phase2(
         n_samples: Number of LHS samples for PCE fitting.
         expected_cycle_time: Expected cell cycle period in seconds.
         export_path: If provided, export surrogate to this path.
+        precomputed_samples: Pre-evaluated input samples (n_samples, n_params).
+        precomputed_timeseries: Per-sample raw timeseries list, each
+            (n_timesteps, n_obs).  When provided with precomputed_samples,
+            Strategy4 outputs are computed from cached timeseries.
 
     Returns:
         Tuple of (list[SobolIndices], PCESurrogate, CellCycleRelevanceResult).
     """
     from uq.cell_cycle import KoopmanCellCycleVariable
 
-    # Step 5b: GSA-informed observable selection
-    relevance = identify_cell_cycle_relevant_observables(
-        aggregated_uniform=agg_result.uniform,
-        aggregated_by_gen=agg_result.generation,
-        aggregated_by_seed=agg_result.seed,
-        observable_names=observable_names,
-    )
+    use_precomputed = precomputed_samples is not None and precomputed_timeseries is not None
 
-    # Use relevant observables, or fall back to all observables
-    selected_obs = relevance.relevant_observables or observable_names
+    # Step 5b: GSA-informed observable selection
+    if agg_result is not None and observable_names is not None:
+        relevance = identify_cell_cycle_relevant_observables(
+            aggregated_uniform=agg_result.uniform,
+            aggregated_by_gen=agg_result.generation,
+            aggregated_by_seed=agg_result.seed,
+            observable_names=observable_names,
+        )
+        selected_obs = relevance.relevant_observables or observable_names
+    else:
+        # Precomputed mode without aggregation — infer from timeseries shape
+        n_obs = precomputed_timeseries[0].shape[1] if precomputed_timeseries else 1
+        selected_obs = observable_names or [f"obs_{i}" for i in range(n_obs)]
+        relevance = CellCycleRelevanceResult(
+            relevant_observables=selected_obs,
+            residual_fractions=dict.fromkeys(selected_obs, 0.5),
+            threshold=0.3,
+        )
 
     # Step 6b: Koopman cell cycle variable
     koopman_cc = KoopmanCellCycleVariable(
@@ -479,26 +511,60 @@ def run_phase2(
         expected_cycle_time=expected_cycle_time,
     )
 
-    # Step 6d: Strategy 4 wrapper
-    f_stage4 = Strategy4Wrapper(
-        base_wrapper=simulation_func,
-        koopman_cc=koopman_cc,
-        n_bins=n_bins,
-        observable_columns=selected_obs,
-    )
+    if use_precomputed:
+        # Compute Strategy4 outputs from cached timeseries
+        stage_edges = np.linspace(0, 1, n_bins + 1)
+        Y_stage4_list = []
+        for ts in precomputed_timeseries:
+            df = polars.DataFrame({col: ts[:, i] for i, col in enumerate(selected_obs)})
+            cc_var = koopman_cc.compute(df)
+            theta = cc_var.values
+            bins = np.clip(np.digitize(theta, stage_edges) - 1, 0, n_bins - 1)
 
-    # Step 7b: PCE + Sobol on Strategy 4
-    per_stage_sobol, surrogate = compute_strategy4_sobol(
-        param_space=param_space,
-        f_stage4=f_stage4,
-        polynomial_order=polynomial_order,
-        n_samples=n_samples,
-    )
+            n_obs = ts.shape[1]
+            stage_means = np.zeros(n_bins * n_obs)
+            for s in range(n_bins):
+                mask = bins == s
+                if np.any(mask):
+                    stage_means[s * n_obs : (s + 1) * n_obs] = ts[mask].mean(axis=0)
+            Y_stage4_list.append(stage_means)
+
+        Y_stage4 = np.vstack(Y_stage4_list)
+
+        # Fit PCE from precomputed (X, Y_stage4)
+        analyzer = SensitivityAnalyzer(
+            parameter_space=param_space,
+            samples=precomputed_samples,
+            outputs=Y_stage4,
+        )
+        sobol_multi, surrogate = analyzer.analyze_with_pce(
+            polynomial_order=polynomial_order,
+            n_samples=n_samples,
+        )
+        per_stage_sobol = _split_multi_output_sobol(sobol_multi)
+    else:
+        if simulation_func is None:
+            raise ValueError("Either simulation_func or precomputed data is required")
+
+        # Step 6d: Strategy 4 wrapper
+        f_stage4 = Strategy4Wrapper(
+            base_wrapper=simulation_func,
+            koopman_cc=koopman_cc,
+            n_bins=n_bins,
+            observable_columns=selected_obs,
+        )
+
+        # Step 7b: PCE + Sobol on Strategy 4
+        per_stage_sobol, surrogate = compute_strategy4_sobol(
+            param_space=param_space,
+            f_stage4=f_stage4,
+            polynomial_order=polynomial_order,
+            n_samples=n_samples,
+        )
 
     if export_path is not None:
         surrogate.export(export_path / "cell_cycle_surrogate")
 
-        # Export Koopman spectrum visualization (Step 6b artifact)
         if koopman_cc.spectrum is not None:
             from uq.viz import plot_koopman_spectrum
 

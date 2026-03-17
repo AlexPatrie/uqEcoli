@@ -76,6 +76,20 @@ loaded = PipelineResult.from_export("./uq_results")
 
 See [`examples/uq_pipeline.py`](examples/uq_pipeline.py) for a fully runnable end-to-end example.
 
+### Two-Stage Workflow
+
+For large parameter spaces or HPC environments, split sample generation from analysis:
+
+```bash
+# Stage 1: generate and cache (run once, can be batched on HPC)
+uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200
+
+# Stage 2: analyze from cache (fast, repeatable)
+uv run uq demo --precomputed-path ./cache --export-path ./results
+```
+
+Stage 1 generates LHS samples, evaluates the simulation function at each point, and caches `(X, Y)` plus per-sample timeseries to disk. Stage 2 loads the cache and fits PCE surrogates directly — no simulation calls needed. This lets you iterate on analysis parameters (polynomial order, number of bins) without re-running expensive simulations.
+
 ## Pipeline Output
 
 The pipeline produces a `PipelineResult` with two profiles:

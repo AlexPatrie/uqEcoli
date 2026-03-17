@@ -87,7 +87,9 @@ def pipe(
     pce_n_trajectories: int = 10,
     pce_n_selected_params: int = 5,
     export_path: str | None = None,
+    precomputed_path: str | None = None,
 ) -> None:
+    """Run the full RFC006 UQ pipeline."""
     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
     result: PipelineResult = pipeline(
         experiment_ids=experiment_ids,
@@ -100,6 +102,7 @@ def pipe(
         n_samples=n_samples,
         expected_cycle_time=expected_cycle_time,
         export_path=Path(export_path) if export_path else None,
+        precomputed_path=Path(precomputed_path) if precomputed_path else None,
     )
     if export_path:
         console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
@@ -110,6 +113,7 @@ def pipe(
 @app.command()
 def demo(
     export_path: str | None = None,
+    precomputed_path: str | None = None,
 ) -> None:
     """Run the pipeline on the 3 default experiments with real vEcoli data."""
     experiment_ids = [
@@ -134,11 +138,72 @@ def demo(
         n_samples=20,
         polynomial_order=2,
         export_path=Path(export_path) if export_path else None,
+        precomputed_path=Path(precomputed_path) if precomputed_path else None,
     )
     if export_path:
         console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
     else:
         console.print("[bold green]Pipeline complete.[/bold green]")
+
+
+@app.command(name="generate-samples")
+def generate_samples(
+    experiment_ids: list[str],
+    sim_base_path: str,
+    cache_dir: str,
+    n_samples: int = 200,
+    seed: int = 42,
+    observable_columns: list[str] | None = None,
+) -> None:
+    """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
+
+    Run this once to pre-compute simulation evaluations.  Then pass
+    --precomputed-path to ``pipe`` or ``demo`` for Stage 2 analysis.
+    """
+    from uq.pipe import initialize_data
+    from uq.pipeline.workflow import aggregate_timeseries
+    from uq.sampling import run_and_cache
+    from uq.wrappers import DataDrivenWrapper
+
+    # Default observables to avoid DuckDB OOM on wide tables
+    if observable_columns is None:
+        observable_columns = [
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+            "listeners__mass__volume",
+            "listeners__mass__growth",
+        ]
+
+    ds = initialize_data(
+        experiment_ids=experiment_ids,
+        sim_base_path=sim_base_path,
+        observable_columns=observable_columns,
+    )
+
+    # Use DataDrivenWrapper for demo; replace with SimulationWrapper
+    # when Nextflow sims are available.
+    agg = aggregate_timeseries(ds.y, ds.observables)
+    sim_func = DataDrivenWrapper(
+        parameter_space=ds.parameter_space,
+        observable_means=agg.uniform.mean,
+        observable_stds=agg.uniform.std,
+    )
+
+    cache = run_and_cache(
+        parameter_space=ds.parameter_space,
+        simulation_func=sim_func,
+        n_samples=n_samples,
+        cache_dir=Path(cache_dir),
+        seed=seed,
+    )
+
+    console.print(
+        f"[bold green]Cached {cache.X.shape[0]} samples[/bold green] "
+        f"({cache.X.shape[1]} params, {cache.Y.shape[1]} outputs) "
+        f"to {cache_dir}"
+    )
+    if cache.Y_timeseries is not None:
+        console.print(f"  Timeseries cached: {len(cache.Y_timeseries)} samples")
 
 
 @app.command()
