@@ -571,7 +571,7 @@ class UQInputParametersVecoli(UQInputParameters):
         if variants:
             config["variants"] = variants
 
-        return SimulationConfigVecoli
+        return config
 
 
 class CellCyclePhase(str, Enum):

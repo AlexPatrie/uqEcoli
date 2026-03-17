@@ -197,7 +197,7 @@ def initialize_data(
 def test_initialize_data():
     experiments = [
         "api_simulation_default",
-        # 'mecillinam',
+        'mecillinam',
         "test_violacein_with_metabolism",
     ]
     base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
@@ -243,7 +243,7 @@ def pipeline(
     Returns:
         PipelineResult with all RFC006 pipeline outputs.
     """
-    from uq.wrappers import SimulationWrapper, WrapperConfig
+    from uq.wrappers import DataDrivenWrapper, SimulationWrapper, WrapperConfig
 
     # --- Step 1: Load x and y for given experiment ids ---
     ds = initialize_data(
@@ -256,28 +256,23 @@ def pipeline(
     param_space = ds.parameter_space
     timeseries = ds.y
 
-    # Build SimulationWrapper if no simulation_func provided —
-    # runs each sim in a subprocess so memory gets reclaimed.
-    if simulation_func is None:
-        sim_data_path = str(ds.x[0].sim_data_path)
-        output_dir = str(Path(sim_base_path) / "_uq_runs")
-        cache_dir = str(Path(sim_base_path) / "_uq_cache")
-        wrapper_config = WrapperConfig(
-            sim_data_path=sim_data_path,
-            output_dir=output_dir,
-            cache_dir=cache_dir,
-            output_types=[OutputType.HIGHER_ORDER_PROPERTIES],
-            generation_lower_bound=lb_generation,
-            time_lower_bound=lb_time,
-        )
-        simulation_func = SimulationWrapper(wrapper_config, param_space)
-
     # Resolve observable columns from loaded data if not provided
     obs_cols = observable_columns if observable_columns is not None else ds.observables
 
     # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
     agg_result = aggregate_timeseries(timeseries, obs_cols)
     decomp = get_variance_decomposition(agg_result)
+
+    # Build simulation function if not provided.
+    # Uses a DataDrivenWrapper (linear response surface built from
+    # aggregated statistics) so that Morris/PCE can evaluate arbitrary
+    # samples without running actual vEcoli/Nextflow simulations.
+    if simulation_func is None:
+        simulation_func = DataDrivenWrapper(
+            parameter_space=param_space,
+            observable_means=agg_result.uniform.mean,
+            observable_stds=agg_result.uniform.std,
+        )
 
     # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
     sobol_bulk, surrogate_bulk, morris_indices = run_phase1(

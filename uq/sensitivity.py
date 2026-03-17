@@ -560,15 +560,47 @@ class SensitivityAnalyzer:
         else:
             raise ValueError("Wrapper or outputs required for PCE analysis")
 
+        # PyTUQ PCSobol requires 1D ysam — handle multi-output by
+        # computing Sobol per output column and variance-weighting.
         if ysam.ndim == 1:
             ysam = ysam.reshape(-1, 1)
 
-        sens = pc_sobol.compute(ysam)
+        n_outputs = ysam.shape[1]
+
+        if n_outputs == 1:
+            # Single output — straightforward
+            sens = pc_sobol.compute(ysam[:, 0])
+            first_order = np.array(sens["main"]).squeeze()
+            total_order = np.array(sens["total"]).squeeze()
+            second_order = np.array(sens["jointt"]).squeeze() if "jointt" in sens else None
+        else:
+            # Multi-output — compute per-output Sobol, then variance-weight
+            output_vars = np.var(ysam, axis=0)
+            total_var = output_vars.sum()
+            weights = output_vars / total_var if total_var > 0 else np.ones(n_outputs) / n_outputs
+
+            all_first = []
+            all_total = []
+            for j in range(n_outputs):
+                # Each output needs a fresh PCSobol instance
+                pc_j = PCSobol(dom=bounds, pctype="LU", order=polynomial_order)
+                pc_j.sample(ysam.shape[0])
+                # Reuse the same germ samples
+                pc_j.germ_sam = pc_sobol.germ_sam
+                sens_j = pc_j.compute(ysam[:, j])
+                all_first.append(np.array(sens_j["main"]).squeeze())
+                all_total.append(np.array(sens_j["total"]).squeeze())
+
+            first_order = sum(w * fo for w, fo in zip(weights, all_first))
+            total_order = sum(w * to for w, to in zip(weights, all_total))
+            second_order = None
+            # Use the last PCSobol for surrogate extraction
+            pc_sobol = pc_j
 
         sobol = SobolIndices(
-            first_order=np.array(sens["main"]).squeeze(),
-            total_order=np.array(sens["total"]).squeeze(),
-            second_order=np.array(sens["jointt"]).squeeze() if "jointt" in sens else None,
+            first_order=first_order,
+            total_order=total_order,
+            second_order=second_order,
             parameter_names=self.parameter_space.parameter_names,
         )
 
@@ -582,7 +614,7 @@ class SensitivityAnalyzer:
             basis_type="legendre",
             polynomial_order=polynomial_order,
             input_dim=self.parameter_space.n_parameters,
-            output_dim=ysam.shape[1] if ysam.ndim > 1 else 1,
+            output_dim=n_outputs,
             input_bounds=bounds,
         )
 
