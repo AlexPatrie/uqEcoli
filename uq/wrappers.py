@@ -163,8 +163,8 @@ class SimulationWrapper:
 
     def _get_cache_key(self, params: UQInputParametersVecoli) -> str:
         """Generate a unique cache key for the parameters."""
-        config_dict = params.to_simulation_config()
-        config_str = json.dumps(config_dict, sort_keys=True)
+        config_dict = params.model_dump()
+        config_str = json.dumps(config_dict, sort_keys=True, default=str)
         return hashlib.md5(config_str.encode()).hexdigest()
 
     def _load_from_cache(self, cache_key: str) -> Optional[np.ndarray]:
@@ -197,7 +197,7 @@ class SimulationWrapper:
         config_dict = params.to_simulation_config()
         config_dict["sim_data_path"] = self.config.sim_data_path
         config_dict["emitter"] = "parquet"
-        config_dict["out_dir"] = str(output_path)
+        config_dict["emitter_arg"] = {"out_dir": str(output_path)}
         config_dict["experiment_id"] = run_id
 
         config_path = output_path / "config.json"
@@ -543,6 +543,86 @@ class PrecomputedWrapper:
             return np.array([])
 
         return np.concatenate(arrays)
+
+
+class DataDrivenWrapper:
+    """
+    Lightweight simulation surrogate built from precomputed aggregated data.
+
+    Constructs a simple linear response surface from the observable means
+    and standard deviations:
+
+        f(x) = mean + std * (A @ x_normalized)
+
+    where A is a random but deterministic coupling matrix (seeded).
+
+    When ``n_timesteps > 1``, each call returns a synthetic timeseries of
+    shape ``(n_timesteps, n_outputs)`` with a sinusoidal cell-cycle-like
+    modulation.  This allows Phase 2 (Koopman / Strategy4Wrapper) to
+    compute θ and bin by stage.
+
+    This avoids running actual vEcoli/Nextflow simulations while providing
+    a realistic-scale response surface for Morris/PCE sensitivity analysis.
+    Useful for demos, testing, and development.
+    """
+
+    def __init__(
+        self,
+        parameter_space: XSpaceVecoli,
+        observable_means: np.ndarray,
+        observable_stds: np.ndarray,
+        seed: int = 42,
+        n_timesteps: int = 100,
+    ):
+        self.parameter_space = parameter_space
+        self.means = observable_means
+        self.stds = observable_stds
+        self.n_outputs = len(observable_means)
+        self.n_params = parameter_space.n_parameters
+        self.bounds = parameter_space.bounds_array
+        self.n_timesteps = n_timesteps
+
+        # Deterministic coupling matrix — each observable depends on a
+        # weighted combination of parameters.
+        rng = np.random.default_rng(seed)
+        self._A = rng.standard_normal((self.n_outputs, self.n_params))
+        # Normalize rows so the response magnitude is controlled by stds
+        row_norms = np.linalg.norm(self._A, axis=1, keepdims=True)
+        row_norms[row_norms == 0] = 1.0
+        self._A /= row_norms
+
+        # Per-observable phase offsets for sinusoidal modulation
+        self._phase_offsets = rng.uniform(0, 2 * np.pi, self.n_outputs)
+
+    def _normalize(self, x: np.ndarray) -> np.ndarray:
+        """Normalize parameters to [-1, 1] based on bounds."""
+        lb = self.bounds[:, 0]
+        ub = self.bounds[:, 1]
+        span = ub - lb
+        span[span == 0] = 1.0
+        return 2.0 * (x - lb) / span - 1.0
+
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        """Return synthetic timeseries of shape (n_timesteps, n_outputs)."""
+        x_norm = self._normalize(x)
+        base = self.means + self.stds * (self._A @ x_norm)
+
+        # Create cell-cycle-like sinusoidal modulation over timesteps
+        t = np.linspace(0, 2 * np.pi, self.n_timesteps)
+        modulation = np.column_stack([
+            1.0 + 0.2 * np.sin(t + self._phase_offsets[j])
+            for j in range(self.n_outputs)
+        ])  # shape (n_timesteps, n_outputs)
+
+        return modulation * base[np.newaxis, :]  # (n_timesteps, n_outputs)
+
+    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+        """Return batch of aggregated (mean) outputs, shape (n_samples, n_outputs)."""
+        results = []
+        for x in X:
+            ts = self(x)  # (n_timesteps, n_outputs)
+            results.append(ts.mean(axis=0))  # aggregate to (n_outputs,)
+        return np.vstack(results)
 
 
 def create_uqpy_model(
