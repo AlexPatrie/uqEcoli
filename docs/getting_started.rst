@@ -165,19 +165,34 @@ Here's a complete example of running a sensitivity analysis:
    print(f"\nFirst-order indices: {sobol_indices.first_order}")
    print(f"Total-order indices: {sobol_indices.total_order}")
 
-Using Precomputed Results
--------------------------
+Two-Stage Workflow
+------------------
 
-If you already have simulation results, you can analyze them directly:
+For large parameter spaces or HPC environments, split sample generation from analysis:
+
+.. code-block:: bash
+
+   # Stage 1: generate and cache (run once, can be batched on HPC)
+   uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200
+
+   # Stage 2: analyze from cache (fast, repeatable)
+   uv run uq demo --precomputed-path ./cache --export-path ./results
+
+Stage 1 generates LHS samples, evaluates the simulation function, and caches ``(X, Y)``
+plus per-sample timeseries to disk via ``PrecomputedCache``. Stage 2 loads the cache and
+fits PCE surrogates directly — no simulation calls needed.
+
+You can also use precomputed data programmatically:
 
 .. code-block:: python
 
-   from uq import analyze_precomputed_results, AggregationStrategy
+   from uq.pipe import pipeline
 
-   sobol, surrogate = analyze_precomputed_results(
-       data_dir="./simulation_outputs",
-       aggregation_strategy=AggregationStrategy.BY_GENERATION,
-       polynomial_order=3,
+   result = pipeline(
+       experiment_ids=["mecillinam"],
+       sim_base_path="/path/to/sims",
+       precomputed_path="./cache",
+       export_path="./results",
    )
 
 Next Steps

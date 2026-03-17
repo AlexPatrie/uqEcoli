@@ -197,7 +197,7 @@ def initialize_data(
 def test_initialize_data():
     experiments = [
         "api_simulation_default",
-        'mecillinam',
+        "mecillinam",
         "test_violacein_with_metabolism",
     ]
     base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
@@ -218,18 +218,24 @@ def pipeline(
     expected_cycle_time: float = 3600.0,
     prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
+    precomputed_path: Path | str | None = None,
 ) -> PipelineResult:
     """
     Execute the RFC006 UQ pipeline.
 
-    Runs Phase 1 and Phase 2 sequentially to control memory usage.
+    Supports three modes for Phase 1/2 evaluation:
+
+    1. **simulation_func provided**: evaluates the wrapper at LHS samples
+       (live simulation mode).
+    2. **precomputed_path provided**: loads cached (X, Y) from a prior
+       ``uq generate-samples`` run — no simulation calls needed.
+    3. **Neither provided**: builds a DataDrivenWrapper (synthetic linear
+       response surface from aggregated statistics) for quick demos.
 
     Args:
-        simulation_func: Callable with __call__(x) and evaluate_batch(X).
-            If None, a SimulationWrapper is built automatically from the
-            resolved sim_data_path — sims run in subprocesses with caching.
         experiment_ids: Experiment identifier(s) for data loading.
         sim_base_path: Root directory containing simulation outputs.
+        simulation_func: Callable with __call__(x) and evaluate_batch(X).
         observable_columns: Column names of observables to aggregate/analyze.
         lb_generation: Skip initial generations (default: 2).
         lb_time: Skip transient period in seconds (default: 100.0).
@@ -239,11 +245,13 @@ def pipeline(
         expected_cycle_time: Expected cell cycle period in seconds.
         prescreen_config: Optional Morris prescreening config for Phase 1.
         export_path: If provided, export surrogates and results here.
+        precomputed_path: Path to cached (X, Y) from ``generate-samples``.
+            When provided, PCE is fit directly to cached data.
 
     Returns:
         PipelineResult with all RFC006 pipeline outputs.
     """
-    from uq.wrappers import DataDrivenWrapper, SimulationWrapper, WrapperConfig
+    from uq.wrappers import DataDrivenWrapper
 
     # --- Step 1: Load x and y for given experiment ids ---
     ds = initialize_data(
@@ -263,11 +271,15 @@ def pipeline(
     agg_result = aggregate_timeseries(timeseries, obs_cols)
     decomp = get_variance_decomposition(agg_result)
 
-    # Build simulation function if not provided.
-    # Uses a DataDrivenWrapper (linear response surface built from
-    # aggregated statistics) so that Morris/PCE can evaluate arbitrary
-    # samples without running actual vEcoli/Nextflow simulations.
-    if simulation_func is None:
+    # --- Resolve simulation data source ---
+    cache = None
+    if precomputed_path is not None:
+        from uq.sampling import PrecomputedCache
+
+        cache = PrecomputedCache.load(precomputed_path)
+
+    if simulation_func is None and cache is None:
+        # Fallback: synthetic response surface for demos
         simulation_func = DataDrivenWrapper(
             parameter_space=param_space,
             observable_means=agg_result.uniform.mean,
@@ -280,8 +292,10 @@ def pipeline(
         simulation_func=simulation_func,
         polynomial_order=polynomial_order,
         n_samples=n_samples,
-        prescreen_config=prescreen_config,
+        prescreen_config=prescreen_config if cache is None else None,
         export_path=export_path,
+        precomputed_samples=cache.X if cache else None,
+        precomputed_outputs=cache.Y if cache else None,
     )
 
     per_stage_sobol, surrogate_cc, cc_relevance = run_phase2(
@@ -294,6 +308,8 @@ def pipeline(
         n_samples=n_samples,
         expected_cycle_time=expected_cycle_time,
         export_path=export_path,
+        precomputed_samples=cache.X if cache else None,
+        precomputed_timeseries=cache.Y_timeseries if cache else None,
     )
 
     # --- Assemble PipelineResult ---
