@@ -84,13 +84,15 @@ class Param(BaseClass):
     """
 
     name: str
-    bounds: tuple[float, float] | tuple[complex, complex]
+    bounds: tuple[float, float] | tuple[complex, complex] | None = None
     default: float | int | complex | None = None
     value: float | int | complex | None = None
     granularity_step: float = 0.25
     description: str | None = None
 
     def __post_init__(self) -> None:
+        if self.bounds is None:
+            self.bounds = [-1.0, 1.0]
         if self.value is None:
             if self.default is None:
                 self.default = self.bounds[1] - self.bounds[0]
@@ -509,9 +511,8 @@ class UQInputParametersInterface(BaseClass, abc.ABC):
 
 @dataclass
 class UQInputParameters(UQInputParametersInterface):
-    """
+    """ """
 
-    """
     # params:
 
     @abc.abstractmethod
@@ -820,8 +821,8 @@ class Pipeline:
 
     def build(
         self,
-        param_space,
         simulation_func,
+        sim_data_path: str | Path | list[str | Path] | None = None,
         observable_columns: list[str] | None = None,
         output_types: list[str] | None = None,
         generation_lower_bound: int | None = 2,
@@ -838,8 +839,9 @@ class Pipeline:
         sim_base_path, then delegates to ``execute_pipeline``.
 
         Args:
-            param_space: Input parameter space Ξ.
             simulation_func: Callable with evaluate_batch(X) → Y.
+            sim_data_path: Path(s) to ``simData.cPickle`` file(s). Falls back
+                to the dataset's simulation config sim_data_path if not provided.
             observable_columns: Column names of observables to analyze.
             output_types: List of OutputType values to extract.
             generation_lower_bound: Skip initial generations (default: 2).
@@ -855,10 +857,13 @@ class Pipeline:
         """
         from uq.pipeline.workflow import execute_pipeline
 
+        if sim_data_path is None:
+            sim_data_path = self.dataset.simulation.config.sim_data_path
+
         self.result = execute_pipeline(
-            param_space=param_space,
+            sim_data_path=sim_data_path,
             simulation_func=simulation_func,
-            experiment_id=self.dataset.simulation.config.experiment_id,
+            experiment_ids=self.dataset.simulation.config.experiment_id,
             sim_base_path=self.dataset.outdir_root,
             observable_columns=observable_columns,
             output_types=output_types,

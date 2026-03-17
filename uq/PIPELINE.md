@@ -412,7 +412,7 @@ Each item below is taken verbatim or near-verbatim from RFC006. An item is check
   # Mass-based (heuristic)
   mass_cc = MassBasedCellCycleVariable()
   cc_var = mass_cc.compute(data)
-  print(f"Cell cycle values: shape={cc_var.values.shape}, range=[0, 1]")
+  print(f"Cell cycle values: shape={cc_var.parameters.shape}, range=[0, 1]")
 
   # Koopman eigenfunction phase (recommended, data-driven)
   koopman_cc = KoopmanCellCycleVariable(expected_cycle_time=3600.0)

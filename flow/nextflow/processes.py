@@ -26,7 +26,6 @@ from typing import Any
 
 from process_bigraph import Process, Step
 
-
 # ─── Helpers ────────────────────────────────────────────────────────────────────
 
 _WORKFLOW_FILE = Path(__file__).resolve().parent.parent / "workflows" / "nextflow" / "uq_pipeline.nf"
@@ -160,10 +159,7 @@ class NextflowProcess(Process):
     def _resolve_workflow(self) -> str:
         wf = self.config.get("workflow_file", "")
         if not wf:
-            raise ValueError(
-                "NextflowProcess requires config.workflow_file to be set "
-                "(absolute path to the .nf file)."
-            )
+            raise ValueError("NextflowProcess requires config.workflow_file to be set (absolute path to the .nf file).")
         return str(wf)
 
     def _build_cmd(

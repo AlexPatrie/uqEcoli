@@ -25,7 +25,7 @@ from rich.table import Table
 from rich.text import Text
 
 from uq.pce.models import Parameter
-from uq.pipeline.models import UQInputParametersVecoli, UQInputParameters
+from uq.pipeline.models import UQInputParameters, UQInputParametersVecoli
 
 if TYPE_CHECKING:
     pass
@@ -38,7 +38,7 @@ class XSpaceInterface(abc.ABC):
     """
     Interface whose implementations fulfill:
         - sample_to_params() -> UQInputParameters: Convert a sample from the model/simulation/function-specific parameter space to UQInputParameters.
-        - params_to_sample() -> np.ndarray[ParameterValue]: Convert domain-specific input space-mapped UQInputParameters to an array of sample(perturbation) values 
+        - params_to_sample() -> np.ndarray[ParameterValue]: Convert domain-specific input space-mapped UQInputParameters to an array of sample(perturbation) values
             when N sample values (sample size) == N perturbations.
     """
 
@@ -206,7 +206,7 @@ class XSpace(XSpaceInterface):
         title.append("⚡ ", style="bold yellow")
         title.append("INPUT PARAMETER SPACE", style="bold magenta")
         title.append("  //  ", style="dim cyan")
-        title.append(self.experiment_id, style="bold cyan")
+        title.append(self.experiment_id or "(no experiment)", style="bold cyan")
 
         # Parameter table
         table = Table(
@@ -235,7 +235,7 @@ class XSpace(XSpaceInterface):
         console.print(panel)
 
 
-class XSpaceVecoli(XSpaceInterface):
+class XSpaceVecoli(XSpace):
     """
     Defines the parameter space for UQ sensitivity analysis pipeline
     on vEcoli datasets.

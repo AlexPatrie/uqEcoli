@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # Run the composite
-    print(f"Running UQ pipeline via process-bigraph Composite...")
+    print("Running UQ pipeline via process-bigraph Composite...")
     print(f"  Experiment: {args.experiment_id}")
     print(f"  Sim base:   {args.sim_base_path}")
     print(f"  Output:     {args.output_dir}")
@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(sobol, dict):
                 names = sobol.get("parameter_names", [])
                 first = sobol.get("first_order", [])
-                print(f"\nPopulation Sobol (first-order):")
+                print("\nPopulation Sobol (first-order):")
                 for name, val in zip(names, first):
                     print(f"  {name}: {val:.4f}" if isinstance(val, float) else f"  {name}: {val}")
 

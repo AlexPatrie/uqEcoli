@@ -9,14 +9,22 @@ output variables from vEcoli simulations:
 - Higher-order properties (mass, growth rate, etc.)
 
 These outputs are extracted from Parquet-emitted simulation data using DuckDB.
+
+The ``OutputExtractor`` is the **single source of truth** for loading
+simulation data.  It wraps ``ecoli.library.parquet_emitter`` helpers
+(``read_stacked_columns``, ``list_columns``, ``field_metadata``, etc.)
+so that callers never need to construct their own DuckDB queries or
+duplicate data-loading logic.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from enum import Enum, StrEnum
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
+import polars
 from duckdb import DuckDBPyConnection
+from ecoli.library.parquet_emitter import create_duckdb_conn
 
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import (
@@ -24,7 +32,7 @@ if TYPE_CHECKING:
     )
 
 
-class OutputType(str, Enum):
+class OutputType(StrEnum):
     """Types of output variables that can be extracted."""
 
     TRANSCRIPTOME = "transcriptome"
@@ -80,6 +88,11 @@ class OutputVariables:
         return np.concatenate(arrays)
 
 
+def get_s3_uri():
+    # raise NotImplementedError("TODO: gets the bucket uri for SMS API")
+    return ""
+
+
 class OutputExtractor:
     """
     Extracts output variables from simulation data stored in Parquet format.
@@ -107,6 +120,8 @@ class OutputExtractor:
         history_sql: str,
         config_sql: str,
         sim_data: Optional["SimulationDataEcoli"] = None,
+        bucket_uri: str | None = None,
+        storage_mode: Literal["fs", "s3"] = "fs",
     ):
         """
         Initialize the output extractor.
@@ -117,7 +132,10 @@ class OutputExtractor:
             config_sql: SQL subquery for configuration data
             sim_data: Optional SimulationDataEcoli for metadata lookup
         """
-        self.conn = conn
+        store = ""
+        if storage_mode == "s3":
+            store = bucket_uri or get_s3_uri()
+        self.conn = conn or create_duckdb_conn(object_store=store)
         self.history_sql = history_sql
         self.config_sql = config_sql
         self.sim_data = sim_data
@@ -126,6 +144,7 @@ class OutputExtractor:
         self,
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> tuple[np.ndarray, list[str]]:
         """
         Extract mRNA cistron counts from simulation data.
@@ -133,11 +152,14 @@ class OutputExtractor:
         Args:
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
+            timeseries: Pre-loaded DataFrame from ``load_timeseries``.
+                If provided, extracts directly from it instead of
+                re-querying DuckDB.
 
         Returns:
             Tuple of (counts array, cistron IDs)
         """
-        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
+        from ecoli.library.parquet_emitter import field_metadata
 
         mrna_ids = field_metadata(
             conn=self.conn,
@@ -145,9 +167,18 @@ class OutputExtractor:
             field=self.TRANSCRIPTOME_COL,
         )
 
+        col = self.TRANSCRIPTOME_COL
+        if timeseries is not None and col in timeseries.columns:
+            if timeseries.is_empty():
+                return np.array([]), mrna_ids
+            counts = np.vstack(timeseries[col].to_numpy())
+            return counts, mrna_ids
+
+        from ecoli.library.parquet_emitter import read_stacked_columns
+
         history_subquery = read_stacked_columns(
             self.history_sql,
-            [f"{self.TRANSCRIPTOME_COL} AS mrna_counts"],
+            [f"{col} AS mrna_counts"],
             order_results=False,
         )
 
@@ -181,6 +212,7 @@ class OutputExtractor:
         self,
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> tuple[np.ndarray, list[str]]:
         """
         Extract protein monomer counts from simulation data.
@@ -188,11 +220,12 @@ class OutputExtractor:
         Args:
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
+            timeseries: Pre-loaded DataFrame from ``load_timeseries``.
 
         Returns:
             Tuple of (counts array, monomer IDs)
         """
-        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
+        from ecoli.library.parquet_emitter import field_metadata
 
         monomer_ids = field_metadata(
             conn=self.conn,
@@ -200,9 +233,18 @@ class OutputExtractor:
             field=self.PROTEOME_COL,
         )
 
+        col = self.PROTEOME_COL
+        if timeseries is not None and col in timeseries.columns:
+            if timeseries.is_empty():
+                return np.array([]), monomer_ids
+            counts = np.vstack(timeseries[col].to_numpy())
+            return counts, monomer_ids
+
+        from ecoli.library.parquet_emitter import read_stacked_columns
+
         history_subquery = read_stacked_columns(
             self.history_sql,
-            [f"{self.PROTEOME_COL} AS monomer_counts"],
+            [f"{col} AS monomer_counts"],
             order_results=False,
         )
 
@@ -236,6 +278,7 @@ class OutputExtractor:
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
         normalize_by_mass: bool = True,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> tuple[np.ndarray, list[str]]:
         """
         Extract metabolic reaction fluxes from simulation data.
@@ -244,11 +287,12 @@ class OutputExtractor:
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
             normalize_by_mass: If True, normalize fluxes by dry mass
+            timeseries: Pre-loaded DataFrame from ``load_timeseries``.
 
         Returns:
             Tuple of (flux array, reaction IDs)
         """
-        from ecoli.library.parquet_emitter import field_metadata, read_stacked_columns
+        from ecoli.library.parquet_emitter import field_metadata
 
         rxn_ids = field_metadata(
             conn=self.conn,
@@ -256,7 +300,22 @@ class OutputExtractor:
             field=self.FLUX_COL,
         )
 
-        columns = [f"{self.FLUX_COL} AS fluxes"]
+        col = self.FLUX_COL
+        if timeseries is not None and col in timeseries.columns:
+            if timeseries.is_empty():
+                return np.array([]), rxn_ids
+            fluxes = np.vstack(timeseries[col].to_numpy())
+            if normalize_by_mass:
+                cell_density = self._get_cell_density()
+                cell_mass = timeseries[self.CELL_MASS_COL].to_numpy()
+                dry_mass = timeseries[self.DRY_MASS_COL].to_numpy()
+                coeff = (dry_mass / cell_mass * cell_density).reshape(-1, 1)
+                fluxes = fluxes / coeff
+            return fluxes, rxn_ids
+
+        from ecoli.library.parquet_emitter import read_stacked_columns
+
+        columns = [f"{col} AS fluxes"]
         if normalize_by_mass:
             columns.extend([
                 f"{self.CELL_MASS_COL} AS cell_mass",
@@ -272,13 +331,7 @@ class OutputExtractor:
         filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
 
         if normalize_by_mass:
-            # Get cell density from sim_data if available
-            cell_density = 1100.0  # Default g/L
-            if self.sim_data is not None:
-                from wholecell.utils import units
-
-                cd = self.sim_data.constants.cell_density
-                cell_density = cd.asNumber(units.g / units.L)
+            cell_density = self._get_cell_density()
 
             query = f"""
                 WITH history AS ({history_subquery}),
@@ -323,6 +376,7 @@ class OutputExtractor:
         self,
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> tuple[np.ndarray, list[str]]:
         """
         Extract exchange reaction fluxes from simulation data.
@@ -333,11 +387,16 @@ class OutputExtractor:
         Args:
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
+            timeseries: Pre-loaded DataFrame from ``load_timeseries``.
 
         Returns:
             Tuple of (flux array for exchange reactions, exchange reaction IDs)
         """
-        fluxes, rxn_ids = self.extract_metabolic_fluxes(generation_lower_bound, time_lower_bound)
+        fluxes, rxn_ids = self.extract_metabolic_fluxes(
+            generation_lower_bound,
+            time_lower_bound,
+            timeseries=timeseries,
+        )
 
         if fluxes.size == 0:
             return np.array([]), []
@@ -352,6 +411,7 @@ class OutputExtractor:
         self,
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> dict[str, np.ndarray]:
         """
         Extract higher-order properties (mass, volume, etc.) from simulation data.
@@ -359,10 +419,32 @@ class OutputExtractor:
         Args:
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
+            timeseries: Pre-loaded DataFrame from ``load_timeseries``.
 
         Returns:
             Dictionary mapping property names to time series arrays
         """
+        # ── fast path: derive from pre-loaded timeseries ──────────────
+        if timeseries is not None and self.DRY_MASS_COL in timeseries.columns:
+            if timeseries.is_empty():
+                return {}
+
+            dry_mass = timeseries[self.DRY_MASS_COL].to_numpy().astype(float)
+            # Compute growth rate per cell trajectory
+            growth_rate = np.zeros_like(dry_mass)
+            growth_rate[1:] = np.diff(dry_mass) / dry_mass[1:]
+
+            result: dict[str, np.ndarray] = {
+                "dry_mass": dry_mass,
+                "growth_rate": growth_rate,
+            }
+            if self.CELL_MASS_COL in timeseries.columns:
+                result["cell_mass"] = timeseries[self.CELL_MASS_COL].to_numpy().astype(float)
+            if self.VOLUME_COL in timeseries.columns:
+                result["volume"] = timeseries[self.VOLUME_COL].to_numpy().astype(float)
+            return result
+
+        # ── DuckDB path (standalone usage without pre-loaded data) ────
         from ecoli.library.parquet_emitter import read_stacked_columns
 
         property_cols = [
@@ -407,16 +489,16 @@ class OutputExtractor:
             ORDER BY {", ".join(self.ID_COLS)}, time
         """
 
-        result = self.conn.sql(query).pl()
+        db_result = self.conn.sql(query).pl()
 
-        if result.is_empty():
+        if db_result.is_empty():
             return {}
 
         return {
-            "cell_mass": result["cell_mass"].to_numpy(),
-            "dry_mass": result["dry_mass"].to_numpy(),
-            "volume": result["volume"].to_numpy(),
-            "growth_rate": result["growth_rate"].to_numpy(),
+            "cell_mass": db_result["cell_mass"].to_numpy(),
+            "dry_mass": db_result["dry_mass"].to_numpy(),
+            "volume": db_result["volume"].to_numpy(),
+            "growth_rate": db_result["growth_rate"].to_numpy(),
         }
 
     def extract_all(
@@ -424,6 +506,7 @@ class OutputExtractor:
         output_types: Optional[list[OutputType]] = None,
         generation_lower_bound: Optional[int] = None,
         time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> OutputVariables:
         """
         Extract all specified output types into an OutputVariables container.
@@ -432,6 +515,10 @@ class OutputExtractor:
             output_types: List of output types to extract. If None, extracts all.
             generation_lower_bound: Only include data from this generation onwards
             time_lower_bound: Only include data from this time onwards
+            timeseries: Pre-loaded DataFrame from ``load_timeseries()``.
+                When provided, each ``extract_*`` method pulls data from
+                this DataFrame instead of re-querying DuckDB, avoiding
+                redundant I/O.
 
         Returns:
             OutputVariables container with extracted data
@@ -442,31 +529,139 @@ class OutputExtractor:
         outputs = OutputVariables()
 
         if OutputType.TRANSCRIPTOME in output_types:
-            counts, ids = self.extract_transcriptome(generation_lower_bound, time_lower_bound)
+            counts, ids = self.extract_transcriptome(
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
+            )
             outputs.transcriptome = counts
             outputs.metadata["cistron_ids"] = ids
 
         if OutputType.PROTEOME in output_types:
-            counts, ids = self.extract_proteome(generation_lower_bound, time_lower_bound)
+            counts, ids = self.extract_proteome(
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
+            )
             outputs.proteome = counts
             outputs.metadata["monomer_ids"] = ids
 
         if OutputType.METABOLIC_FLUXES in output_types:
-            fluxes, ids = self.extract_metabolic_fluxes(generation_lower_bound, time_lower_bound)
+            fluxes, ids = self.extract_metabolic_fluxes(
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
+            )
             outputs.metabolic_fluxes = fluxes
             outputs.metadata["reaction_ids"] = ids
 
         if OutputType.EXCHANGE_FLUXES in output_types:
-            fluxes, ids = self.extract_exchange_fluxes(generation_lower_bound, time_lower_bound)
+            fluxes, ids = self.extract_exchange_fluxes(
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
+            )
             outputs.exchange_fluxes = fluxes
             outputs.metadata["exchange_reaction_ids"] = ids
 
         if OutputType.HIGHER_ORDER_PROPERTIES in output_types:
             outputs.higher_order_properties = self.extract_higher_order_properties(
-                generation_lower_bound, time_lower_bound
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
 
         return outputs
+
+    # ── Timeseries loading (single source of truth) ────────────────────────
+
+    def load_timeseries(
+        self,
+        columns: list[str] | None = None,
+        generation_lower_bound: int | None = None,
+        time_lower_bound: float | None = None,
+    ) -> polars.DataFrame:
+        """Load the full simulation timeseries as a Polars DataFrame.
+
+        This is the **canonical** way to obtain the timeseries that feeds
+        aggregation strategies 2-3 (which need ``generation`` and
+        ``lineage_seed`` metadata columns).  It delegates to
+        ``read_stacked_columns`` from ``ecoli.library.parquet_emitter`` so
+        that all data loading goes through a single DuckDB path.
+
+        Args:
+            columns: Observable column names to include.  If *None*, all
+                scalar (non-list) columns in the dataset are returned.
+                Metadata columns (``experiment_id``, ``variant``,
+                ``lineage_seed``, ``generation``, ``agent_id``, ``time``)
+                are always included when available.
+            generation_lower_bound: Exclude generations below this value.
+            time_lower_bound: Exclude time steps below this value (seconds).
+
+        Returns:
+            Polars DataFrame with requested columns plus metadata.
+        """
+        from ecoli.library.parquet_emitter import read_stacked_columns
+
+        # Build column select list
+        if columns is not None:
+            select_cols = [c for c in columns]
+        else:
+            # Grab all available columns and let DuckDB figure it out
+            available = self.list_columns()
+            select_cols = [c for c in available if c not in self.ID_COLS and c != "time"]
+
+        # read_stacked_columns returns a SQL subquery string when conn is
+        # not passed; pass conn= to get a DataFrame directly.
+        history_subquery = read_stacked_columns(
+            self.history_sql,
+            select_cols,
+            order_results=False,
+        )
+
+        filter_clause = self._build_filter_clause(generation_lower_bound, time_lower_bound)
+
+        # Always pull in metadata columns for downstream aggregation
+        id_cols_sql = ", ".join(self.ID_COLS)
+
+        query = f"""
+            WITH history AS ({history_subquery}),
+            filtered AS (
+                SELECT *
+                FROM history
+                {filter_clause}
+            )
+            SELECT *
+            FROM filtered
+            ORDER BY {id_cols_sql}, time
+        """
+
+        return self.conn.sql(query).pl()
+
+    def list_columns(self, pattern: str | None = None) -> list[str]:
+        """List available column names in the history dataset.
+
+        Args:
+            pattern: Optional glob pattern to filter columns
+                (e.g. ``"listeners__mass__*"``).
+
+        Returns:
+            Sorted list of column name strings.
+        """
+        from ecoli.library.parquet_emitter import list_columns
+
+        return list_columns(self.conn, self.history_sql, pattern=pattern)
+
+    # ── internal helpers ─────────────────────────────────────────────────
+
+    def _get_cell_density(self) -> float:
+        """Return cell density in g/L (from sim_data or default)."""
+        if self.sim_data is not None:
+            from wholecell.utils import units
+
+            cd = self.sim_data.constants.cell_density
+            return cd.asNumber(units.g / units.L)
+        return 1100.0
 
     def _build_filter_clause(
         self,
