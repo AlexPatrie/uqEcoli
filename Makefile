@@ -1,5 +1,19 @@
 PACKAGE_LOCATION=/Users/alexanderpatrie/sms/uqEcoli/uq
 
+.PHONY: add-vecoli
+add-vecoli:
+	@echo "/Users/alexanderpatrie/sms/vEcoli-private" > $(uv run python -c "import site; print(site.getsitepackages()[0])")/vecoli.pth
+
+.PHONY: install
+install:
+	@uv lock --no-cache; \
+	uv sync --no-cache --all-groups --all-extras \
+	make export-deps
+
+.PHONY: export-deps
+export-deps:
+	@uv pip freeze | sed 's/=.*//' > requirements.txt
+
 .PHONY: documentation
 documentation:
 	@open "${PACKAGE_LOCATION}/docs/_build/html/index.html"

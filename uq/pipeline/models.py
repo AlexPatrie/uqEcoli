@@ -338,7 +338,7 @@ class SimulationConfigVecoli(SimulationConfig):
     """Vecoli simulation config (JSON), 1:1"""
 
     experiment_id: str
-    sim_data_path: str
+    sim_data_path: str | None = None
     n_init_sims: int = field(default=1)
     generations: int = field(default=1)
     variants: list[VariantVecoli] = field(default_factory=list)

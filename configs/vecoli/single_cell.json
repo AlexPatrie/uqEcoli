@@ -8,5 +8,8 @@
   "generations": 1,
   "n_init_sims": 1,
   "single_daughters": true,
-  "emitter": "timeseries"
+  "emitter": "timeseries",
+  "emit_paths": [
+    "bulk"
+  ]
 }

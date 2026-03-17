@@ -2,7 +2,7 @@
 Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 
 Workflow:
-      Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
+      Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli
 
       1. Define Parameter Space — param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True) → n parameters with bounds
       2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
@@ -66,7 +66,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars
@@ -208,7 +208,6 @@ def test_initialize_data():
 def pipeline(
     experiment_ids: str | list[str],
     sim_base_path: str | Path,
-    simulation_func: Callable | None = None,
     observable_columns: list[str] | None = None,
     lb_generation: int | None = 2,
     lb_time: float | None = 100.0,
@@ -216,26 +215,35 @@ def pipeline(
     polynomial_order: int = 3,
     n_samples: int = 200,
     expected_cycle_time: float = 3600.0,
+    max_duration: float = 10800.0,
     prescreen_config: PCEParameterSelectionConfig | None = None,
     export_path: Path | None = None,
     precomputed_path: Path | str | None = None,
+    sim_config_path: str | None = None,
 ) -> PipelineResult:
     """
     Execute the RFC006 UQ pipeline.
 
+    The simulation function ``f(x) -> y`` is constructed internally from
+    the ``SimulationDataEcoli`` pickle(s) found at
+    ``{sim_base_path}/{experiment_id}/parca/kb/simData.cPickle`` and the
+    parameter space derived from those pickles.  Callers do not need to
+    provide a simulation function.
+
     Supports three modes for Phase 1/2 evaluation:
 
-    1. **simulation_func provided**: evaluates the wrapper at LHS samples
-       (live simulation mode).
+    1. **Live simulation** (default): instantiates a
+       ``VecoliSimulationFunc`` that runs single-cell ``EcoliSim`` with
+       the timeseries emitter for each LHS sample.
     2. **precomputed_path provided**: loads cached (X, Y) from a prior
        ``uq generate-samples`` run — no simulation calls needed.
-    3. **Neither provided**: builds a DataDrivenWrapper (synthetic linear
-       response surface from aggregated statistics) for quick demos.
+    3. **Neither live nor precomputed and no sim_data available**: builds
+       a ``DataDrivenWrapper`` (synthetic linear response surface from
+       aggregated statistics) for quick demos.
 
     Args:
         experiment_ids: Experiment identifier(s) for data loading.
         sim_base_path: Root directory containing simulation outputs.
-        simulation_func: Callable with __call__(x) and evaluate_batch(X).
         observable_columns: Column names of observables to aggregate/analyze.
         lb_generation: Skip initial generations (default: 2).
         lb_time: Skip transient period in seconds (default: 100.0).
@@ -243,14 +251,18 @@ def pipeline(
         polynomial_order: PCE polynomial order for both phases.
         n_samples: Number of LHS samples for PCE fitting.
         expected_cycle_time: Expected cell cycle period in seconds.
+        max_duration: EcoliSim max_duration in seconds for live mode.
         prescreen_config: Optional Morris prescreening config for Phase 1.
         export_path: If provided, export surrogates and results here.
         precomputed_path: Path to cached (X, Y) from ``generate-samples``.
             When provided, PCE is fit directly to cached data.
+        sim_config_path: Optional path to EcoliSim JSON config file.
+            If None, uses the vEcoli default config.
 
     Returns:
         PipelineResult with all RFC006 pipeline outputs.
     """
+    from uq.generators.vecoli import VecoliSimulationFunc
     from uq.wrappers import DataDrivenWrapper
 
     # --- Step 1: Load x and y for given experiment ids ---
@@ -278,13 +290,28 @@ def pipeline(
 
         cache = PrecomputedCache.load(precomputed_path)
 
-    if simulation_func is None and cache is None:
-        # Fallback: synthetic response surface for demos
-        simulation_func = DataDrivenWrapper(
-            parameter_space=param_space,
-            observable_means=agg_result.uniform.mean,
-            observable_stds=agg_result.uniform.std,
-        )
+    # --- Instantiate simulation function from loaded sim_data ---
+    # ds.x is list[ParameterDataset], each with a .sim_data attribute.
+    # For live simulation mode, use the first experiment's sim_data as
+    # the baseline (single-cell runs are per-experiment).
+    simulation_func: Any = None
+    if cache is None:
+        baseline_sim_data = ds.x[0].sim_data if ds.x else None
+        if baseline_sim_data is not None:
+            simulation_func = VecoliSimulationFunc(
+                baseline_sim_data=baseline_sim_data,
+                param_space=param_space,
+                sim_config_path=sim_config_path,
+                max_duration=max_duration,
+                output_keys=obs_cols if observable_columns is not None else None,
+            )
+        else:
+            # Fallback: synthetic response surface for demos
+            simulation_func = DataDrivenWrapper(
+                parameter_space=param_space,
+                observable_means=agg_result.uniform.mean,
+                observable_stds=agg_result.uniform.std,
+            )
 
     # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
     sobol_bulk, surrogate_bulk, morris_indices = run_phase1(
