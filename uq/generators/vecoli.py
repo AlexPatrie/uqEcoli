@@ -20,11 +20,13 @@ cannot be reduced to simple setattr calls.
 
 import copy
 import importlib
+import json as _json
 import os
 import pickle
 import tempfile
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -356,22 +358,248 @@ class VecoliSimulationFunc:
         self._obs_names = obs_names
         return timeseries
 
-    def evaluate_batch(self, X: np.ndarray) -> np.ndarray:
+    def evaluate_batch(
+        self,
+        X: np.ndarray,
+        max_workers: int | None = None,
+    ) -> np.ndarray:
         """Evaluate simulation for a batch of parameter vectors.
 
         Args:
             X: Parameter array of shape ``(n_samples, n_params)``.
+            max_workers: Max parallel processes.  ``None`` = sequential
+                (safe default since EcoliSim is memory-heavy).  Set to
+                e.g. 4 for local parallelism.
 
         Returns:
             Aggregated (time-mean) output array of shape
             ``(n_samples, n_outputs)``.  This is the format expected by
             ``SensitivityAnalyzer.analyze_with_pce()`` in Phase 1.
         """
-        results = []
-        for x in X:
-            ts = self(x)  # (n_timesteps, n_obs)
-            results.append(ts.mean(axis=0))  # aggregate -> (n_obs,)
+        if max_workers is None or max_workers <= 1:
+            results = []
+            for x in X:
+                ts = self(x)  # (n_timesteps, n_obs)
+                results.append(ts.mean(axis=0))  # aggregate -> (n_obs,)
+            return np.vstack(results)
+
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+
+        results = [None] * len(X)
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            future_to_idx = {pool.submit(_evaluate_single, self, X[i]): i for i in range(len(X))}
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                results[idx] = future.result()
+
         return np.vstack(results)
+
+
+# -- Module-level helper for ProcessPoolExecutor ----------------------------
+# ProcessPoolExecutor requires a top-level picklable callable.
+
+
+def _evaluate_single(sim_func: "VecoliSimulationFunc", x: np.ndarray) -> np.ndarray:
+    """Evaluate one sample and return time-mean output (picklable target)."""
+    ts = sim_func(x)
+    return ts.mean(axis=0)
+
+
+# -- Batch config export / collection --------------------------------------
+
+
+def export_batch_configs(
+    sim_func: "VecoliSimulationFunc",
+    X: np.ndarray,
+    batch_dir: str | os.PathLike,
+    base_config_path: str | None = None,
+    generations: int = 1,
+    emitter: str = "parquet",
+) -> Path:
+    """Convert LHS samples into per-sample vEcoli configs for Nextflow/HPC.
+
+    For each row in *X*, this function:
+    1. Converts x -> variant param dicts via ``param_space.sample_to_params()``
+    2. Deep-copies baseline sim_data, applies variants, pickles to
+       ``{batch_dir}/sim_data/{i}.cPickle``
+    3. Writes a per-sample JSON config to ``{batch_dir}/configs/{i}.json``
+    4. Writes ``{batch_dir}/metadata.json`` mapping sample indices to
+       parameter vectors (for result collection)
+
+    The resulting directory can be submitted to Nextflow:
+
+    .. code-block:: bash
+
+        nextflow run sim.nf --config_dir <batch_dir>/configs \\
+                            --sim_data_dir <batch_dir>/sim_data
+
+    Args:
+        sim_func: VecoliSimulationFunc with baseline_sim_data and param_space.
+        X: LHS sample array, shape ``(n_samples, n_params)``.
+        batch_dir: Output directory for the batch.
+        base_config_path: Optional JSON config template.  If None, a
+            minimal config is generated.
+        generations: Number of generations per sample sim.
+        emitter: Emitter type (``"parquet"`` for Nextflow collection).
+
+    Returns:
+        Path to batch_dir (for chaining).
+    """
+    batch_dir = Path(batch_dir)
+    config_dir = batch_dir / "configs"
+    sim_data_dir = batch_dir / "sim_data"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    sim_data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load base config template if provided
+    base_config: dict = {}
+    if base_config_path is not None:
+        base_config = _json.loads(Path(base_config_path).read_text())
+
+    sample_metadata: dict = {
+        "parameter_names": sim_func.parameter_names,
+        "n_samples": int(X.shape[0]),
+        "n_params": int(X.shape[1]),
+        "bounds": np.array(sim_func.param_space.parameter_bounds).tolist(),
+        "samples": {},
+    }
+
+    for i, x in enumerate(X):
+        # x -> variant config
+        uq_params = sim_func.param_space.sample_to_params(x)
+        sim_config = uq_params.to_simulation_config()
+        variants = sim_config.get("variants", {})
+
+        # Deep-copy and apply variants to sim_data, then pickle
+        sd = copy.deepcopy(sim_func.baseline_sim_data)
+        if variants:
+            sd = _apply_variants(sd, variants)
+
+        pickle_path = sim_data_dir / f"{i}.cPickle"
+        with open(pickle_path, "wb") as f:
+            pickle.dump(sd, f)
+
+        # Build per-sample JSON config
+        sample_config = {**base_config}
+        sample_config["experiment_id"] = f"uq_sample_{i:04d}"
+        sample_config["sim_data_path"] = str(pickle_path)
+        sample_config["generations"] = generations
+        sample_config["emitter"] = emitter
+        sample_config["variants"] = {}  # already baked into sim_data
+
+        config_path = config_dir / f"{i}.json"
+        config_path.write_text(_json.dumps(sample_config, indent=2))
+
+        sample_metadata["samples"][str(i)] = {
+            "x": x.tolist(),
+            "config": str(config_path),
+            "sim_data": str(pickle_path),
+        }
+
+    (batch_dir / "metadata.json").write_text(_json.dumps(sample_metadata, indent=2))
+
+    return batch_dir
+
+
+def collect_batch_results(
+    batch_dir: str | os.PathLike,
+    output_dir: str | os.PathLike,
+    observable_columns: list[str] | None = None,
+    cache_dir: str | os.PathLike | None = None,
+) -> "PrecomputedCache":
+    """Collect Parquet outputs from a completed batch run into PrecomputedCache.
+
+    After Nextflow/HPC runs complete, each sample's output lives under
+    ``{output_dir}/uq_sample_NNNN/``.  This function reads the hive-
+    partitioned Parquet files, aggregates (time-mean), and assembles
+    the ``(X, Y)`` cache.
+
+    Args:
+        batch_dir: Directory produced by :func:`export_batch_configs`
+            (must contain ``metadata.json``).
+        output_dir: Root directory containing per-sample Parquet outputs.
+            Expected structure: ``{output_dir}/uq_sample_NNNN/history/...``
+        observable_columns: Which columns to extract.  Defaults to
+            mass listeners (dry_mass, cell_mass, volume, growth).
+        cache_dir: Where to save the PrecomputedCache.  Defaults to
+            ``{batch_dir}/cache``.
+
+    Returns:
+        PrecomputedCache with X, Y assembled from the batch outputs.
+    """
+    import polars as pl
+
+    from uq.sampling import PrecomputedCache
+
+    batch_dir = Path(batch_dir)
+    output_dir = Path(output_dir)
+
+    meta = _json.loads((batch_dir / "metadata.json").read_text())
+    n_samples = meta["n_samples"]
+    parameter_names = meta["parameter_names"]
+    bounds = meta["bounds"]
+
+    if observable_columns is None:
+        observable_columns = [
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+            "listeners__mass__volume",
+            "listeners__mass__growth",
+        ]
+
+    X_list = []
+    Y_list = []
+    Y_timeseries = []
+
+    for i in range(n_samples):
+        sample_meta = meta["samples"][str(i)]
+        x = np.array(sample_meta["x"])
+        X_list.append(x)
+
+        # Read Parquet output for this sample
+        experiment_id = f"uq_sample_{i:04d}"
+        history_dir = output_dir / experiment_id / "history"
+
+        if not history_dir.exists():
+            raise FileNotFoundError(
+                f"No output found for sample {i} at {history_dir}. Ensure Nextflow/HPC run completed successfully."
+            )
+
+        # Read hive-partitioned parquet
+        df = pl.read_parquet(
+            str(history_dir / "**/*.parquet"),
+            hive_partitioning=True,
+        )
+
+        # Extract observable columns that exist in the data
+        available = [c for c in observable_columns if c in df.columns]
+        if not available:
+            raise ValueError(f"None of {observable_columns} found in Parquet columns: {df.columns}")
+
+        obs_df = df.select(available).fill_null(0.0)
+        ts_array = obs_df.to_numpy()  # (n_rows, n_obs)
+        Y_timeseries.append(ts_array)
+
+        # Aggregate: time-mean
+        y_mean = ts_array.mean(axis=0)
+        Y_list.append(y_mean)
+
+    X = np.vstack(X_list)
+    Y = np.vstack(Y_list)
+
+    if cache_dir is None:
+        cache_dir = batch_dir / "cache"
+
+    cache = PrecomputedCache(
+        cache_dir=Path(cache_dir),
+        X=X,
+        Y=Y,
+        parameter_names=parameter_names,
+        metadata={"bounds": bounds, "seed": -1, "source": "batch_collection"},
+        Y_timeseries=Y_timeseries,
+    )
+    cache.save()
+    return cache
 
 
 # -- Legacy config classes (kept for backward compatibility) -----------------

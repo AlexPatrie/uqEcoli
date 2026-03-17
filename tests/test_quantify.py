@@ -155,8 +155,8 @@ class TestPrecomputedSamples:
         meta = json.loads((precomputed_cache_dir / "metadata.json").read_text())
         bounds = np.array(meta["bounds"])
         # LHS samples should be within parameter bounds (with small tolerance)
-        assert np.all(X >= bounds[:, 0] - 1e-10)
-        assert np.all(X <= bounds[:, 1] + 1e-10)
+        assert np.all(bounds[:, 0] - 1e-10 <= X)
+        assert np.all(bounds[:, 1] + 1e-10 >= X)
 
 
 # ---------------------------------------------------------------------------
@@ -257,23 +257,34 @@ class TestQuantifyCli:
 
         export_dir = tmp_path / "cli_export"
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "quantify",
-            *EXPERIMENT_IDS,
-            str(SIM_BASE_PATH),
-            "--n-bins", str(N_BINS),
-            "--n-samples", str(N_SAMPLES),
-            "--pce-polynomial-order", str(POLYNOMIAL_ORDER),
-            "--pce-n-trajectories", str(N_TRAJECTORIES),
-            "--pce-n-selected-params", str(N_TOP),
-            "--precomputed-path", str(precomputed_cache_dir),
-            "--export-path", str(export_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "quantify",
+                *EXPERIMENT_IDS,
+                str(SIM_BASE_PATH),
+                "--n-bins",
+                str(N_BINS),
+                "--n-samples",
+                str(N_SAMPLES),
+                "--pce-polynomial-order",
+                str(POLYNOMIAL_ORDER),
+                "--pce-n-trajectories",
+                str(N_TRAJECTORIES),
+                "--pce-n-selected-params",
+                str(N_TOP),
+                "--precomputed-path",
+                str(precomputed_cache_dir),
+                "--export-path",
+                str(export_dir),
+            ],
+        )
 
         if result.exit_code != 0:
             print(result.output)
             if result.exception:
                 import traceback
+
                 traceback.print_exception(
                     type(result.exception),
                     result.exception,
@@ -294,14 +305,20 @@ class TestQuantifyCli:
         from uq.cli import app
 
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "quantify",
-            *EXPERIMENT_IDS,
-            str(SIM_BASE_PATH),
-            "--n-samples", str(N_SAMPLES),
-            "--pce-polynomial-order", str(POLYNOMIAL_ORDER),
-            "--precomputed-path", str(precomputed_cache_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "quantify",
+                *EXPERIMENT_IDS,
+                str(SIM_BASE_PATH),
+                "--n-samples",
+                str(N_SAMPLES),
+                "--pce-polynomial-order",
+                str(POLYNOMIAL_ORDER),
+                "--precomputed-path",
+                str(precomputed_cache_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         # Should show percentage values from Sobol
@@ -342,8 +359,7 @@ class TestSamplePipelineCompatibility:
         cached_bounds = np.array(meta["bounds"])
 
         assert cached_names == pipeline_names, (
-            f"Parameter name mismatch: cache has {cached_names}, "
-            f"pipeline expects {pipeline_names}"
+            f"Parameter name mismatch: cache has {cached_names}, pipeline expects {pipeline_names}"
         )
         np.testing.assert_array_almost_equal(
             cached_bounds,
