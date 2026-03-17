@@ -703,7 +703,7 @@ class TestKoopmanMusicAnalogy:
             np.cos(0.1 * t) + 0.5 * np.cos(0.2 * t),
         ])
 
-        dmd = DynamicModeDecomposition(dt=1.0)
+        dmd = DynamicModeDecomposition(rank=2, dt=1.0)
         dmd.fit(X)
         spectrum = dmd.get_spectrum()
 
@@ -724,7 +724,7 @@ class TestKoopmanMusicAnalogy:
             np.exp(0.02 * t),  # Faster growth
         ])
 
-        dmd = DynamicModeDecomposition(dt=1.0)
+        dmd = DynamicModeDecomposition(rank=2, dt=1.0)
         dmd.fit(X)
         spectrum = dmd.get_spectrum()
 
