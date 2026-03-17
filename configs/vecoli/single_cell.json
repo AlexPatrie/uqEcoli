@@ -1,12 +1,12 @@
 {
-    "experiment_id": "single_cell",
-    "suffix_time": true,
-    "initial_global_time": 0.0,
-    "time_step": 1.0,
-    "fail_at_max_duration": false,
-    "sim_data_path": "sim_data/baseline/kb/simData.cPickle",
-    "generations": 1,
-    "n_init_sims": 1,
-    "single_daughters": true,
-    "emitter": "timeseries"
+  "experiment_id": "single_cell",
+  "suffix_time": true,
+  "initial_global_time": 0.0,
+  "time_step": 1.0,
+  "fail_at_max_duration": false,
+  "sim_data_path": "sim_data/baseline/kb/simData.cPickle",
+  "generations": 1,
+  "n_init_sims": 1,
+  "single_daughters": true,
+  "emitter": "timeseries"
 }

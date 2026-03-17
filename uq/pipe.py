@@ -62,7 +62,6 @@ Workflow:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from dataclasses import dataclass, field
@@ -71,7 +70,6 @@ from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import numpy as np
 import polars
-import pytest
 
 from uq import (
     AggregatedOutput,
@@ -121,12 +119,21 @@ class DatasetMultiExperiment:
     Attributes:
         experiment_ids: list[str]
         x: list[ParameterDataset]
+        y: polars.DataFrame — timeseries data from load_timeseries()
+        observables: list[str] — resolved observable column names
     """
 
     experiment_ids: list[str]
     x: list[ParameterDataset]
-    y: TimeseriesDataset
+    y: polars.DataFrame
     parameter_space: XSpace = field(init=False)
+    observables: list[str] = field(init=False)
+
+    _METADATA_COLS: set[str] = field(
+        default_factory=lambda: {"experiment_id", "variant", "lineage_seed", "generation", "agent_id", "time"},
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self):
         parameter_datasets = self.x
@@ -140,6 +147,9 @@ class DatasetMultiExperiment:
             self.parameter_space = parameter_datasets[0].to_parameter_space()
         else:
             self.parameter_space = ParameterDataset.merge_to_parameter_space(*parameter_datasets)
+
+        # Resolve observable columns from the timeseries DataFrame
+        self.observables = [c for c in self.y.columns if c not in self._METADATA_COLS]
 
 
 def initialize_data(
@@ -160,24 +170,19 @@ def initialize_data(
         time_lower_bound: Skip transient period in seconds (default: 100.0).
 
     Returns:
-        PipelineResult with all RFC006 pipeline outputs.
+        DatasetMultiExperiment with parameter datasets and timeseries.
     """
+    # Normalize to list BEFORE iterating
+    if isinstance(experiment_ids, str):
+        experiment_ids = [experiment_ids]
+
     sim_data_paths = [
         (expid, (Path(sim_base_path) / expid / "parca" / "kb" / "simData.cPickle")) for expid in experiment_ids
     ]
     # --- Step 1: Build parameter space from sim_data ---
     parameter_datasets = [ParameterDataset(sim_data_path=p, experiment_id=expid) for expid, p in sim_data_paths]
 
-    if len(parameter_datasets) == 1:
-        param_space = parameter_datasets[0].to_parameter_space()
-    else:
-        param_space = ParameterDataset.merge_to_parameter_space(*parameter_datasets)
-
-    if isinstance(experiment_ids, str):
-        experiment_ids = [experiment_ids]
-
     # --- Step 2: Load simulation data via DuckDB + OutputExtractor ---
-    # Load timeseries once, then derive typed outputs from it.
     timeseries_dataset = load_timeseries(
         sim_base_path=sim_base_path,
         experiment_ids=experiment_ids,
@@ -200,10 +205,10 @@ def test_initialize_data():
     print()
 
 
-async def pipeline(
+def pipeline(
     experiment_ids: str | list[str],
     sim_base_path: str | Path,
-    simulation_func: Callable,
+    simulation_func: Callable | None = None,
     observable_columns: list[str] | None = None,
     lb_generation: int | None = 2,
     lb_time: float | None = 100.0,
@@ -215,13 +220,14 @@ async def pipeline(
     export_path: Path | None = None,
 ) -> PipelineResult:
     """
-    Async version of execute_pipeline — runs Phase 1 and Phase 2 concurrently.
+    Execute the RFC006 UQ pipeline.
 
-    Same interface and outputs as execute_pipeline but uses asyncio to run
-    the two independent phases in parallel after the shared steps 1-4.
+    Runs Phase 1 and Phase 2 sequentially to control memory usage.
 
     Args:
-        simulation_func: Callable with evaluate_batch(X) → Y.
+        simulation_func: Callable with __call__(x) and evaluate_batch(X).
+            If None, a SimulationWrapper is built automatically from the
+            resolved sim_data_path — sims run in subprocesses with caching.
         experiment_ids: Experiment identifier(s) for data loading.
         sim_base_path: Root directory containing simulation outputs.
         observable_columns: Column names of observables to aggregate/analyze.
@@ -237,6 +243,8 @@ async def pipeline(
     Returns:
         PipelineResult with all RFC006 pipeline outputs.
     """
+    from uq.wrappers import SimulationWrapper, WrapperConfig
+
     # --- Step 1: Load x and y for given experiment ids ---
     ds = initialize_data(
         experiment_ids=experiment_ids,
@@ -248,42 +256,49 @@ async def pipeline(
     param_space = ds.parameter_space
     timeseries = ds.y
 
+    # Build SimulationWrapper if no simulation_func provided —
+    # runs each sim in a subprocess so memory gets reclaimed.
+    if simulation_func is None:
+        sim_data_path = str(ds.x[0].sim_data_path)
+        output_dir = str(Path(sim_base_path) / "_uq_runs")
+        cache_dir = str(Path(sim_base_path) / "_uq_cache")
+        wrapper_config = WrapperConfig(
+            sim_data_path=sim_data_path,
+            output_dir=output_dir,
+            cache_dir=cache_dir,
+            output_types=[OutputType.HIGHER_ORDER_PROPERTIES],
+            generation_lower_bound=lb_generation,
+            time_lower_bound=lb_time,
+        )
+        simulation_func = SimulationWrapper(wrapper_config, param_space)
+
+    # Resolve observable columns from loaded data if not provided
+    obs_cols = observable_columns if observable_columns is not None else ds.observables
+
     # --- Steps 3-4: Aggregation + Variance Decomposition (shared) ---
-    agg_result = aggregate_timeseries(timeseries, observable_columns)
+    agg_result = aggregate_timeseries(timeseries, obs_cols)
     decomp = get_variance_decomposition(agg_result)
 
-    # --- Phase 1 || Phase 2 (parallel) ---
-    loop = asyncio.get_running_loop()
-
-    phase1_future = loop.run_in_executor(
-        None,
-        lambda: run_phase1(
-            param_space=param_space,
-            simulation_func=simulation_func,
-            polynomial_order=polynomial_order,
-            n_samples=n_samples,
-            prescreen_config=prescreen_config,
-            export_path=export_path,
-        ),
+    # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
+    sobol_bulk, surrogate_bulk, morris_indices = run_phase1(
+        param_space=param_space,
+        simulation_func=simulation_func,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+        prescreen_config=prescreen_config,
+        export_path=export_path,
     )
 
-    phase2_future = loop.run_in_executor(
-        None,
-        lambda: run_phase2(
-            param_space=param_space,
-            simulation_func=simulation_func,
-            agg_result=agg_result,
-            observable_names=observable_columns,
-            n_bins=n_bins,
-            polynomial_order=polynomial_order,
-            n_samples=n_samples,
-            expected_cycle_time=expected_cycle_time,
-            export_path=export_path,
-        ),
-    )
-
-    (sobol_bulk, surrogate_bulk, morris_indices), (per_stage_sobol, surrogate_cc, cc_relevance) = await asyncio.gather(
-        phase1_future, phase2_future
+    per_stage_sobol, surrogate_cc, cc_relevance = run_phase2(
+        param_space=param_space,
+        simulation_func=simulation_func,
+        agg_result=agg_result,
+        observable_names=obs_cols,
+        n_bins=n_bins,
+        polynomial_order=polynomial_order,
+        n_samples=n_samples,
+        expected_cycle_time=expected_cycle_time,
+        export_path=export_path,
     )
 
     # --- Assemble PipelineResult ---
