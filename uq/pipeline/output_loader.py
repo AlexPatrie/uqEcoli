@@ -623,7 +623,7 @@ class TimeseriesLoaderParquet:
         columns: list[str] | None = None,
         generation_lower_bound: int | None = None,
         time_lower_bound: float | None = None,
-    ) -> TimeseriesDataset:
+    ) -> polars.DataFrame:
         """Load the full simulation timeseries as a Polars DataFrame.
 
         This is the **canonical** way to obtain the timeseries that feeds
@@ -775,7 +775,7 @@ def load_timeseries(
     lb_time: float | None = None,
     bucket_uri: str | None = None,
     storage_mode: Literal["fs", "s3"] = "fs",
-) -> TimeseriesDataset:
+) -> polars.DataFrame:
     loader = TimeseriesLoaderParquet(
         sim_base_path=sim_base_path, experiment_ids=experiment_ids, bucket_uri=bucket_uri, storage_mode=storage_mode
     )

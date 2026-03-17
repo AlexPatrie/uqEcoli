@@ -22,23 +22,18 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
   orthogonal decompositions.
 """
 
-import asyncio
 from pathlib import Path
 
 import typer
-from ecoli.experiments.ecoli_master_sim import EcoliSim
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from uq import XSpaceVecoli
-from uq.common import get_repo_root
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import pipeline
 from uq.pipeline import PipelineResult
-from uq.pipeline.workflow import execute_pipeline
 
 app = typer.Typer()
 console = Console()
@@ -79,12 +74,6 @@ def show(self):
     console.print(panel)
 
 
-def f_vecoli():
-    sim = EcoliSim.from_file((get_repo_root() / "configs" / "vecoli" / "single_cell.json").__str__())
-    sim.build_ecoli()
-    return sim.run()
-
-
 @app.command()
 def uq(
     experiment_ids: str,
@@ -93,28 +82,29 @@ def uq(
     lb_time: float | None = 100.0,
     n_bins: int = 10,
     pce_polynomial_order: int = 3,
-    n_samples: int = 200,
+    n_samples: int = 20,
     expected_cycle_time: float = 3600.0,
-    pce_n_trajectories: int = 20,
+    pce_n_trajectories: int = 10,
     pce_n_selected_params: int = 5,
     export_path: str | None = None,
 ) -> None:
     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
-    results: PipelineResult = asyncio.run(
-        pipeline(
-            experiment_ids=experiment_ids,
-            sim_base_path=outdir_root,
-            simulation_func=f_vecoli,
-            prescreen_config=param_prescreen_config,
-            lb_time=lb_time,
-            lb_generation=lb_generation,
-            n_bins=n_bins,
-            polynomial_order=pce_polynomial_order,
-            n_samples=n_samples,
-            expected_cycle_time=expected_cycle_time,
-            export_path=Path(export_path) if export_path else None,
-        )
+    result: PipelineResult = pipeline(
+        experiment_ids=experiment_ids,
+        sim_base_path=outdir_root,
+        prescreen_config=param_prescreen_config,
+        lb_time=lb_time,
+        lb_generation=lb_generation,
+        n_bins=n_bins,
+        polynomial_order=pce_polynomial_order,
+        n_samples=n_samples,
+        expected_cycle_time=expected_cycle_time,
+        export_path=Path(export_path) if export_path else None,
     )
+    if export_path:
+        console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
+    else:
+        console.print("[bold green]Pipeline complete.[/bold green]")
 
 
 @app.command()
@@ -149,181 +139,6 @@ def readme(rfc_id: str = "RFC006") -> None:
   │  df = load_dataset(experiment_id, hpc_sim_base_path)                                │
   │  → Polars DataFrame from hive-partitioned Parquet                                   │
   └─────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  STEP 3: Aggregation Strategies 1-3  (PARALLEL)                                     │
-  │                                                                                     │
-  │  aggregator = Aggregator(conn, history_sql, config_sql)                             │
-  │                                                                                     │
-  │  ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐                │
-  │  │ Strategy 1        │  │ Strategy 2        │  │ Strategy 3        │                │
-  │  │ UNIFORM           │  │ BY_GENERATION     │  │ BY_LINEAGE_SEED   │                │
-  │  │                   │  │                   │  │                   │                │
-  │  │ mean, std across  │  │ per-gen stats     │  │ per-seed stats    │                │
-  │  │ ALL cells/times   │  │ (convergence)     │  │ (exogenous var.)  │                │
-  │  └────────┬──────────┘  └────────┬──────────┘  └────────┬──────────┘                │
-  │           │                      │                      │                           │
-  │           └──────────────────────┼──────────────────────┘                           │
-  │                                  ▼                                                  │
-  │                     3 × AggregatedOutput                                            │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  STEP 4: Variance Decomposition                                                     │
-  │                                                                                     │
-  │  decomp = compute_variance_decomposition(agg_uniform, agg_by_gen, agg_by_seed)      │
-  │                                                                                     │
-  │  → Per observable:                                                                  │
-  │      generation_fraction   (convergence-related variance)                           │
-  │      seed_fraction         (stochastic/exogenous variance)                          │
-  │      residual_fraction     (cell-cycle-related variance)  ◄── KEY OUTPUT            │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          │
-                   ┌──────────────────────┴──────────────────────┐
-                   │                                             │
-      ═════════════╪═════════════════════════════════╪═══════════════════════════════
-      ║  PHASE 1   ▼  (Strategies 1-3 GSA)          ║  PHASE 2   ▼  (Strategy 4)  ║
-      ║            │                                 ║            │                ║
-      ║            │                                 ║            │                ║
-      ║            ▼                                 ║            ▼                ║
-      ║  ┌──────────────────────┐                    ║  ┌──────────────────────┐   ║
-      ║  │ STEP 5a:             │                    ║  │ STEP 5b:             │   ║
-      ║  │ Morris Prescreening  │                    ║  │ GSA-Informed         │   ║
-      ║  │                      │                    ║  │ Observable Selection │   ║
-      ║  │ prescreen_parameters(│                    ║  │                      │   ║
-      ║  │   param_space, f)    │                    ║  │ identify_cell_cycle_ │   ║
-      ║  │                      │                    ║  │ relevant_observables(│   ║
-      ║  │ n params → K params  │                    ║  │   decomp)            │   ║
-      ║  │ (K << n)             │                    ║  │                      │   ║
-      ║  │                      │                    ║  │ Filter by high       │   ║
-      ║  │ → selected: list[    │                    ║  │ residual_fraction    │   ║
-      ║  │     Parameter]       │                    ║  │                      │   ║
-      ║  │ → MorrisIndices      │                    ║  │ → relevant_obs:      │   ║
-      ║  │                      │                    ║  │   list[str]          │   ║
-      ║  └──────────┬───────────┘                    ║  └──────────┬───────────┘   ║
-      ║             │                                ║             │               ║
-      ║             ▼                                ║             ▼               ║
-      ║  ┌──────────────────────┐                    ║  ┌──────────────────────┐   ║
-      ║  │ STEP 6a:             │                    ║  │ STEP 6b:             │   ║
-      ║  │ PCE Surrogate        │                    ║  │ Koopman DMD          │   ║
-      ║  │ (Strategies 1-3)     │                    ║  │                      │   ║
-      ║  │                      │                    ║  │ KoopmanCellCycle     │   ║
-      ║  │ generate_surrogate(  │                    ║  │ Variable(            │   ║
-      ║  │   param_space,       │                    ║  │   observable_columns │   ║
-      ║  │   f,                 │                    ║  │   = relevant_obs     │   ║
-      ║  │   sample_size)       │                    ║  │ )                    │   ║
-      ║  │                      │                    ║  │                      │   ║
-      ║  │ Internally:          │                    ║  │ DMD/EDMD → find      │   ║
-      ║  │  X = create_samples()│                    ║  │ eigenvalue at ω_cc   │   ║
-      ║  │  Y = process_samples │                    ║  │ → extract φ_cc(x)    │   ║
-      ║  │       (X, f)         │                    ║  │ → θ(x) = arg(φ)/2π  │   ║
-      ║  │  fit_pce_coefficients│                    ║  │                      │   ║
-      ║  │       (X, Y, order)  │                    ║  │ → θ ∈ [0, 1]        │   ║
-      ║  │                      │                    ║  └──────────┬───────────┘   ║
-      ║  │ → PCESurrogate       │                    ║             │               ║
-      ║  │ → PCEFitResult       │                    ║             ▼               ║
-      ║  └──────────┬───────────┘                    ║  ┌──────────────────────┐   ║
-      ║             │                                ║  │ STEP 6c:             │   ║
-      ║             ▼                                ║  │ Strategy 4           │   ║
-      ║  ┌──────────────────────┐                    ║  │ Aggregation          │   ║
-      ║  │ STEP 7a:             │                    ║  │                      │   ║
-      ║  │ Sobol Indices        │                    ║  │ CellCycleAggregator  │   ║
-      ║  │ (from PCE)           │                    ║  │ Bin by θ → per-stage │   ║
-      ║  │                      │                    ║  │ mean, std            │   ║
-      ║  │ S_i, S_Ti from       │                    ║  │                      │   ║
-      ║  │ PCE coefficients     │                    ║  │ → stage_stats        │   ║
-      ║  │                      │                    ║  └──────────┬───────────┘   ║
-      ║  │ "Which parameters    │                    ║             │               ║
-      ║  │  drive bulk output   │                    ║             ▼               ║
-      ║  │  variance?"          │                    ║  ┌──────────────────────┐   ║
-      ║  │                      │                    ║  │ STEP 6d: ◄── MISSING │   ║
-      ║  │ → SobolIndices       │                    ║  │ Stage4 Wrapper       │   ║
-      ║  └──────────┬───────────┘                    ║  │                      │   ║
-      ║             │                                ║  │ f_stage4(params):    │   ║
-      ║             │                                ║  │   raw = f(params)    │   ║
-      ║             │                                ║  │   θ = koopman(raw)   │   ║
-      ║             │                                ║  │   bin by θ           │   ║
-      ║             │                                ║  │   return stage_means │   ║
-      ║             │                                ║  └──────────┬───────────┘   ║
-      ║             │                                ║             │               ║
-      ║             │                                ║             ▼               ║
-      ║             │                                ║  ┌──────────────────────┐   ║
-      ║             │                                ║  │ STEP 7b: ◄── MISSING │   ║
-      ║             │                                ║  │ PCE + Sobol on       │   ║
-      ║             │                                ║  │ Strategy 4 outputs   │   ║
-      ║             │                                ║  │                      │   ║
-      ║             │                                ║  │ generate_surrogate(  │   ║
-      ║             │                                ║  │   param_space,       │   ║
-      ║             │                                ║  │   f_stage4,          │   ║
-      ║             │                                ║  │   sample_size)       │   ║
-      ║             │                                ║  │                      │   ║
-      ║             │                                ║  │ "Which parameters    │   ║
-      ║             │                                ║  │  drive variation     │   ║
-      ║             │                                ║  │  WITHIN each cell    │   ║
-      ║             │                                ║  │  cycle stage?"       │   ║
-      ║             │                                ║  │                      │   ║
-      ║             │                                ║  │ → PCESurrogate       │   ║
-      ║             │                                ║  │ → SobolIndices       │   ║
-      ║             │                                ║  └──────────┬───────────┘   ║
-      ║             │                                ║             │               ║
-      ═════════════╪═════════════════════════════════╪═════════════╪═══════════════
-                   │                                              │
-                   └──────────────────┬───────────────────────────┘
-                                      │
-                                      ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  PIPELINE OUTPUTS                                                                   │
-  │                                                                                     │
-  │  From Phase 1 (Strategies 1-3):              From Phase 2 (Strategy 4):             │
-  │  ├─ AggregatedOutput × 3                     ├─ CellCycleResult (θ, stages)         │
-  │  ├─ variance decomposition (fractions)       ├─ per-stage statistics                │
-  │  ├─ MorrisIndices (parameter screening)      ├─ PCESurrogate (phenotypic) ◄ MISSING │
-  │  ├─ PCESurrogate (bulk)                      └─ SobolIndices (phenotypic) ◄ MISSING │
-  │  └─ SobolIndices (bulk)                                                             │
-  │                                                                                     │
-  │  ┌───────────────────────────────────────────────────────────────────────────┐       │
-  │  │ FEEDBACK LOOP (variance decomp → Phase 2):                               │       │
-  │  │                                                                           │       │
-  │  │  Step 4 residual_fraction ──► Step 5b observable selection ──► Step 6b   │       │
-  │  │                                                                           │       │
-  │  │  "Strategies 1-3 tell you WHICH observables to give to Koopman"          │       │
-  │  └───────────────────────────────────────────────────────────────────────────┘       │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-
-  Key points:
-
-  - Steps 1-4 are sequential and shared by both phases
-  - Phase 1 (left) and Phase 2 (right) run in parallel after Step 4 — they're independent analyses on the same data
-  - The feedback loop is Step 4 → Step 5b: variance decomposition residuals select observables for Koopman
-  - Steps 6d and 7b are the two missing pieces — the wrapper and the Strategy 4 PCE/Sobol
-  - Phase 1 answers "which parameters drive bulk output variance?"
-  - Phase 2 answers "which parameters drive variation within each cell-cycle stage?" — this is the "phenotypic sensitivity analysis"
-  RFC006 §3 describes
-
-Phase 1 asks: "Across all cells, all times, all generations — which parameters drive the most variance in bulk output?" This
-collapses time. It's not a "static version" of Phase 2 — it's measuring different variance. Specifically, Phase 1's three strategies
-decompose variance into generation effects (convergence), seed effects (exogenous stochasticity), and residual (everything else,
-including cell cycle).
-
-Phase 2 asks: "Within a single cell cycle stage — say, during DNA replication specifically — which parameters drive variance?" This
-doesn't add temporal resolution to Phase 1's answer. It's asking about a different slice of the data that Phase 1 couldn't access at
-all, because Phase 1 had no notion of "where in the cell cycle are we."
-
-A concrete example of why they're not static-vs-temporal versions of each other:
-
-  - Phase 1 might say: "vio_expression explains 40% of total mass variance"
-  - Phase 2 might say: "vio_expression explains 5% of mass variance during B-period, but 85% during D-period"
-
-  Phase 1's "40%" is not the time-average of Phase 2's stage-specific numbers. It's computed from a differently aggregated dataset (all
-   cells pooled uniformly vs. binned by θ). The populations being analyzed are literally different subsets organized differently.
-
-The mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-(phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-orthogonal decompositions.
 """
     )
     print(txt)
