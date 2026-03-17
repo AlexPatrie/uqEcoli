@@ -72,28 +72,29 @@ import json
 from pathlib import Path
 import polars
 
-from uq.pipeline.workflow import load_timeseries
 from uq.outputs import OutputExtractor, OutputType
 from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
-# Extract via DuckDB
+# Load timeseries once — single source of truth
 conn = create_duckdb_conn()
 history_sql, config_sql, _ = dataset_sql('${params.sim_base_path}', ['${params.experiment_id}'])
 extractor = OutputExtractor(conn, history_sql, config_sql)
+
+ts = extractor.load_timeseries(
+    generation_lower_bound=${params.generation_lower_bound},
+    time_lower_bound=${params.time_lower_bound},
+)
+ts.write_parquet('timeseries.parquet')
+
+# Extract typed outputs from the already-loaded timeseries (no re-query)
 output_type_names = '${params.output_types}'.split(',')
 extract_types = [OutputType(t.strip()) for t in output_type_names]
 outputs = extractor.extract_all(
     output_types=extract_types,
     generation_lower_bound=${params.generation_lower_bound},
     time_lower_bound=${params.time_lower_bound},
+    timeseries=ts,
 )
-
-# Load timeseries with metadata
-ts = load_timeseries(
-    experiment_id='${params.experiment_id}',
-    outdir_root=Path('${params.sim_base_path}'),
-)
-ts.write_parquet('timeseries.parquet')
 
 # Resolve observable columns
 obs_cols = list(outputs.higher_order_properties.keys())

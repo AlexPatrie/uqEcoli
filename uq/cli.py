@@ -58,7 +58,7 @@ def show(self):
     table.add_column("VALUE", style="bright_white")
     table.add_column("TYPE", style="dim cyan")
 
-    for name, val in self.values.items():
+    for name, val in self.parameters.items():
         table.add_row(name, str(val), type(val).__name__)
 
     panel = Panel(

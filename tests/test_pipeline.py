@@ -395,7 +395,7 @@ class TestComputeStrategy4Sobol:
 class TestExecutePipeline:
     @pytest.fixture
     def _mock_phases(self, input_parameter_space, synthetic_simulation_dataframe):
-        """Patch run_phase1, run_phase2, and data loading to avoid PyTUQ/DuckDB calls."""
+        """Patch run_phase1, run_phase2, ParameterDataset, and data loading to avoid PyTUQ/DuckDB calls."""
         n_params = input_parameter_space.n_parameters
         param_names = input_parameter_space.parameter_names
 
@@ -411,14 +411,19 @@ class TestExecutePipeline:
         mock_outputs.higher_order_properties = {col: np.random.rand(100) for col in OBSERVABLE_COLUMNS}
         mock_extractor = MagicMock()
         mock_extractor.extract_all.return_value = mock_outputs
+        mock_extractor.load_timeseries.return_value = synthetic_simulation_dataframe
+
+        # Mock ParameterDataset so execute_pipeline can build param_space from sim_data_path
+        mock_param_dataset = MagicMock()
+        mock_param_dataset.to_parameter_space.return_value = input_parameter_space
 
         with (
             patch("uq.pipeline.workflow.run_phase1", return_value=(mock_sobol_bulk, mock_surrogate_bulk, None)),
             patch("uq.pipeline.workflow.run_phase2", return_value=(mock_cc_sobols, mock_surrogate_cc, None)),
-            patch("uq.pipeline.workflow.load_timeseries", return_value=synthetic_simulation_dataframe),
             patch("ecoli.library.parquet_emitter.create_duckdb_conn", return_value=MagicMock()),
             patch("ecoli.library.parquet_emitter.dataset_sql", return_value=("hist", "conf", "succ")),
             patch("uq.outputs.OutputExtractor", return_value=mock_extractor),
+            patch("uq.pipeline.param_loader.ParameterDataset", return_value=mock_param_dataset),
         ):
             yield {
                 "n_bins": n_bins,
@@ -431,14 +436,13 @@ class TestExecutePipeline:
     def test_returns_pipeline_result(
         self,
         _mock_phases,
-        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
-            param_space=input_parameter_space,
+            sim_data_path="/tmp/sim_data/simData.cPickle",
             simulation_func=MagicMock(),
-            experiment_id="test_experiment",
+            experiment_ids="test_experiment",
             sim_base_path="/tmp/sims",
             observable_columns=OBSERVABLE_COLUMNS,
             n_bins=5,
@@ -453,14 +457,13 @@ class TestExecutePipeline:
     def test_population_profile(
         self,
         _mock_phases,
-        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
-            param_space=input_parameter_space,
+            sim_data_path="/tmp/sim_data/simData.cPickle",
             simulation_func=MagicMock(),
-            experiment_id="test_experiment",
+            experiment_ids="test_experiment",
             sim_base_path="/tmp/sims",
             observable_columns=OBSERVABLE_COLUMNS,
         )
@@ -471,14 +474,13 @@ class TestExecutePipeline:
     def test_cell_cycle_profile(
         self,
         _mock_phases,
-        input_parameter_space,
     ):
         from uq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
-            param_space=input_parameter_space,
+            sim_data_path="/tmp/sim_data/simData.cPickle",
             simulation_func=MagicMock(),
-            experiment_id="test_experiment",
+            experiment_ids="test_experiment",
             sim_base_path="/tmp/sims",
             observable_columns=OBSERVABLE_COLUMNS,
         )

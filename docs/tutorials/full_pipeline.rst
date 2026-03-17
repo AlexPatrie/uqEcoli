@@ -112,10 +112,14 @@ Step 2: Load Simulation Data
 
 .. code-block:: python
 
-   from uq.pipeline.workflow import load_timeseries
+   from uq.outputs import OutputExtractor
+   from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
    # Real data:
-   # timeseries = load_timeseries("api_simulation_default", "/path/to/sims")
+   # conn = create_duckdb_conn()
+   # history_sql, config_sql, _ = dataset_sql("/path/to/sims", ["api_simulation_default"])
+   # extractor = OutputExtractor(conn, history_sql, config_sql)
+   # timeseries = extractor.load_timeseries()
 
    # Synthetic data:
    from uq.synthetic import generate_synthetic_simulation_data

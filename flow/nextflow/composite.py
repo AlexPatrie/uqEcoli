@@ -154,11 +154,19 @@ def build_state(
 
     if use_step:
         # Step variant — fires once when inputs are satisfied
-        step_input_wires = {k: [k] for k in [
-            "experiment_id", "sim_base_path", "output_dir",
-            "include_vio", "include_mecillinam",
-            "polynomial_order", "n_samples", "n_bins",
-        ]}
+        step_input_wires = {
+            k: [k]
+            for k in [
+                "experiment_id",
+                "sim_base_path",
+                "output_dir",
+                "include_vio",
+                "include_mecillinam",
+                "polynomial_order",
+                "n_samples",
+                "n_bins",
+            ]
+        }
         step_output_wires = {
             "pipeline_result": ["pipeline_result"],
             "return_code": ["return_code"],

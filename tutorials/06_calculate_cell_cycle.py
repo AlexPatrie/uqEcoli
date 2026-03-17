@@ -261,14 +261,14 @@ def _(cc_result, koopman_cc, mo):
     mo.md(f"""
     ### Cell Cycle Variable Computed
 
-    **Output:** `cc_result.values` - numpy array of shape ({len(cc_result.values)},)
+    **Output:** `cc_result.values` - numpy array of shape ({len(cc_result.parameters)},)
 
     | Statistic | Value |
     |-----------|-------|
-    | Min | {cc_result.values.min():.4f} |
-    | Max | {cc_result.values.max():.4f} |
-    | Mean | {cc_result.values.mean():.4f} |
-    | Std | {cc_result.values.std():.4f} |
+    | Min | {cc_result.parameters.min():.4f} |
+    | Max | {cc_result.parameters.max():.4f} |
+    | Mean | {cc_result.parameters.mean():.4f} |
+    | Std | {cc_result.parameters.std():.4f} |
 
     **Method:** `{cc_result.metadata.get("method", "unknown")}`
 
@@ -280,7 +280,7 @@ def _(cc_result, koopman_cc, mo):
 @app.cell
 def _(alt, cc_result, mo, pl, t):
     # Visualize the cell cycle variable
-    theta = cc_result.values
+    theta = cc_result.parameters
 
     cc_df = pl.DataFrame({
         "time": t,
@@ -329,7 +329,7 @@ def _(hlines, theta_chart):
 @app.cell
 def _(alt, cc_result, mo, pl):
     # Histogram of cell cycle variable
-    theta_hist_df = pl.DataFrame({"theta": cc_result.values})
+    theta_hist_df = pl.DataFrame({"theta": cc_result.parameters})
 
     theta_hist = (
         alt.Chart(theta_hist_df)
@@ -375,7 +375,7 @@ def _(alt, cc_result, mo, pl):
 
     stage_df = pl.DataFrame({
         "stage": stage_bins,
-        "theta": cc_result.values,
+        "theta": cc_result.parameters,
     })
 
     # Count per stage

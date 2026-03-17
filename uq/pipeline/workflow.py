@@ -79,12 +79,11 @@ from uq import (
     XSpaceVecoli,
     compute_variance_decomposition,
     identify_cell_cycle_relevant_observables,
-    inputs,
 )
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
-from uq.inputs import XSpaceInterface
+from uq.inputs import XSpace, XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
 from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
@@ -117,19 +116,6 @@ def define_parameter_space(
         vio_trl_eff_bounds=vio_trl_eff_bounds,
         mecillinam_conc_bounds=mecillinam_conc_bounds,
     )
-
-
-# === Step 2: Load Data === #
-
-
-def load_timeseries(
-    experiment_id: str,
-    outdir_root: Path,
-    observables: list[str] | None = None,
-    include_metadata: bool = True,
-) -> polars.DataFrame:
-    """Step 2: Load simulation timeseries data from hive-partitioned Parquet."""
-    return inputs.load_dataset(experiment_id, outdir_root, observables, include_metadata)
 
 
 # === Step 3: Aggregate Timeseries === #
@@ -377,7 +363,7 @@ def _split_multi_output_sobol(sobol: SobolIndices) -> list[SobolIndices]:
 
 
 def run_phase1(
-    param_space: XSpaceInterface,
+    param_space: XSpace,
     simulation_func: Callable,
     polynomial_order: int = 3,
     n_samples: int = 200,
@@ -439,7 +425,7 @@ def run_phase1(
 
 
 def run_phase2(
-    param_space: XSpaceInterface,
+    param_space: XSpace,
     simulation_func: Callable,
     agg_result: AggregationResult,
     observable_names: list[str],
@@ -527,12 +513,24 @@ def run_phase2(
 
 
 # === Pipeline Orchestration === #
+"""
+. Observable Selection (uq/sensitivity.py:858-928)
+
+  identify_cell_cycle_relevant_observables currently ranks observables by residual variance fraction
+  (greedy threshold). This is a natural graph partitioning problem:
+
+  - Nodes = observables (e.g., mRNA counts, protein counts, fluxes)
+  - Edges = co-variance or mutual information between observable pairs
+  - Max-cut partitions into "cell-cycle-relevant" vs "non-relevant" sets, maximizing the total
+  dissimilarity (edge weight) across the cut — ensuring the two groups are maximally distinct in their
+  variance structure
+"""
 
 
 def execute_pipeline(
-    param_space: XSpaceInterface,
+    sim_data_path: str | Path | list[str | Path],
     simulation_func: Callable,
-    experiment_id: str,
+    experiment_ids: str | list[str],
     sim_base_path: str | Path,
     observable_columns: list[str] | None = None,
     output_types: list[str] | None = None,
@@ -548,19 +546,23 @@ def execute_pipeline(
     """
     Execute the full RFC006 UQ pipeline.
 
-    Steps 1-2 load simulation data via DuckDB from hive-partitioned Parquet.
-    Steps 3-4 aggregate and decompose variance. Then Phase 1
-    (population-level GSA) and Phase 2 (cell-cycle GSA) run.
+    Step 1 builds the input parameter space Ξ programmatically from
+    ``SimulationDataEcoli`` pickle(s).  Steps 2-4 load simulation
+    timeseries via DuckDB, aggregate, and decompose variance.  Then
+    Phase 1 (population-level GSA) and Phase 2 (cell-cycle GSA) run.
 
     All intermediate outputs specified by RFC006 are captured in the
-    returned PipelineResult: aggregation results, variance decomposition,
-    Morris indices, cell cycle relevance, Sobol indices, and PCE surrogates.
+    returned PipelineResult.
 
     Args:
-        param_space: Input parameter space Ξ (step 1).
+        sim_data_path: Path(s) to ``simData.cPickle`` file(s).  A single
+            path produces an ``XSpaceVecoli`` for one condition; a list
+            merges parameters from multiple conditions (e.g. violacein +
+            mecillinam).
         simulation_func: Callable with evaluate_batch(X) → Y.
-        experiment_id: Experiment identifier for data loading (e.g.,
-            "mecillinam"). Passed to ``dataset_sql``.
+        experiment_ids: Experiment identifier(s) for data loading (e.g.,
+            ``"mecillinam"`` or ``["mecillinam", "violacein"]``).
+            Passed to ``dataset_sql``.
         sim_base_path: Root directory containing simulation outputs
             (e.g., ``/path/to/vEcoli/api_integration/sims``).
         observable_columns: Column names of observables to aggregate/analyze.
@@ -586,13 +588,36 @@ def execute_pipeline(
     from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
     from uq.outputs import OutputExtractor, OutputType
+    from uq.pipeline.param_loader import ParameterDataset
 
-    # --- Steps 1-2: Load simulation data via DuckDB + OutputExtractor ---
+    # --- Step 1: Build parameter space from sim_data ---
+    if isinstance(sim_data_path, (str, Path)):
+        datasets = [ParameterDataset(sim_data_path=sim_data_path)]
+    else:
+        datasets = [ParameterDataset(sim_data_path=p) for p in sim_data_path]
+
+    if len(datasets) == 1:
+        param_space = datasets[0].to_parameter_space()
+    else:
+        param_space = ParameterDataset.merge_to_parameter_space(*datasets)
+
+    # Normalize experiment_ids to list
+    if isinstance(experiment_ids, str):
+        experiment_ids = [experiment_ids]
+
+    # --- Step 2: Load simulation data via DuckDB + OutputExtractor ---
     conn = create_duckdb_conn()
-    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), [experiment_id])
+    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), experiment_ids)
     extractor = OutputExtractor(conn, history_sql, config_sql)
 
-    # Determine which output types to extract
+    # Load timeseries once — the single source of truth for all data.
+    timeseries = extractor.load_timeseries(
+        columns=observable_columns,
+        generation_lower_bound=generation_lower_bound,
+        time_lower_bound=time_lower_bound,
+    )
+
+    # Extract typed outputs from the already-loaded timeseries (no re-query).
     if output_types is not None:
         extract_types = [OutputType(t) for t in output_types]
     else:
@@ -602,14 +627,7 @@ def execute_pipeline(
         output_types=extract_types,
         generation_lower_bound=generation_lower_bound,
         time_lower_bound=time_lower_bound,
-    )
-
-    # Also load the full timeseries DataFrame (with metadata columns for
-    # aggregation strategies 2-3 which need 'generation' and 'lineage_seed')
-    timeseries = load_timeseries(
-        experiment_id=experiment_id,
-        outdir_root=Path(sim_base_path),
-        observables=observable_columns,
+        timeseries=timeseries,
     )
 
     # Resolve observable columns from extracted outputs if not specified
@@ -672,9 +690,9 @@ def execute_pipeline(
 
 
 async def execute_pipeline_async(
-    param_space: XSpaceInterface,
+    sim_data_path: str | Path | list[str | Path],
     simulation_func: Callable,
-    experiment_id: str,
+    experiment_ids: str | list[str],
     sim_base_path: str | Path,
     observable_columns: list[str] | None = None,
     output_types: list[str] | None = None,
@@ -694,9 +712,9 @@ async def execute_pipeline_async(
     the two independent phases in parallel after the shared steps 1-4.
 
     Args:
-        param_space: Input parameter space Ξ (step 1).
+        sim_data_path: Path(s) to ``simData.cPickle`` file(s).
         simulation_func: Callable with evaluate_batch(X) → Y.
-        experiment_id: Experiment identifier for data loading.
+        experiment_ids: Experiment identifier(s) for data loading.
         sim_base_path: Root directory containing simulation outputs.
         observable_columns: Column names of observables to aggregate/analyze.
         output_types: List of OutputType values to extract.
@@ -715,11 +733,33 @@ async def execute_pipeline_async(
     from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
     from uq.outputs import OutputExtractor, OutputType
+    from uq.pipeline.param_loader import ParameterDataset
 
-    # --- Steps 1-2: Load simulation data via DuckDB + OutputExtractor ---
+    # --- Step 1: Build parameter space from sim_data ---
+    if isinstance(sim_data_path, (str, Path)):
+        datasets = [ParameterDataset(sim_data_path=sim_data_path)]
+    else:
+        datasets = [ParameterDataset(sim_data_path=p) for p in sim_data_path]
+
+    if len(datasets) == 1:
+        param_space = datasets[0].to_parameter_space()
+    else:
+        param_space = ParameterDataset.merge_to_parameter_space(*datasets)
+
+    if isinstance(experiment_ids, str):
+        experiment_ids = [experiment_ids]
+
+    # --- Step 2: Load simulation data via DuckDB + OutputExtractor ---
     conn = create_duckdb_conn()
-    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), [experiment_id])
+    history_sql, config_sql, _ = dataset_sql(str(sim_base_path), experiment_ids)
     extractor = OutputExtractor(conn, history_sql, config_sql)
+
+    # Load timeseries once, then derive typed outputs from it.
+    timeseries = extractor.load_timeseries(
+        columns=observable_columns,
+        generation_lower_bound=generation_lower_bound,
+        time_lower_bound=time_lower_bound,
+    )
 
     if output_types is not None:
         extract_types = [OutputType(t) for t in output_types]
@@ -730,12 +770,7 @@ async def execute_pipeline_async(
         output_types=extract_types,
         generation_lower_bound=generation_lower_bound,
         time_lower_bound=time_lower_bound,
-    )
-
-    timeseries = load_timeseries(
-        experiment_id=experiment_id,
-        outdir_root=Path(sim_base_path),
-        observables=observable_columns,
+        timeseries=timeseries,
     )
 
     if observable_columns is None:

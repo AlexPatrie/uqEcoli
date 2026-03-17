@@ -241,7 +241,7 @@ def _(MassBasedCellCycleVariable, alt, cell_data, cell_df, mo):
 
     # Add CC variable to dataframe
     cell_df_with_cc = cell_df.copy()
-    cell_df_with_cc["cc_variable"] = cc_result.values
+    cell_df_with_cc["cc_variable"] = cc_result.parameters
 
     # Histogram of cell cycle variable
     cc_hist = (
@@ -263,8 +263,8 @@ def _(MassBasedCellCycleVariable, alt, cell_data, cell_df, mo):
 
     **Formula:** `θ = (log(M) - log(M_birth)) / (log(M_div) - log(M_birth))`
 
-    - **Range:** [{cc_result.values.min():.3f}, {cc_result.values.max():.3f}]
-    - **Mean:** {cc_result.values.mean():.3f}
+    - **Range:** [{cc_result.parameters.min():.3f}, {cc_result.parameters.max():.3f}]
+    - **Mean:** {cc_result.parameters.mean():.3f}
 
     The histogram shows how the cell cycle variable distributes across phases.
     Values near 0 = early in cycle, values near 1 = late in cycle.
@@ -334,8 +334,8 @@ def _(KoopmanCellCycleVariable, cell_data, mo):
     mo.md(f"""
     ### Koopman Cell Cycle Variable Results
 
-    - **Range:** [{koopman_result.values.min():.3f}, {koopman_result.values.max():.3f}]
-    - **Mean:** {koopman_result.values.mean():.3f}
+    - **Range:** [{koopman_result.parameters.min():.3f}, {koopman_result.parameters.max():.3f}]
+    - **Mean:** {koopman_result.parameters.mean():.3f}
     - **Method:** {koopman_result.metadata.get("method", "unknown")}
     {mode_info}
     The Koopman approach automatically detected the periodic cell cycle dynamics
@@ -352,8 +352,8 @@ def _(MassBasedCellCycleVariable, alt, cell_data, cell_df, koopman_result, mo):
 
     # Add both CC variables to dataframe
     cell_df_koopman = cell_df.copy()
-    cell_df_koopman["mass_cc"] = _mass_result.values
-    cell_df_koopman["koopman_cc"] = koopman_result.values
+    cell_df_koopman["mass_cc"] = _mass_result.parameters
+    cell_df_koopman["koopman_cc"] = koopman_result.parameters
 
     # Compare mass-based vs Koopman cell cycle variables
     comparison_base = (

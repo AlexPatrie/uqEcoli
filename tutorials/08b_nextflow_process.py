@@ -92,7 +92,7 @@ def _(mo):
 
     # Extract just the workflow block
     _wf_idx = _src.find("workflow {")
-    _proc_section = _src[_src.find("process GENERATE_DATA"):_wf_idx].strip()
+    _proc_section = _src[_src.find("process GENERATE_DATA") : _wf_idx].strip()
     _wf_block = _src[_wf_idx:].strip()
 
     mo.md(f"""
@@ -335,10 +335,10 @@ def _(composite, mo):
     6. process-bigraph merged the delta into composite state
 
     The result tells us:
-    - **Greeting:** `{_result.get('greeting', '?')}`
-    - **Count:** `{_result.get('count', '?')}` random numbers generated
-    - **Mean:** `{_result.get('statistics', {}).get('mean', '?')}`
-    - **Std:** `{_result.get('statistics', {}).get('std', '?')}`
+    - **Greeting:** `{_result.get("greeting", "?")}`
+    - **Count:** `{_result.get("count", "?")}` random numbers generated
+    - **Mean:** `{_result.get("statistics", {}).get("mean", "?")}`
+    - **Std:** `{_result.get("statistics", {}).get("std", "?")}`
     """)
 
     return

@@ -173,7 +173,7 @@ def plot_koopman_spectrum(
     # Mark expected cell cycle frequency and harmonics
     for harmonic in range(1, 5):
         f_h = harmonic * expected_freq
-        label = f"f₀" if harmonic == 1 else f"{harmonic}f₀"
+        label = "f₀" if harmonic == 1 else f"{harmonic}f₀"
         fig.add_vline(
             x=f_h,
             line=dict(color="crimson", dash="dot", width=1.5),

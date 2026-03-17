@@ -118,7 +118,6 @@ def _(mo):
 def _(mo):
     from flow.nextflow.processes import NextflowUQProcess, NextflowRunStep
 
-
     def _format_ports(ports: dict) -> str:
         """Format port dict for display."""
         _lines = []
@@ -126,7 +125,6 @@ def _(mo):
             _lines.append(f"    '{_name}': '{_type}'")
         return "{\n" + ",\n".join(_lines) + "\n}"
 
-    
     # Show port declarations
     _core_for_inspection = __import__("flow").get_core()
     _proc = NextflowUQProcess(config={}, core=_core_for_inspection)
@@ -501,6 +499,7 @@ def _(mo):
     _nf_file = _Path(__file__).resolve().parent.parent / "flow" / "workflows" / "nextflow" / "uq_pipeline.nf"
     if not _nf_file.exists():
         from flow.nextflow.processes import _WORKFLOW_FILE
+
         _nf_file = _WORKFLOW_FILE
     try:
         _nf_source = _nf_file.read_text()

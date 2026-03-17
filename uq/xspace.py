@@ -11,8 +11,8 @@ These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libra
 
 import abc
 import pprint
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass, field, asdict
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, override
 
@@ -25,13 +25,63 @@ from rich.table import Table
 from rich.text import Text
 
 from uq.pce.models import Parameter
-from uq.pipeline.models import UQInputParameters, UQInputParametersVecoli
+from uq.pipeline.models import UQInputParametersVecoli, UQInputParameters, BaseClass
 
 if TYPE_CHECKING:
     pass
 
 
 console = Console()
+
+
+class ParameterType(StrEnum):
+    CONTINUOUS = "continuous"
+    DISCRETE = "discrete"
+    CATEGORIAL = "categorial"
+
+
+@dataclass
+class Param(BaseClass):
+    """
+    Input parameter for UQ pipeline extracted from sim_data.
+
+    Attributes:
+        name: str
+        bounds: tuple[float, float] (low, high)
+        granularity_step: float - granularity of control allowed for ui element
+            range control (knob, slider, etc). TODO: move this.
+        description: str
+    """
+
+    name: str
+    type: ParameterType
+    bounds: tuple[float, float] | tuple[complex, complex] | None = None
+    default: float | int | complex | None = None
+    value: float | int | complex | None = None
+    granularity_step: float = 0.25
+    description: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.bounds is None:
+            self.bounds = [-1.0, 1.0]
+        if self.value is None:
+            if self.default is None:
+                self.default = self.bounds[1] - self.bounds[0]
+            self.set(self.default)
+
+    @property
+    def dtype(self):
+        return type(self.value)
+
+    def set(self, value: float | int | complex):
+        self.value = value
+
+    def model_dump(self):
+        d = asdict(self)
+        bounds = tuple(self.bounds)
+        d["bounds"] = bounds
+        d["dtype"] = self.dtype.name
+        return d
 
 
 class XSpaceInterface(abc.ABC):
@@ -41,6 +91,10 @@ class XSpaceInterface(abc.ABC):
         - params_to_sample() -> np.ndarray[ParameterValue]: Convert domain-specific input space-mapped UQInputParameters to an array of sample(perturbation) values
             when N sample values (sample size) == N perturbations.
     """
+
+    @abc.abstractmethod
+    def initialize(self, *args, **kwargs):
+        pass
 
     @abc.abstractmethod
     def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParameters:
@@ -71,6 +125,8 @@ class XSpaceInterface(abc.ABC):
 
 
 class XSpace(XSpaceInterface):
+    kwargs: dict[str, Any]
+    parameters: list[Param]
     parameter_names: list[str]
     parameter_bounds: list[tuple[float, float]]
     parameter_types: list[Literal["continuous", "discrete", "categorical"]]
@@ -89,23 +145,29 @@ class XSpace(XSpaceInterface):
 
     def __init__(
         self,
-        *args,
-        parameter_names: list[str] | None = None,
-        parameter_bounds: list[tuple[float, float]] | None = None,
-        parameter_types: list[Literal["continuous", "discrete", "categorical"]] | None = None,
+        parameters: list[Param] | None = None,
         experiment_id: str | None = None,
-        **kwargs,
+        **kwargs
     ) -> None:
-        self.parameter_names = parameter_names or []
-        self.parameter_bounds = parameter_bounds or []
-        self.parameter_types = parameter_types or []
+        self.kwargs = kwargs
+        self.parameters = parameters or []
         self.experiment_id = experiment_id
+        self.initialize(self.kwargs)
 
-        self.implementation_init(*args, **kwargs)
+    def initialize(self, kwargs):
+        pass
 
-    def implementation_init(self, *args, **kwargs) -> None:
-        # self.define_parameters()
-        return None
+    @property
+    def parameter_names(self) -> list[str]:
+        return [p.name for p in self.parameters]
+
+    @property
+    def parameter_bounds(self) -> list[str]:
+        return [p.bounds for p in self.parameters]
+
+    @property
+    def parameter_types(self) -> list[str]:
+        return [p.type for p in self.parameters]
 
     @property
     def n_parameters(self) -> int:
@@ -181,7 +243,7 @@ class XSpace(XSpaceInterface):
         return bounds[:, 0], bounds[:, 1]
 
     @property
-    def parameters(self) -> dict[str, dict[list[float], str]]:
+    def _parameters_dict(self) -> dict[str, dict[list[float], str]]:
         params = {}
         # TODO: enable ragged shape, for now symmetry required for construction
         if all(
@@ -198,7 +260,7 @@ class XSpace(XSpaceInterface):
 
     def __repr__(self) -> str:
         self.show()
-        return f"<ParameterSpace '{self.experiment_id}' n={self.n_parameters}>"
+        return f"<XSpace '{self.experiment_id}' n={self.n_parameters}>"
 
     def show(self):
         # Neon 90s header
@@ -206,7 +268,7 @@ class XSpace(XSpaceInterface):
         title.append("⚡ ", style="bold yellow")
         title.append("INPUT PARAMETER SPACE", style="bold magenta")
         title.append("  //  ", style="dim cyan")
-        title.append(self.experiment_id or "(no experiment)", style="bold cyan")
+        title.append(self.experiment_id, style="bold cyan")
 
         # Parameter table
         table = Table(
@@ -220,7 +282,7 @@ class XSpace(XSpaceInterface):
         table.add_column("VALUE", style="bright_white")
         table.add_column("TYPE", style="dim cyan")
 
-        for name, val in self.parameters.items():
+        for name, val in self._parameters_dict.items():
             table.add_row(name, str(val), type(val).__name__)
 
         panel = Panel(
@@ -256,11 +318,7 @@ class XSpaceVecoli(XSpace):
         parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
     """
 
-    parameter_names: list[str]
-    parameter_bounds: list[tuple[float, float]]
-    parameter_types: list[Literal["continuous", "discrete", "categorical"]]
-
-    def implementation_init(self, *args, **kwargs) -> None:
+    def initialize(self, kwargs) -> None:
         if kwargs.get("include_vio"):
             self.parameter_names.extend(["vio_expression", "vio_trl_eff"])
             self.parameter_bounds.extend([
@@ -277,21 +335,6 @@ class XSpaceVecoli(XSpace):
         self.knockout_genes = kwargs.get("knockout_genes", [])
         self._include_vio = kwargs.get("include_vio", False)
         self._include_mecillinam = kwargs.get("include_mecillinam", False)
-
-    @property
-    def n_parameters(self) -> int:
-        """Number of parameters in the space."""
-        return len(self.parameter_names)
-
-    @property
-    def bounds_array(self) -> np.ndarray:
-        """
-        Parameter bounds as numpy array for UQPy.
-
-        Returns:
-            Array of shape (n_parameters, 2) with [lower, upper] bounds
-        """
-        return np.array(self.parameter_bounds)
 
     @override
     def sample_to_params(
@@ -358,33 +401,6 @@ class XSpaceVecoli(XSpace):
             sample.append(conc)
 
         return np.array(sample)
-
-    def get_uqpy_distributions(self) -> list[Any]:
-        """
-        Get UQPy distribution objects for this parameter space.
-
-        Returns:
-            List of UQPy Distribution objects (Uniform distributions)
-        """
-        try:
-            from UQpy.distributions import Uniform
-        except ImportError:
-            raise ImportError("UQPy is required for sensitivity analysis. Install it with: pip install UQpy")
-
-        distributions = []
-        for lb, ub in self.parameter_bounds:
-            distributions.append(Uniform(loc=lb, scale=ub - lb))
-        return distributions
-
-    def get_pytuq_bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Get PyTUQ-compatible bounds arrays.
-
-        Returns:
-            Tuple of (lower_bounds, upper_bounds) arrays
-        """
-        bounds = self.bounds_array
-        return bounds[:, 0], bounds[:, 1]
 
 
 def _get_repo_root() -> Path:

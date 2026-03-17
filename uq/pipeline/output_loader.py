@@ -18,13 +18,14 @@ duplicate data-loading logic.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional, Literal
 
 import numpy as np
 import polars
 from duckdb import DuckDBPyConnection
-from ecoli.library.parquet_emitter import create_duckdb_conn
+from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
 if TYPE_CHECKING:
     from reconstruction.ecoli.simulation_data import (
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     )
 
 
-class OutputType(StrEnum):
+class OutputType(str, Enum):
     """Types of output variables that can be extracted."""
 
     TRANSCRIPTOME = "transcriptome"
@@ -93,12 +94,36 @@ def get_s3_uri():
     return ""
 
 
-class OutputExtractor:
+@dataclass
+class TimeseriesDataset:
+    data: polars.DataFrame
+    generation_lower_bound: int
+    time_lower_bound: int
+    variables: OutputVariables = field(init=False)
+    observables: list[str] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.variables = TimeseriesLoaderParquet.extract_variables(
+            timeseries=self.data,
+            generation_lower_bound=self.generation_lower_bound,
+            time_lower_bound=self.time_lower_bound
+        )
+        observable_columns = list(self.variables.higher_order_properties.keys())
+        if not observable_columns:
+            metadata_cols = {"experiment_id", "variant", "lineage_seed", "generation", "agent_id", "time"}
+            observable_columns = [c for c in self.data.columns if c not in metadata_cols]
+        self.observables = observable_columns
+
+
+class TimeseriesLoaderParquet:
     """
     Extracts output variables from simulation data stored in Parquet format.
 
     This class uses DuckDB to efficiently query and aggregate simulation outputs.
     """
+    conn: DuckDBPyConnection
+    history_sql: str
+    config_sql: str
 
     # Column names in Parquet files
     TRANSCRIPTOME_COL = "listeners__rna_counts__mRNA_cistron_counts"
@@ -116,12 +141,11 @@ class OutputExtractor:
 
     def __init__(
         self,
-        conn: DuckDBPyConnection,
-        history_sql: str,
-        config_sql: str,
+        sim_base_path: Path,
+        experiment_ids: list[str],
         sim_data: Optional["SimulationDataEcoli"] = None,
         bucket_uri: str | None = None,
-        storage_mode: Literal["fs", "s3"] = "fs",
+        storage_mode: Literal["fs", "s3"] = "fs"
     ):
         """
         Initialize the output extractor.
@@ -135,9 +159,12 @@ class OutputExtractor:
         store = ""
         if storage_mode == "s3":
             store = bucket_uri or get_s3_uri()
-        self.conn = conn or create_duckdb_conn(object_store=store)
+
+        history_sql, config_sql, _ = dataset_sql(str(sim_base_path), experiment_ids)
         self.history_sql = history_sql
         self.config_sql = config_sql
+        self.conn = create_duckdb_conn(object_store=store)
+
         self.sim_data = sim_data
 
     def extract_transcriptome(
@@ -393,9 +420,7 @@ class OutputExtractor:
             Tuple of (flux array for exchange reactions, exchange reaction IDs)
         """
         fluxes, rxn_ids = self.extract_metabolic_fluxes(
-            generation_lower_bound,
-            time_lower_bound,
-            timeseries=timeseries,
+            generation_lower_bound, time_lower_bound, timeseries=timeseries,
         )
 
         if fluxes.size == 0:
@@ -501,6 +526,19 @@ class OutputExtractor:
             "growth_rate": db_result["growth_rate"].to_numpy(),
         }
 
+    @classmethod
+    def extract_variables(
+            cls,
+            output_types: Optional[list[OutputType]] = None,
+            generation_lower_bound: Optional[int] = None,
+            time_lower_bound: Optional[float] = None,
+            timeseries: Optional[polars.DataFrame] = None,
+    ) -> OutputVariables:
+        return cls.extract_all(
+            output_types=output_types, generation_lower_bound=generation_lower_bound,
+            time_lower_bound=time_lower_bound, timeseries=timeseries
+        )
+
     def extract_all(
         self,
         output_types: Optional[list[OutputType]] = None,
@@ -530,45 +568,35 @@ class OutputExtractor:
 
         if OutputType.TRANSCRIPTOME in output_types:
             counts, ids = self.extract_transcriptome(
-                generation_lower_bound,
-                time_lower_bound,
-                timeseries=timeseries,
+                generation_lower_bound, time_lower_bound, timeseries=timeseries,
             )
             outputs.transcriptome = counts
             outputs.metadata["cistron_ids"] = ids
 
         if OutputType.PROTEOME in output_types:
             counts, ids = self.extract_proteome(
-                generation_lower_bound,
-                time_lower_bound,
-                timeseries=timeseries,
+                generation_lower_bound, time_lower_bound, timeseries=timeseries,
             )
             outputs.proteome = counts
             outputs.metadata["monomer_ids"] = ids
 
         if OutputType.METABOLIC_FLUXES in output_types:
             fluxes, ids = self.extract_metabolic_fluxes(
-                generation_lower_bound,
-                time_lower_bound,
-                timeseries=timeseries,
+                generation_lower_bound, time_lower_bound, timeseries=timeseries,
             )
             outputs.metabolic_fluxes = fluxes
             outputs.metadata["reaction_ids"] = ids
 
         if OutputType.EXCHANGE_FLUXES in output_types:
             fluxes, ids = self.extract_exchange_fluxes(
-                generation_lower_bound,
-                time_lower_bound,
-                timeseries=timeseries,
+                generation_lower_bound, time_lower_bound, timeseries=timeseries,
             )
             outputs.exchange_fluxes = fluxes
             outputs.metadata["exchange_reaction_ids"] = ids
 
         if OutputType.HIGHER_ORDER_PROPERTIES in output_types:
             outputs.higher_order_properties = self.extract_higher_order_properties(
-                generation_lower_bound,
-                time_lower_bound,
-                timeseries=timeseries,
+                generation_lower_bound, time_lower_bound, timeseries=timeseries,
             )
 
         return outputs
@@ -580,7 +608,7 @@ class OutputExtractor:
         columns: list[str] | None = None,
         generation_lower_bound: int | None = None,
         time_lower_bound: float | None = None,
-    ) -> polars.DataFrame:
+    ) -> TimeseriesDataset:
         """Load the full simulation timeseries as a Polars DataFrame.
 
         This is the **canonical** way to obtain the timeseries that feeds
@@ -722,3 +750,25 @@ def get_output_variable_info(
     }
 
     return info
+
+
+def load_timeseries(
+    sim_base_path: Path,
+    experiment_ids: list[str],
+    observables: list[str] | None = None,
+    lb_generation: int | None = None,
+    lb_time: float | None = None,
+    bucket_uri: str | None = None,
+    storage_mode: Literal["fs", "s3"] = "fs"
+) -> TimeseriesDataset:
+    loader = TimeseriesLoaderParquet(
+        sim_base_path=sim_base_path,
+        experiment_ids=experiment_ids,
+        bucket_uri=bucket_uri,
+        storage_mode=storage_mode
+    )
+    return loader.load_timeseries(
+        columns=observables,
+        generation_lower_bound=lb_generation,
+        time_lower_bound=lb_time,
+    )
