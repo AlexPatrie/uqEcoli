@@ -19,9 +19,14 @@ This provides a complementary view to PCE-based sensitivity analysis:
 - PCE: Static variance-based sensitivity indices
 - Koopman: Dynamic spectral decomposition revealing temporal structure
 
+The DMD and EDMD implementations delegate to PyDMD (https://pydmd.github.io/PyDMD/)
+for the core matrix decomposition, while preserving the domain-specific API
+(KoopmanSpectrum, KoopmanMode, CellCycleKoopmanAnalyzer) used throughout the
+UQ pipeline.
+
 Methods implemented:
-- Dynamic Mode Decomposition (DMD)
-- Extended DMD (EDMD) with dictionary functions
+- Dynamic Mode Decomposition (DMD) via PyDMD
+- Extended DMD (EDMD) with dictionary lifting + PyDMD backend
 - Spectral sensitivity analysis
 - Cell cycle mode identification
 """
@@ -32,7 +37,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
-from scipy import linalg
+from pydmd import DMD as _PyDMD
 
 if TYPE_CHECKING:
     from duckdb import DuckDBPyConnection
@@ -191,11 +196,15 @@ class DynamicModeDecomposition:
     The algorithm finds a best-fit linear operator A such that X' ≈ A @ X,
     where X and X' are time-shifted snapshot matrices.
 
+    This implementation delegates the core decomposition to PyDMD while
+    preserving the UQ-framework API (KoopmanSpectrum, KoopmanMode).
+
     References:
         - Schmid, P.J. (2010). "Dynamic mode decomposition of numerical and
           experimental data"
         - Kutz, J.N. et al. (2016). "Dynamic Mode Decomposition: Data-Driven
           Modeling of Complex Systems"
+        - Demo, Tezzele, Rozza (2018). "PyDMD: Python Dynamic Mode Decomposition"
     """
 
     def __init__(
@@ -216,13 +225,16 @@ class DynamicModeDecomposition:
         self.svd_threshold = svd_threshold
         self.dt = dt
 
-        # Results stored after fit
+        # PyDMD backend — svd_rank mapping:
+        #   our rank=None → svd_rank=0 (PyDMD optimal rank selection)
+        #   our rank=N    → svd_rank=N (fixed truncation)
+        svd_rank = 0 if rank is None else rank
+        self._pydmd = _PyDMD(svd_rank=svd_rank, exact=True)
+
+        # Results stored after fit (populated from PyDMD)
         self._eigenvalues: Optional[np.ndarray] = None
         self._eigenvectors: Optional[np.ndarray] = None
         self._amplitudes: Optional[np.ndarray] = None
-        self._U: Optional[np.ndarray] = None
-        self._S: Optional[np.ndarray] = None
-        self._Vh: Optional[np.ndarray] = None
 
     def fit(self, X: np.ndarray) -> "DynamicModeDecomposition":
         """
@@ -235,50 +247,13 @@ class DynamicModeDecomposition:
         Returns:
             self
         """
-        # Transpose to (n_observables, n_snapshots) for standard DMD formulation
-        X = X.T
+        # PyDMD expects (n_space, n_time) — snapshots as columns
+        self._pydmd.fit(X.T)
 
-        # Split into X and X' (time-shifted)
-        X1 = X[:, :-1]
-        X2 = X[:, 1:]
-
-        # SVD of X1
-        U, S, Vh = linalg.svd(X1, full_matrices=False)
-
-        # Determine rank
-        if self.rank is None:
-            rank = np.sum(self.svd_threshold * S[0] < S)
-        else:
-            rank = min(self.rank, len(S))
-
-        # Truncate
-        Ur = U[:, :rank]
-        Sr = S[:rank]
-        Vhr = Vh[:rank, :]
-
-        # Build reduced Koopman operator
-        # A_tilde = Ur.T @ X2 @ Vhr.T @ diag(1/Sr)
-        A_tilde = Ur.conj().T @ X2 @ Vhr.conj().T @ np.diag(1.0 / Sr)
-
-        # Eigendecomposition of A_tilde
-        eigenvalues, W = linalg.eig(A_tilde)
-
-        # Recover full eigenvectors (DMD modes)
-        # Phi = X2 @ Vhr.T @ diag(1/Sr) @ W
-        eigenvectors = X2 @ Vhr.conj().T @ np.diag(1.0 / Sr) @ W
-
-        # Compute amplitudes from initial condition
-        # x0 = sum_j amplitude_j * mode_j
-        # amplitudes = pinv(eigenvectors) @ x0
-        x0 = X1[:, 0]
-        amplitudes = linalg.lstsq(eigenvectors, x0)[0]
-
-        self._eigenvalues = eigenvalues
-        self._eigenvectors = eigenvectors
-        self._amplitudes = amplitudes
-        self._U = Ur
-        self._S = Sr
-        self._Vh = Vhr
+        self._eigenvalues = self._pydmd.eigs
+        # PyDMD modes: (n_space, rank) — columns are modes
+        self._eigenvectors = self._pydmd.modes
+        self._amplitudes = self._pydmd.amplitudes
 
         return self
 
@@ -307,9 +282,6 @@ class DynamicModeDecomposition:
         # Sort by amplitude
         modes.sort(key=lambda m: np.abs(m.amplitude), reverse=True)
 
-        # Compute reconstruction error
-        # ... (simplified for now)
-
         return KoopmanSpectrum(
             modes=modes,
             eigenvalues=self._eigenvalues,
@@ -325,7 +297,8 @@ class ExtendedDMD:
     Extended Dynamic Mode Decomposition (EDMD) with dictionary functions.
 
     EDMD lifts the observables into a higher-dimensional space using
-    dictionary functions, enabling better approximation of nonlinear
+    dictionary functions, then applies standard DMD (via PyDMD) to the
+    lifted data. This enables better approximation of nonlinear
     Koopman eigenfunctions.
 
     This is like adding "overtones" to capture nonlinear dynamics.
@@ -374,16 +347,13 @@ class ExtendedDMD:
             return X
 
         elif self.dictionary == KoopmanDictionary.POLYNOMIAL:
-            # Include polynomial terms up to given order
             lifted = [X]
             for order in range(2, self.dictionary_order + 1):
-                # Add all monomials of this order
                 for i in range(X.shape[1]):
                     lifted.append(X[:, i : i + 1] ** order)
             return np.hstack(lifted)
 
         elif self.dictionary == KoopmanDictionary.FOURIER:
-            # Add Fourier features
             lifted = [X]
             for k in range(1, self.dictionary_order + 1):
                 for i in range(X.shape[1]):
@@ -392,13 +362,10 @@ class ExtendedDMD:
             return np.hstack(lifted)
 
         elif self.dictionary == KoopmanDictionary.RBF:
-            # Radial basis functions centered at data points
-            # Use subset of points as centers
             n_centers = min(self.dictionary_order * X.shape[1], X.shape[0] // 2)
             idx = np.linspace(0, X.shape[0] - 1, n_centers, dtype=int)
             centers = X[idx]
 
-            # Compute RBF features
             lifted = [X]
             sigma = np.std(X) + 1e-6
             for center in centers:
@@ -424,12 +391,8 @@ class ExtendedDMD:
         Returns:
             self
         """
-        # Lift observables
         X_lifted = self._lift(X)
-
-        # Apply standard DMD to lifted data
         self._dmd.fit(X_lifted)
-
         return self
 
     def get_spectrum(self, observable_names: Optional[list[str]] = None) -> KoopmanSpectrum:

@@ -4517,6 +4517,7 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
+    { name = "ipykernel" },
     { name = "kaleido" },
     { name = "plotly" },
     { name = "polars" },
@@ -4562,6 +4563,7 @@ music = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.5.0" },
+    { name = "ipykernel", specifier = ">=7.2.0" },
     { name = "kaleido", specifier = ">=1.2.0" },
     { name = "plotly", specifier = ">=6.6.0" },
     { name = "polars", specifier = ">=1.39.0" },

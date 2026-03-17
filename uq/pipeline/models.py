@@ -549,7 +549,15 @@ class UQInputParametersVecoli(UQInputParameters):
         Convert to configuration dictionary for EcoliSim.
 
         Returns:
-            Dictionary that can be used to configure a simulation
+            Dictionary that can be used to configure a simulation.
+
+        Gene knockout handling:
+        - ``translation_knockouts`` are applied via the ``mecillinam_timeline``
+          variant, which sets ``translation_efficiencies_by_monomer`` to 0.0
+          for the specified monomer IDs.  If no mecillinam concentrations are
+          active, a zero-concentration timeline is used as the vehicle.
+        - ``gene_deletions`` require ParCa-level changes (before sim_data is
+          built) and are emitted under ``parca_options``.
         """
         config: dict[str, Any] = {
             "seed": self.seed,
@@ -565,11 +573,31 @@ class UQInputParametersVecoli(UQInputParameters):
             # Just set the condition if vio is not enabled
             variants["condition"] = [{"condition": self.condition.value}]
 
-        if any(self.mecillinam.concentrations):
-            variants["mecillinam_timeline"] = [self.mecillinam.to_variant_params()]
+        # Merge translation knockouts into mecillinam_timeline variant.
+        # mecillinam_timeline.apply_variant() handles both concentration
+        # changes AND translation knockouts in a single variant call.
+        _has_mecillinam = any(self.mecillinam.concentrations)
+        _has_trl_knockouts = bool(self.knockouts.translation_knockouts)
+
+        if _has_mecillinam or _has_trl_knockouts:
+            mec_params = self.mecillinam.to_variant_params()
+            if _has_trl_knockouts:
+                # Merge standalone knockouts with any mecillinam knockouts
+                existing_ko = mec_params.get("knockouts", [])
+                merged_ko = list(set(existing_ko + self.knockouts.translation_knockouts))
+                mec_params["knockouts"] = merged_ko
+            variants["mecillinam_timeline"] = [mec_params]
 
         if variants:
             config["variants"] = variants
+
+        # Gene deletions require ParCa-level changes (before sim_data
+        # generation).  Emit under parca_options for Nextflow/HPC configs
+        # that rebuild sim_data from scratch.
+        if self.knockouts.gene_deletions:
+            config["parca_options"] = {
+                "gene_deletions": self.knockouts.gene_deletions,
+            }
 
         return config
 
