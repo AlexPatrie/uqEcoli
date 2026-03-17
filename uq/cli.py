@@ -383,7 +383,9 @@ def create_samples(
     n_samples: int = 200,
     seed: int = 42,
     observable_columns: list[str] | None = None,
+    max_workers: int | None = None,
 ) -> None:
+    """Generate LHS samples, evaluate simulation function, cache (X, Y)."""
     samples = handlers.generate_samples(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
@@ -391,8 +393,61 @@ def create_samples(
         n_samples=n_samples,
         seed=seed,
         observable_columns=observable_columns,
+        max_workers=max_workers,
     )
     print(samples)
+
+
+@app.command(name="export-configs")
+def export_configs(
+    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+    batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
+    n_samples: int = 200,
+    seed: int = 42,
+    include_vio: bool = True,
+    include_mecillinam: bool = True,
+    base_config_path: str | None = None,
+    generations: int = 1,
+    emitter: str = "parquet",
+) -> None:
+    """Export per-sample vEcoli configs for Nextflow/HPC batch execution.
+
+    Generates LHS samples, applies variants to sim_data, writes per-sample
+    JSON configs and pickled sim_data files.  Submit the resulting directory
+    to Nextflow for parallel execution on HPC.
+    """
+    handlers.export_configs(
+        sim_data_path=sim_data_path,
+        batch_dir=batch_dir,
+        n_samples=n_samples,
+        seed=seed,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+        base_config_path=base_config_path,
+        generations=generations,
+        emitter=emitter,
+    )
+
+
+@app.command(name="collect-results")
+def collect_results(
+    batch_dir: str = typer.Argument(..., help="Directory from export-configs"),
+    output_dir: str = typer.Argument(..., help="Root dir with per-sample Parquet outputs"),
+    observable_columns: list[str] | None = None,
+    cache_dir: str | None = None,
+) -> None:
+    """Collect completed Nextflow/HPC batch outputs into a PrecomputedCache.
+
+    After Nextflow completes, run this to assemble (X, Y) from per-sample
+    Parquet outputs.  The resulting cache can be passed to
+    ``quantify --precomputed-path``.
+    """
+    handlers.collect_results(
+        batch_dir=batch_dir,
+        output_dir=output_dir,
+        observable_columns=observable_columns,
+        cache_dir=cache_dir,
+    )
 
 
 @app.command()

@@ -125,6 +125,7 @@ def run_and_cache(
     cache_dir: Path,
     seed: int = 42,
     store_timeseries: bool = True,
+    max_workers: int | None = None,
 ) -> PrecomputedCache:
     """Generate LHS samples, evaluate simulation_func, save to disk.
 
@@ -143,6 +144,8 @@ def run_and_cache(
         cache_dir: Directory to write cached data.
         seed: Random seed for LHS generation.
         store_timeseries: Whether to cache per-sample raw timeseries for Phase 2.
+        max_workers: If > 1, use parallel evaluation (passed to
+            ``evaluate_batch``).  None = sequential.
 
     Returns:
         PrecomputedCache with X, Y, and optionally timeseries.
@@ -150,7 +153,17 @@ def run_and_cache(
     X = generate_lhs_samples(parameter_space, n_samples, seed=seed)
 
     # Evaluate aggregated outputs (Phase 1)
-    Y = simulation_func.evaluate_batch(X)
+    # Pass max_workers if the simulation_func supports it
+    if max_workers and hasattr(simulation_func, "evaluate_batch"):
+        import inspect
+
+        sig = inspect.signature(simulation_func.evaluate_batch)
+        if "max_workers" in sig.parameters:
+            Y = simulation_func.evaluate_batch(X, max_workers=max_workers)
+        else:
+            Y = simulation_func.evaluate_batch(X)
+    else:
+        Y = simulation_func.evaluate_batch(X)
 
     # Optionally collect per-sample timeseries (Phase 2)
     Y_timeseries = None

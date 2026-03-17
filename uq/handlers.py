@@ -32,7 +32,7 @@ from rich.table import Table
 from rich.text import Text
 
 from uq.pce.models import PCEParameterSelectionConfig
-from uq.pipe import execute_pipeline, Pipeline
+from uq.pipe import Pipeline, execute_pipeline
 from uq.pipeline import PipelineResult
 from uq.sampling import PrecomputedCache
 
@@ -76,22 +76,22 @@ def show(self):
 
 
 def pipeline(
-        experiment_ids: str | list[str],
-        sim_base_path: str | Path,
-        observable_columns: list[str] | None = None,
-        lb_generation: int | None = 2,
-        lb_time: float | None = 100.0,
-        n_bins: int = 10,
-        polynomial_order: int = 3,
-        n_samples: int = 200,
-        expected_cycle_time: float = 3600.0,
-        max_duration: float = 10800.0,
-        prescreen_config: PCEParameterSelectionConfig | None = None,
-        export_path: Path | None = None,
-        precomputed_path: Path | str | None = None,
-        sim_config_path: str | None = None,
-        execute: bool = True,
-        initialize: bool = True
+    experiment_ids: str | list[str],
+    sim_base_path: str | Path,
+    observable_columns: list[str] | None = None,
+    lb_generation: int | None = 2,
+    lb_time: float | None = 100.0,
+    n_bins: int = 10,
+    polynomial_order: int = 3,
+    n_samples: int = 200,
+    expected_cycle_time: float = 3600.0,
+    max_duration: float = 10800.0,
+    prescreen_config: PCEParameterSelectionConfig | None = None,
+    export_path: Path | None = None,
+    precomputed_path: Path | str | None = None,
+    sim_config_path: str | None = None,
+    execute: bool = True,
+    initialize: bool = True,
 ) -> Pipeline:
     _pipe = Pipeline(
         experiment_ids=experiment_ids,
@@ -108,7 +108,7 @@ def pipeline(
         export_path=export_path,
         precomputed_path=precomputed_path,
         sim_config_path=sim_config_path,
-        init=initialize
+        init=initialize,
     )
     if execute:
         _pipe.run()
@@ -117,18 +117,18 @@ def pipeline(
 
 
 def pipe(
-        experiment_ids: list[str],
-        outdir_root: str,
-        lb_generation: int | None = 2,
-        lb_time: float | None = 100.0,
-        n_bins: int = 10,
-        pce_polynomial_order: int = 3,
-        n_samples: int = 20,
-        expected_cycle_time: float = 3600.0,
-        pce_n_trajectories: int = 10,
-        pce_n_selected_params: int = 5,
-        export_path: str | None = None,
-        precomputed_path: str | None = None,
+    experiment_ids: list[str],
+    outdir_root: str,
+    lb_generation: int | None = 2,
+    lb_time: float | None = 100.0,
+    n_bins: int = 10,
+    pce_polynomial_order: int = 3,
+    n_samples: int = 20,
+    expected_cycle_time: float = 3600.0,
+    pce_n_trajectories: int = 10,
+    pce_n_selected_params: int = 5,
+    export_path: str | None = None,
+    precomputed_path: str | None = None,
 ) -> PipelineResult:
     """Run the full RFC006 UQ pipeline."""
     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
@@ -153,9 +153,9 @@ def pipe(
 
 
 def demo(
-        demo_type: str = "full",
-        export_path: str | None = None,
-        precomputed_path: str | None = None,
+    demo_type: str = "full",
+    export_path: str | None = None,
+    precomputed_path: str | None = None,
 ) -> PrecomputedCache | PipelineResult:
     # start with exp ids, outdir_base, observable cols if needed
     experiment_ids = [
@@ -198,17 +198,22 @@ def demo(
 
 
 def generate_samples(
-        experiment_ids: list[str],
-        sim_base_path: str,
-        cache_dir: str,
-        n_samples: int = 200,
-        seed: int = 42,
-        observable_columns: list[str] | None = None,
+    experiment_ids: list[str],
+    sim_base_path: str,
+    cache_dir: str,
+    n_samples: int = 200,
+    seed: int = 42,
+    observable_columns: list[str] | None = None,
+    max_workers: int | None = None,
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
     Run this once to pre-compute simulation evaluations.  Then pass
     --precomputed-path to ``pipe`` or ``demo`` for Stage 2 analysis.
+
+    Args:
+        max_workers: If > 1, use parallel local evaluation via
+            ProcessPoolExecutor.  None = sequential (default).
     """
     from uq.pipe import initialize_data
     from uq.pipeline.workflow import aggregate_timeseries
@@ -257,6 +262,104 @@ def generate_samples(
     return cache
 
 
+def export_configs(
+    sim_data_path: str,
+    batch_dir: str,
+    n_samples: int = 200,
+    seed: int = 42,
+    include_vio: bool = True,
+    include_mecillinam: bool = True,
+    base_config_path: str | None = None,
+    generations: int = 1,
+    emitter: str = "parquet",
+) -> Path:
+    """Export per-sample vEcoli configs for Nextflow/HPC batch execution.
+
+    This is the HPC-scale alternative to ``generate_samples()``:
+    instead of running simulations locally, it writes variant-applied
+    sim_data pickles + JSON configs that Nextflow can consume.
+
+    Returns:
+        Path to the batch directory.
+    """
+    from uq.generators.vecoli import VecoliSimulationFunc, export_batch_configs
+    from uq.pipeline.param_loader import ParameterDataset
+    from uq.sampling import generate_lhs_samples
+
+    ds = ParameterDataset(sim_data_path=sim_data_path)
+    param_space = ds.to_parameter_space(
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+    )
+
+    if param_space.n_parameters == 0:
+        raise ValueError("Parameter space is empty. Set include_vio=True and/or include_mecillinam=True.")
+
+    sim_func = VecoliSimulationFunc(
+        baseline_sim_data=ds.sim_data,
+        param_space=param_space,
+    )
+
+    X = generate_lhs_samples(param_space, n_samples, seed=seed)
+
+    result_dir = export_batch_configs(
+        sim_func=sim_func,
+        X=X,
+        batch_dir=batch_dir,
+        base_config_path=base_config_path,
+        generations=generations,
+        emitter=emitter,
+    )
+
+    console.print(
+        f"[bold green]Exported {n_samples} batch configs[/bold green] "
+        f"({param_space.n_parameters} params) to {result_dir}"
+    )
+    console.print("  configs/  → per-sample JSON configs for Nextflow")
+    console.print("  sim_data/ → variant-applied pickled sim_data")
+    console.print("  metadata.json → sample-to-parameter mapping")
+    return result_dir
+
+
+def collect_results(
+    batch_dir: str,
+    output_dir: str,
+    observable_columns: list[str] | None = None,
+    cache_dir: str | None = None,
+) -> PrecomputedCache:
+    """Collect Parquet outputs from completed Nextflow/HPC batch into cache.
+
+    After Nextflow completes, call this to assemble (X, Y) from the
+    per-sample outputs.  The resulting PrecomputedCache can be passed
+    to ``quantify --precomputed-path``.
+
+    Args:
+        batch_dir: Directory produced by ``export_configs()``.
+        output_dir: Root directory containing per-sample Parquet outputs.
+        observable_columns: Which columns to extract from Parquet.
+        cache_dir: Where to save the cache (default: ``{batch_dir}/cache``).
+
+    Returns:
+        PrecomputedCache ready for Stage 2 analysis.
+    """
+    from uq.generators.vecoli import collect_batch_results
+
+    cache = collect_batch_results(
+        batch_dir=batch_dir,
+        output_dir=output_dir,
+        observable_columns=observable_columns,
+        cache_dir=cache_dir,
+    )
+
+    console.print(
+        f"[bold green]Collected {cache.X.shape[0]} samples[/bold green] "
+        f"({cache.X.shape[1]} params, {cache.Y.shape[1]} outputs) "
+        f"from {output_dir}"
+    )
+    console.print(f"  Cache saved to: {cache.cache_dir}")
+    return cache
+
+
 def readme(rfc_id: str = "RFC006") -> None:
     txt = (
         None
@@ -291,4 +394,3 @@ def readme(rfc_id: str = "RFC006") -> None:
 """
     )
     print(txt)
-
