@@ -22,9 +22,11 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
   orthogonal decompositions.
 """
 
+import asyncio
 from pathlib import Path
 
 import typer
+from ecoli.experiments.ecoli_master_sim import EcoliSim
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -32,6 +34,10 @@ from rich.table import Table
 from rich.text import Text
 
 from uq import XSpaceVecoli
+from uq.common import get_repo_root
+from uq.pce.models import PCEParameterSelectionConfig
+from uq.pipe import pipeline
+from uq.pipeline import PipelineResult
 from uq.pipeline.workflow import execute_pipeline
 
 app = typer.Typer()
@@ -73,57 +79,42 @@ def show(self):
     console.print(panel)
 
 
+def f_vecoli():
+    sim = EcoliSim.from_file((get_repo_root() / "configs" / "vecoli" / "single_cell.json").__str__())
+    sim.build_ecoli()
+    return sim.run()
+
+
 @app.command()
-def uq(experiment_id: str, outdir_root: str) -> None:
-    out_parent = Path(outdir_root)
-    if not out_parent.exists():
-        raise FileNotFoundError(f"The directory {outdir_root} does not exist")
-
-    exp_dir = out_parent / experiment_id
-    pq_root_dir = exp_dir / "history" / f"experiment_id={experiment_id}"
-
-    # 1. Define input parameter space
-    param_space = XSpaceVecoli(
-        include_vio=True,
-        include_mecillinam=True,
-        vio_expression_bounds=(0.0, 5.0),
-        vio_trl_eff_bounds=(0.0, 2.0),
-        mecillinam_conc_bounds=(0.0, 10.0),
+def uq(
+    experiment_ids: str,
+    outdir_root: str,
+    lb_generation: int | None = 2,
+    lb_time: float | None = 100.0,
+    n_bins: int = 10,
+    pce_polynomial_order: int = 3,
+    n_samples: int = 200,
+    expected_cycle_time: float = 3600.0,
+    pce_n_trajectories: int = 20,
+    pce_n_selected_params: int = 5,
+    export_path: str | None = None,
+) -> None:
+    param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
+    results: PipelineResult = asyncio.run(
+        pipeline(
+            experiment_ids=experiment_ids,
+            sim_base_path=outdir_root,
+            simulation_func=f_vecoli,
+            prescreen_config=param_prescreen_config,
+            lb_time=lb_time,
+            lb_generation=lb_generation,
+            n_bins=n_bins,
+            polynomial_order=pce_polynomial_order,
+            n_samples=n_samples,
+            expected_cycle_time=expected_cycle_time,
+            export_path=Path(export_path) if export_path else None,
+        )
     )
-
-    # 2. Run the full pipeline — data loading, aggregation, variance
-    #    decomposition, PCE surrogate, and Sobol indices are all handled
-    #    internally. Just point it at your simulation output directory.
-    result = execute_pipeline(
-        param_space=param_space,
-        simulation_func=your_simulation_wrapper,  # callable with evaluate_batch(X) → Y
-        experiment_id="mecillinam",
-        sim_base_path="/path/to/vEcoli/api_integration/sims",
-        output_types=["higher_order_properties", "exchange_fluxes"],
-        generation_lower_bound=2,  # skip initial transient generations
-        time_lower_bound=100.0,  # skip early transient timesteps
-        polynomial_order=3,
-        n_samples=200,
-        export_path="./uq_results",
-    )
-
-    # 3. Inspect population-level results (Phase 1)
-    sobol = result.population.sobol_indices[0]
-    for name, value in sobol.select(n=5):
-        print(f"{name}: {value:.4f}")
-
-    # 4. Variance decomposition (Step 4)
-    print(f"Generation: {result.variance_decomposition['generation_fraction']}")
-    print(f"Seed:       {result.variance_decomposition['seed_fraction']}")
-
-    # 5. Inspect per-cell-cycle-stage results (Phase 2)
-    for i, stage_sobol in enumerate(result.cell_cycle.sobol_indices):
-        print(f"Stage {i}: {stage_sobol.select(n=3)}")
-
-    # 6. Reload results later
-    from uq.pipeline.models import PipelineResult
-
-    loaded = PipelineResult.from_export("./uq_results")
 
 
 @app.command()

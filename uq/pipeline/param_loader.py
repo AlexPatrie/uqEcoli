@@ -14,6 +14,7 @@ Usage::
     mec = ParameterDataset(sim_data_path="sim_data/mecillinam/kb/simData.cPickle")
     space = ParameterDataset.merge_to_parameter_space(vio, mec)
 """
+
 import dataclasses
 import os
 import pickle
@@ -24,9 +25,8 @@ from typing import Any, Callable, Literal
 import numpy as np
 import polars as pl
 from ecoli.library.sim_data import LoadSimData
-from scipy import sparse
-
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
+from scipy import sparse
 
 from uq.common import get_repo_root
 
@@ -38,7 +38,10 @@ _DEFAULT_PICKLE = (get_repo_root() / "sim_data" / "baseline" / "kb" / "simData.c
 
 # Attribute names that are known to be expensive to access or not useful data
 _SKIP_ATTRS = frozenset({
-    "derivatives_jit", "derivatives", "jit", "jacobian",
+    "derivatives_jit",
+    "derivatives",
+    "jit",
+    "jacobian",
 })
 
 # Sim-data subdirectory → condition label
@@ -52,6 +55,7 @@ _CONDITION_LABELS: dict[str, str] = {
 @dataclasses.dataclass
 class SimDataPayload:
     """Nested dict of serializable values plus any callables found."""
+
     data: dict[str, Any]
     callbacks: dict[str, Callable]
     sim_data_path: Path
@@ -88,9 +92,7 @@ class ParameterDataset:
     def __post_init__(self):
         if self.sim_data is None:
             if self.sim_data_path is None:
-                raise ValueError(
-                    "Must pass either sim_data_path or sim_data instance."
-                )
+                raise ValueError("Must pass either sim_data_path or sim_data instance.")
             self.sim_data = LoadSimData(str(self.sim_data_path)).sim_data
         if self.sim_data_path is not None:
             self.sim_data_path = Path(self.sim_data_path)
@@ -297,6 +299,7 @@ def _safe_getattr(obj, name, timeout_s=2):
 # Type helpers
 # ---------------------------------------------------------------------------
 
+
 def _is_unum(obj: Any) -> bool:
     return type(obj).__name__ == "Unum"
 
@@ -308,11 +311,7 @@ def _is_unit_struct_array(obj: Any) -> bool:
 def _is_data_container(obj: Any) -> bool:
     """True for vEcoli data-class objects that should be recursed into."""
     mod = getattr(type(obj), "__module__", "") or ""
-    return (
-        mod.startswith("reconstruction.ecoli")
-        or mod.startswith("wholecell")
-        or mod.startswith("ecoli")
-    )
+    return mod.startswith("reconstruction.ecoli") or mod.startswith("wholecell") or mod.startswith("ecoli")
 
 
 def _resolve_value(obj: Any) -> tuple[Any, str | None, str]:
@@ -354,6 +353,7 @@ def _resolve_value(obj: Any) -> tuple[Any, str | None, str]:
 # ---------------------------------------------------------------------------
 # Tree walker
 # ---------------------------------------------------------------------------
+
 
 def _instance_attrs(obj: Any) -> list[str]:
     """Get attribute names from __dict__ (instance attrs only, no methods)."""
@@ -411,7 +411,7 @@ def _to_str(val: Any) -> str:
         return ""
     if isinstance(val, (list, tuple)):
         if len(val) > 200:
-            return f"[{len(val)} elements] {str(val[:5])}..."
+            return f"[{len(val)} elements] {val[:5]!s}..."
         return str(val)
     return str(val)
 
@@ -440,8 +440,7 @@ def _serialize_leaf(obj: Any) -> Any:
             val = str(obj)
         unit = obj.strUnit()
         if isinstance(val, np.ndarray):
-            return {"__type__": "unum", "value": val.tolist(),
-                    "dtype": str(val.dtype), "unit": unit}
+            return {"__type__": "unum", "value": val.tolist(), "dtype": str(val.dtype), "unit": unit}
         return {"__type__": "unum", "value": val, "unit": unit}
 
     if _is_unit_struct_array(obj):
@@ -450,19 +449,16 @@ def _serialize_leaf(obj: Any) -> Any:
             "__type__": "unit_struct_array",
             "value": sa.tolist(),
             "dtype_descr": sa.dtype.descr,
-            "units": {k: str(v) if v is not None else None
-                      for k, v in obj.units.items()},
+            "units": {k: str(v) if v is not None else None for k, v in obj.units.items()},
         }
 
     if sparse.issparse(obj):
         fmt = obj.format if hasattr(obj, "format") else "csr"
         dense = obj.toarray()
-        return {"__type__": "sparse", "data": dense.tolist(),
-                "dtype": str(dense.dtype), "format": fmt}
+        return {"__type__": "sparse", "data": dense.tolist(), "dtype": str(dense.dtype), "format": fmt}
 
     if isinstance(obj, np.ndarray):
-        return {"__type__": "ndarray", "data": obj.tolist(),
-                "dtype": str(obj.dtype)}
+        return {"__type__": "ndarray", "data": obj.tolist(), "dtype": str(obj.dtype)}
 
     if isinstance(obj, (set, frozenset)):
         return {"__type__": "set", "data": sorted(str(x) for x in obj)}
@@ -535,9 +531,11 @@ def _to_nested_dict(
 # Deserialization helpers
 # ---------------------------------------------------------------------------
 
+
 def _import_class(module: str, qualname: str) -> type:
     """Import and return a class given its module and qualname."""
     import importlib
+
     mod = importlib.import_module(module)
     obj = mod
     for part in qualname.split("."):
@@ -559,6 +557,7 @@ def _parse_unit_str(unit_str: str | None) -> Any:
     if not unit_str or unit_str.strip() in ("", "[]"):
         return None
     from wholecell.utils import units as units_pkg
+
     # Strip brackets: "[umol/L]" -> "umol/L"
     s = unit_str.strip("[] ")
     if not s:
@@ -584,6 +583,7 @@ def _parse_unit_product(expr: str, units_pkg: Any) -> Any:
     Multiplication can be ``*`` or ``.`` (Unum uses ``.``).
     """
     import re
+
     tokens = re.split(r"[.*]", expr.strip())
     result = None
     for tok in tokens:
@@ -614,6 +614,7 @@ def _deserialize_leaf(obj: Any) -> Any:
 
     if t == "unum":
         import unum as unum_mod
+
         val = obj["value"]
         if "dtype" in obj:
             val = np.array(val, dtype=np.dtype(obj["dtype"]))
@@ -626,6 +627,7 @@ def _deserialize_leaf(obj: Any) -> Any:
 
     if t == "unit_struct_array":
         from wholecell.utils.unit_struct_array import UnitStructArray
+
         dtype = np.dtype(obj["dtype_descr"])
         sa = np.array([tuple(row) for row in obj["value"]], dtype=dtype)
         unit_map = {}
@@ -652,6 +654,7 @@ def _deserialize_leaf(obj: Any) -> Any:
 
     if t == "sparse":
         from scipy import sparse as sp
+
         dense = np.array(obj["data"], dtype=np.dtype(obj["dtype"]))
         fmt = obj.get("format", "csr")
         if fmt == "csc":
@@ -712,6 +715,7 @@ def _from_nested_dict(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def load_sim_data(path: str = _DEFAULT_PICKLE):
     """Load and return the raw SimulationDataEcoli object."""
     with open(path, "rb") as f:
@@ -730,9 +734,7 @@ def dict_to_sim_data(serialized: SimDataPayload) -> Any:
     return _from_nested_dict(serialized.data, serialized.callbacks)
 
 
-def sim_data_to_dict(
-    sim_data: SimulationDataEcoli
-) -> SimDataPayload:
+def sim_data_to_dict(sim_data: SimulationDataEcoli) -> SimDataPayload:
     """Convert a ``SimulationDataEcoli`` instance to a nested dict.
 
     Returns a ``SerializedSimData`` with:
@@ -772,12 +774,11 @@ if __name__ == "__main__":
     print(f"Loaded {len(ds.df)} data attributes from SimulationDataEcoli")
     print(f"Captured {len(ds.callbacks)} callbacks")
     print(ds.df.head(20))
-    print(f"\nDtype distribution:")
+    print("\nDtype distribution:")
     print(ds.df.group_by("dtype").len().sort("len", descending=True))
-    print(f"\nCallback paths (first 20):")
+    print("\nCallback paths (first 20):")
     for i, path in enumerate(sorted(ds.callbacks)):
         if i >= 20:
             print(f"  ... and {len(ds.callbacks) - 20} more")
             break
         print(f"  {path}")
-

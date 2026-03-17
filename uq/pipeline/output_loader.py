@@ -20,7 +20,7 @@ duplicate data-loading logic.
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Literal
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 import polars
@@ -106,7 +106,7 @@ class TimeseriesDataset:
         self.variables = TimeseriesLoaderParquet.extract_variables(
             timeseries=self.data,
             generation_lower_bound=self.generation_lower_bound,
-            time_lower_bound=self.time_lower_bound
+            time_lower_bound=self.time_lower_bound,
         )
         observable_columns = list(self.variables.higher_order_properties.keys())
         if not observable_columns:
@@ -121,6 +121,7 @@ class TimeseriesLoaderParquet:
 
     This class uses DuckDB to efficiently query and aggregate simulation outputs.
     """
+
     conn: DuckDBPyConnection
     history_sql: str
     config_sql: str
@@ -145,7 +146,7 @@ class TimeseriesLoaderParquet:
         experiment_ids: list[str],
         sim_data: Optional["SimulationDataEcoli"] = None,
         bucket_uri: str | None = None,
-        storage_mode: Literal["fs", "s3"] = "fs"
+        storage_mode: Literal["fs", "s3"] = "fs",
     ):
         """
         Initialize the output extractor.
@@ -420,7 +421,9 @@ class TimeseriesLoaderParquet:
             Tuple of (flux array for exchange reactions, exchange reaction IDs)
         """
         fluxes, rxn_ids = self.extract_metabolic_fluxes(
-            generation_lower_bound, time_lower_bound, timeseries=timeseries,
+            generation_lower_bound,
+            time_lower_bound,
+            timeseries=timeseries,
         )
 
         if fluxes.size == 0:
@@ -528,15 +531,17 @@ class TimeseriesLoaderParquet:
 
     @classmethod
     def extract_variables(
-            cls,
-            output_types: Optional[list[OutputType]] = None,
-            generation_lower_bound: Optional[int] = None,
-            time_lower_bound: Optional[float] = None,
-            timeseries: Optional[polars.DataFrame] = None,
+        cls,
+        output_types: Optional[list[OutputType]] = None,
+        generation_lower_bound: Optional[int] = None,
+        time_lower_bound: Optional[float] = None,
+        timeseries: Optional[polars.DataFrame] = None,
     ) -> OutputVariables:
         return cls.extract_all(
-            output_types=output_types, generation_lower_bound=generation_lower_bound,
-            time_lower_bound=time_lower_bound, timeseries=timeseries
+            output_types=output_types,
+            generation_lower_bound=generation_lower_bound,
+            time_lower_bound=time_lower_bound,
+            timeseries=timeseries,
         )
 
     def extract_all(
@@ -568,35 +573,45 @@ class TimeseriesLoaderParquet:
 
         if OutputType.TRANSCRIPTOME in output_types:
             counts, ids = self.extract_transcriptome(
-                generation_lower_bound, time_lower_bound, timeseries=timeseries,
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
             outputs.transcriptome = counts
             outputs.metadata["cistron_ids"] = ids
 
         if OutputType.PROTEOME in output_types:
             counts, ids = self.extract_proteome(
-                generation_lower_bound, time_lower_bound, timeseries=timeseries,
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
             outputs.proteome = counts
             outputs.metadata["monomer_ids"] = ids
 
         if OutputType.METABOLIC_FLUXES in output_types:
             fluxes, ids = self.extract_metabolic_fluxes(
-                generation_lower_bound, time_lower_bound, timeseries=timeseries,
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
             outputs.metabolic_fluxes = fluxes
             outputs.metadata["reaction_ids"] = ids
 
         if OutputType.EXCHANGE_FLUXES in output_types:
             fluxes, ids = self.extract_exchange_fluxes(
-                generation_lower_bound, time_lower_bound, timeseries=timeseries,
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
             outputs.exchange_fluxes = fluxes
             outputs.metadata["exchange_reaction_ids"] = ids
 
         if OutputType.HIGHER_ORDER_PROPERTIES in output_types:
             outputs.higher_order_properties = self.extract_higher_order_properties(
-                generation_lower_bound, time_lower_bound, timeseries=timeseries,
+                generation_lower_bound,
+                time_lower_bound,
+                timeseries=timeseries,
             )
 
         return outputs
@@ -759,13 +774,10 @@ def load_timeseries(
     lb_generation: int | None = None,
     lb_time: float | None = None,
     bucket_uri: str | None = None,
-    storage_mode: Literal["fs", "s3"] = "fs"
+    storage_mode: Literal["fs", "s3"] = "fs",
 ) -> TimeseriesDataset:
     loader = TimeseriesLoaderParquet(
-        sim_base_path=sim_base_path,
-        experiment_ids=experiment_ids,
-        bucket_uri=bucket_uri,
-        storage_mode=storage_mode
+        sim_base_path=sim_base_path, experiment_ids=experiment_ids, bucket_uri=bucket_uri, storage_mode=storage_mode
     )
     return loader.load_timeseries(
         columns=observables,

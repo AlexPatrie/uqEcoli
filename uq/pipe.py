@@ -71,6 +71,7 @@ from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import numpy as np
 import polars
+import pytest
 
 from uq import (
     AggregatedOutput,
@@ -78,16 +79,16 @@ from uq import (
     SobolIndices,
     XSpaceVecoli,
     compute_variance_decomposition,
-    identify_cell_cycle_relevant_observables
+    identify_cell_cycle_relevant_observables,
 )
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
-from uq.inputs import XSpaceInterface, XSpace
+from uq.inputs import XSpace, XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
 from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
-from uq.pipeline.output_loader import TimeseriesLoaderParquet, load_timeseries, OutputVariables, TimeseriesDataset
+from uq.pipeline.output_loader import OutputVariables, TimeseriesDataset, TimeseriesLoaderParquet, load_timeseries
 from uq.pipeline.workflow import aggregate_timeseries, get_variance_decomposition, run_phase1, run_phase2
 from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices
 
@@ -95,18 +96,18 @@ if TYPE_CHECKING:
     from uq.sensitivity import PCESurrogate
 
 from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
+
 from uq.outputs import OutputExtractor, OutputType
 from uq.pipeline.param_loader import ParameterDataset
-
 
 # === Pipeline Orchestration === #
 """
 . Observable Selection (uq/sensitivity.py:858-928)
 
   identify_cell_cycle_relevant_observables currently ranks observables by residual variance fraction
-  (greedy threshold). This is a natural graph partitioning problem:                                     
+  (greedy threshold). This is a natural graph partitioning problem:
 
-  - Nodes = observables (e.g., mRNA counts, protein counts, fluxes)                                   
+  - Nodes = observables (e.g., mRNA counts, protein counts, fluxes)
   - Edges = co-variance or mutual information between observable pairs
   - Max-cut partitions into "cell-cycle-relevant" vs "non-relevant" sets, maximizing the total
   dissimilarity (edge weight) across the cut — ensuring the two groups are maximally distinct in their
@@ -121,6 +122,7 @@ class DatasetMultiExperiment:
         experiment_ids: list[str]
         x: list[ParameterDataset]
     """
+
     experiment_ids: list[str]
     x: list[ParameterDataset]
     y: TimeseriesDataset
@@ -147,44 +149,55 @@ def initialize_data(
     generation_lower_bound: int | None = 2,
     time_lower_bound: float | None = 100.0,
 ) -> DatasetMultiExperiment:
-        """
-        Initialize Datasets
+    """
+    Initialize Datasets
 
-        Args:
-            experiment_ids: Experiment identifier(s) for data loading.
-            sim_base_path: Root directory containing simulation outputs.
-            observable_columns: Column names of observables to aggregate/analyze.
-            generation_lower_bound: Skip initial generations (default: 2).
-            time_lower_bound: Skip transient period in seconds (default: 100.0).
+    Args:
+        experiment_ids: Experiment identifier(s) for data loading.
+        sim_base_path: Root directory containing simulation outputs.
+        observable_columns: Column names of observables to aggregate/analyze.
+        generation_lower_bound: Skip initial generations (default: 2).
+        time_lower_bound: Skip transient period in seconds (default: 100.0).
 
-        Returns:
-            PipelineResult with all RFC006 pipeline outputs.
-        """
-        sim_data_paths = [
-            (expid, (Path(sim_base_path) / expid / "parca" / "kb" / "simData.cPickle")) for expid in experiment_ids
-        ]
-        # --- Step 1: Build parameter space from sim_data ---
-        parameter_datasets = [ParameterDataset(sim_data_path=p, experiment_id=expid) for expid, p in sim_data_paths]
+    Returns:
+        PipelineResult with all RFC006 pipeline outputs.
+    """
+    sim_data_paths = [
+        (expid, (Path(sim_base_path) / expid / "parca" / "kb" / "simData.cPickle")) for expid in experiment_ids
+    ]
+    # --- Step 1: Build parameter space from sim_data ---
+    parameter_datasets = [ParameterDataset(sim_data_path=p, experiment_id=expid) for expid, p in sim_data_paths]
 
-        if len(parameter_datasets) == 1:
-            param_space = parameter_datasets[0].to_parameter_space()
-        else:
-            param_space = ParameterDataset.merge_to_parameter_space(*parameter_datasets)
+    if len(parameter_datasets) == 1:
+        param_space = parameter_datasets[0].to_parameter_space()
+    else:
+        param_space = ParameterDataset.merge_to_parameter_space(*parameter_datasets)
 
-        if isinstance(experiment_ids, str):
-            experiment_ids = [experiment_ids]
+    if isinstance(experiment_ids, str):
+        experiment_ids = [experiment_ids]
 
-        # --- Step 2: Load simulation data via DuckDB + OutputExtractor ---
-        # Load timeseries once, then derive typed outputs from it.
-        timeseries_dataset = load_timeseries(
-            sim_base_path=sim_base_path,
-            experiment_ids=experiment_ids,
-            observables=observable_columns,
-            lb_generation=generation_lower_bound,
-            lb_time=time_lower_bound,
-        )
+    # --- Step 2: Load simulation data via DuckDB + OutputExtractor ---
+    # Load timeseries once, then derive typed outputs from it.
+    timeseries_dataset = load_timeseries(
+        sim_base_path=sim_base_path,
+        experiment_ids=experiment_ids,
+        observables=observable_columns,
+        lb_generation=generation_lower_bound,
+        lb_time=time_lower_bound,
+    )
 
-        return DatasetMultiExperiment(experiment_ids=experiment_ids, x=parameter_datasets, y=timeseries_dataset)
+    return DatasetMultiExperiment(experiment_ids=experiment_ids, x=parameter_datasets, y=timeseries_dataset)
+
+
+def test_initialize_data():
+    experiments = [
+        "api_simulation_default",
+        # 'mecillinam',
+        "test_violacein_with_metabolism",
+    ]
+    base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
+    ds = initialize_data(experiment_ids=experiments, sim_base_path=base_path)
+    print()
 
 
 async def pipeline(
@@ -225,7 +238,13 @@ async def pipeline(
         PipelineResult with all RFC006 pipeline outputs.
     """
     # --- Step 1: Load x and y for given experiment ids ---
-    ds = initialize_data(experiment_ids=experiment_ids, sim_base_path=sim_base_path, observable_columns=observable_columns, generation_lower_bound=lb_generation, time_lower_bound=lb_time)
+    ds = initialize_data(
+        experiment_ids=experiment_ids,
+        sim_base_path=sim_base_path,
+        observable_columns=observable_columns,
+        generation_lower_bound=lb_generation,
+        time_lower_bound=lb_time,
+    )
     param_space = ds.parameter_space
     timeseries = ds.y
 

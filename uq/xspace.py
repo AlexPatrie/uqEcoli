@@ -11,7 +11,7 @@ These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libra
 
 import abc
 import pprint
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, override
@@ -25,7 +25,7 @@ from rich.table import Table
 from rich.text import Text
 
 from uq.pce.models import Parameter
-from uq.pipeline.models import UQInputParametersVecoli, UQInputParameters, BaseClass
+from uq.pipeline.models import BaseClass, UQInputParameters, UQInputParametersVecoli
 
 if TYPE_CHECKING:
     pass
@@ -143,12 +143,7 @@ class XSpace(XSpaceInterface):
         parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
     """
 
-    def __init__(
-        self,
-        parameters: list[Param] | None = None,
-        experiment_id: str | None = None,
-        **kwargs
-    ) -> None:
+    def __init__(self, parameters: list[Param] | None = None, experiment_id: str | None = None, **kwargs) -> None:
         self.kwargs = kwargs
         self.parameters = parameters or []
         self.experiment_id = experiment_id
