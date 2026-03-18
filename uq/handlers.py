@@ -22,8 +22,10 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
   orthogonal decompositions.
 """
 
+import os
 from pathlib import Path
 
+import dotenv
 import typer
 from rich import box
 from rich.console import Console
@@ -31,6 +33,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from uq.common import get_repo_root
+from uq.models import PipelineConfig
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import Pipeline, execute_pipeline
 from uq.pipeline import PipelineResult
@@ -38,6 +42,8 @@ from uq.sampling import PrecomputedCache
 
 app = typer.Typer()
 console = Console()
+
+dotenv.load_dotenv(get_repo_root() / ".env")
 
 
 def show(self):
@@ -75,40 +81,53 @@ def show(self):
     console.print(panel)
 
 
-def pipeline(
-    experiment_ids: str | list[str],
-    sim_base_path: str | Path,
-    observable_columns: list[str] | None = None,
-    lb_generation: int | None = 2,
-    lb_time: float | None = 100.0,
-    n_bins: int = 10,
-    polynomial_order: int = 3,
-    n_samples: int = 200,
-    expected_cycle_time: float = 3600.0,
-    max_duration: float = 10800.0,
-    prescreen_config: PCEParameterSelectionConfig | None = None,
-    export_path: Path | None = None,
-    precomputed_path: Path | str | None = None,
-    sim_config_path: str | None = None,
-    execute: bool = True,
-    initialize: bool = True,
-) -> Pipeline:
+def throw_env():
+    raise OSError(
+        "You must provide a value for sim_base_path either explicitly or as a env variable val (SIM_BASE_PATH)"
+    )
+
+
+def pipeline(config: PipelineConfig | None = None, execute: bool = True, **kwargs) -> Pipeline:
+    """
+    :param config:  (PipelineConfig | None)
+    :param execute: (bool) = True
+    :param kwargs:  (keyword-args) as follows:
+        experiment_ids: str | list[str],
+        sim_base_path: str | Path | None = None,
+        observable_columns: list[str] | None = None,
+        lb_generation: int | None = 2,
+        lb_time: float | None = 100.0,
+        n_bins: int = 10,
+        polynomial_order: int = 3,
+        n_samples: int = 200,
+        expected_cycle_time: float = 3600.0,
+        max_duration: float = 10800.0,
+        prescreen_config: PCEParameterSelectionConfig | None = None,
+        export_path: Path | None = None,
+        precomputed_path: Path | str | None = None,
+        sim_config_path: str | None = None,
+        init: bool = True
+    """
+    if len(kwargs) and config is None:
+        config = PipelineConfig(**kwargs)
+    if config.sim_base_path is None:
+        config.sim_base_path = os.getenv("SIM_BASE_PATH", throw_env())
     _pipe = Pipeline(
-        experiment_ids=experiment_ids,
-        sim_base_path=sim_base_path,
-        observable_columns=observable_columns,
-        lb_generation=lb_generation,
-        lb_time=lb_time,
-        n_bins=n_bins,
-        polynomial_order=polynomial_order,
-        n_samples=n_samples,
-        expected_cycle_time=expected_cycle_time,
-        max_duration=max_duration,
-        prescreen_config=prescreen_config,
-        export_path=export_path,
-        precomputed_path=precomputed_path,
-        sim_config_path=sim_config_path,
-        init=initialize,
+        experiment_ids=config.experiment_ids,
+        sim_base_path=config.sim_base_path,
+        observable_columns=config.observable_columns,
+        lb_generation=config.lb_generation,
+        lb_time=config.lb_time,
+        n_bins=config.n_bins,
+        polynomial_order=config.polynomial_order,
+        n_samples=config.n_samples,
+        expected_cycle_time=config.expected_cycle_time,
+        max_duration=config.max_duration,
+        prescreen_config=PCEParameterSelectionConfig(**config.prescreen_config.model_dump()),
+        export_path=config.export_path,
+        precomputed_path=config.precomputed_path,
+        sim_config_path=config.sim_config_path,
+        init=config.init,
     )
     if execute:
         _pipe.run()
@@ -116,40 +135,40 @@ def pipeline(
     return _pipe
 
 
-def pipe(
-    experiment_ids: list[str],
-    outdir_root: str,
-    lb_generation: int | None = 2,
-    lb_time: float | None = 100.0,
-    n_bins: int = 10,
-    pce_polynomial_order: int = 3,
-    n_samples: int = 20,
-    expected_cycle_time: float = 3600.0,
-    pce_n_trajectories: int = 10,
-    pce_n_selected_params: int = 5,
-    export_path: str | None = None,
-    precomputed_path: str | None = None,
-) -> PipelineResult:
-    """Run the full RFC006 UQ pipeline."""
-    param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
-    result: PipelineResult = execute_pipeline(
-        experiment_ids=experiment_ids,
-        sim_base_path=outdir_root,
-        prescreen_config=param_prescreen_config,
-        lb_time=lb_time,
-        lb_generation=lb_generation,
-        n_bins=n_bins,
-        polynomial_order=pce_polynomial_order,
-        n_samples=n_samples,
-        expected_cycle_time=expected_cycle_time,
-        export_path=Path(export_path) if export_path else None,
-        precomputed_path=Path(precomputed_path) if precomputed_path else None,
-    )
-    if export_path:
-        console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
-    else:
-        console.print("[bold green]Pipeline complete.[/bold green]")
-    return result
+# def pipe(
+#     experiment_ids: list[str],
+#     outdir_root: str,
+#     lb_generation: int | None = 2,
+#     lb_time: float | None = 100.0,
+#     n_bins: int = 10,
+#     pce_polynomial_order: int = 3,
+#     n_samples: int = 20,
+#     expected_cycle_time: float = 3600.0,
+#     pce_n_trajectories: int = 10,
+#     pce_n_selected_params: int = 5,
+#     export_path: str | None = None,
+#     precomputed_path: str | None = None,
+# ) -> PipelineResult:
+#     """Run the full RFC006 UQ pipeline."""
+#     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
+#     result: PipelineResult = execute_pipeline(
+#         experiment_ids=experiment_ids,
+#         sim_base_path=outdir_root,
+#         prescreen_config=param_prescreen_config,
+#         lb_time=lb_time,
+#         lb_generation=lb_generation,
+#         n_bins=n_bins,
+#         polynomial_order=pce_polynomial_order,
+#         n_samples=n_samples,
+#         expected_cycle_time=expected_cycle_time,
+#         export_path=Path(export_path) if export_path else None,
+#         precomputed_path=Path(precomputed_path) if precomputed_path else None,
+#     )
+#     if export_path:
+#         console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
+#     else:
+#         console.print("[bold green]Pipeline complete.[/bold green]")
+#     return result
 
 
 def demo(
@@ -205,15 +224,40 @@ def generate_samples(
     seed: int = 42,
     observable_columns: list[str] | None = None,
     max_workers: int | None = None,
+    max_duration: float = 10800.0,
+    generations: int = 1,
+    live: bool = False,
+    include_vio: bool | None = None,
+    include_mecillinam: bool = True,
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
     Run this once to pre-compute simulation evaluations.  Then pass
     --precomputed-path to ``pipe`` or ``demo`` for Stage 2 analysis.
 
+    By default uses ``DataDrivenWrapper`` (synthetic response surface
+    built from the existing data's statistics).  Pass ``live=True``
+    to use ``VecoliSimulationFunc``, which runs a real ``EcoliSim``
+    for each LHS sample — requires the ``ecoli`` package and a
+    ``simData.cPickle`` at the standard path.
+
     Args:
+        experiment_ids: Experiment IDs whose sim_data to load.
+        sim_base_path: Root directory containing simulation outputs.
+        cache_dir: Where to write the PrecomputedCache.
+        n_samples: Number of LHS samples.
+        seed: Random seed for LHS generation.
+        observable_columns: Which output columns to extract.
         max_workers: If > 1, use parallel local evaluation via
             ProcessPoolExecutor.  None = sequential (default).
+        max_duration: Simulation wall-clock limit in seconds (live mode).
+        generations: Number of generations per sim (live mode).
+        live: If True, run real vEcoli simulations via
+            ``VecoliSimulationFunc`` instead of the synthetic
+            ``DataDrivenWrapper``.
+        include_vio: Include vio pathway parameters.  Auto-detected from
+            sim_data if None (requires violacein-enabled sim_data).
+        include_mecillinam: Include mecillinam concentration parameter.
     """
     from uq.pipe import initialize_data
     from uq.pipeline.workflow import aggregate_timeseries
@@ -235,21 +279,57 @@ def generate_samples(
         observable_columns=observable_columns,
     )
 
-    # Use DataDrivenWrapper for demo; replace with SimulationWrapper
-    # when Nextflow sims are available.
-    agg = aggregate_timeseries(ds.y, ds.observables)
-    sim_func = DataDrivenWrapper(
-        parameter_space=ds.parameter_space,
-        observable_means=agg.uniform.mean,
-        observable_stds=agg.uniform.std,
+    # Build parameter space — use explicit flags, falling back to
+    # auto-detection from sim_data when include_vio is None.
+    if not ds.x:
+        raise RuntimeError(
+            f"No ParameterDataset loaded. Ensure simData.cPickle exists under {sim_base_path}/*/parca/kb/"
+        )
+    param_space = ds.x[0].to_parameter_space(
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
     )
+    if param_space.n_parameters == 0:
+        raise RuntimeError(
+            f"Parameter space is empty (include_vio={include_vio}, "
+            f"include_mecillinam={include_mecillinam}). For baseline "
+            f"sim_data without violacein, use --include-mecillinam "
+            f"(default) or provide a violacein-enabled sim_data for "
+            f"--include-vio."
+        )
+
+    if live:
+        # Real vEcoli simulation: each LHS sample triggers EcoliSim
+        from uq.generators.vecoli import VecoliSimulationFunc
+
+        sim_func = VecoliSimulationFunc(
+            baseline_sim_data=ds.x[0].sim_data,
+            param_space=param_space,
+            max_duration=max_duration,
+            output_keys=[c.split("__")[-1] for c in observable_columns],
+        )
+        console.print(
+            f"[bold cyan]Live mode:[/bold cyan] VecoliSimulationFunc "
+            f"(max_duration={max_duration:.0f}s, generations={generations}, "
+            f"params={param_space.parameter_names})"
+        )
+    else:
+        # Synthetic response surface built from existing data statistics
+        agg = aggregate_timeseries(ds.y, ds.observables)
+        sim_func = DataDrivenWrapper(
+            parameter_space=param_space,
+            observable_means=agg.uniform.mean,
+            observable_stds=agg.uniform.std,
+        )
+        console.print("[bold yellow]Synthetic mode:[/bold yellow] DataDrivenWrapper")
 
     cache = run_and_cache(
-        parameter_space=ds.parameter_space,
+        parameter_space=param_space,
         simulation_func=sim_func,
         n_samples=n_samples,
         cache_dir=Path(cache_dir),
         seed=seed,
+        max_workers=max_workers,
     )
 
     console.print(

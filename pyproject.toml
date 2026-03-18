@@ -13,6 +13,7 @@ dependencies = [
     "polars>=1.39.0",
     "process-bigraph>=1.0.6",
     "pydmd>=2025.8.1",
+    "python-dotenv>=1.2.2",
     "pytuq[all]>=1.0.0",
     "ray[data,train,tune]>=2.54.0",
     "salib>=1.5.2",

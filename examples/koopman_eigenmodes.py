@@ -170,10 +170,7 @@ def _(observable_names, config_sliders, alt, mo, np, param_space, pd, wrapper):
     wrapper.n_timesteps = n_timesteps
     _rng2 = np.random.default_rng(99)
     n_batch = 30
-    X_samples = np.column_stack([
-        _rng2.uniform(lo, hi, n_batch)
-        for lo, hi in param_space.bounds_array
-    ])
+    X_samples = np.column_stack([_rng2.uniform(lo, hi, n_batch) for lo, hi in param_space.bounds_array])
     Y_batch = wrapper.evaluate_batch(X_samples)
 
     # Normalize timeseries for visualization
@@ -294,9 +291,7 @@ def _(
     _circle_df = pl.DataFrame({"x": np.cos(_theta), "y": np.sin(_theta)})
 
     _unit_circle = (
-        alt.Chart(_circle_df)
-        .mark_line(strokeDash=[5, 5], color="gray", opacity=0.5)
-        .encode(x="x:Q", y="y:Q")
+        alt.Chart(_circle_df).mark_line(strokeDash=[5, 5], color="gray", opacity=0.5).encode(x="x:Q", y="y:Q")
     )
 
     # Eigenvalue points
@@ -336,11 +331,7 @@ def _(
         )
     )
 
-    _labels = (
-        alt.Chart(_eig_df)
-        .mark_text(dx=12, fontSize=10)
-        .encode(x="Re:Q", y="Im:Q", text="label:N")
-    )
+    _labels = alt.Chart(_eig_df).mark_text(dx=12, fontSize=10).encode(x="Re:Q", y="Im:Q", text="label:N")
 
     eigenvalue_chart = (_unit_circle + _other_pts + _cc_pts + _labels).properties(
         width=450,
@@ -400,16 +391,10 @@ def _(alt, cc_modes, expected_cycle_time, mo, np, pl, spectrum):
         "label": ["f0", "2f0", "3f0", "4f0"],
     })
 
-    _rules = (
-        alt.Chart(_harm_df)
-        .mark_rule(strokeDash=[4, 4], color="crimson", opacity=0.6)
-        .encode(x="freq:Q")
-    )
+    _rules = alt.Chart(_harm_df).mark_rule(strokeDash=[4, 4], color="crimson", opacity=0.6).encode(x="freq:Q")
 
     _harm_labels = (
-        alt.Chart(_harm_df)
-        .mark_text(dy=-10, color="crimson", fontSize=11)
-        .encode(x="freq:Q", text="label:N")
+        alt.Chart(_harm_df).mark_text(dy=-10, color="crimson", fontSize=11).encode(x="freq:Q", text="label:N")
     )
 
     freq_chart = (_bars + _rules + _harm_labels).properties(
@@ -439,9 +424,7 @@ def _(freq_chart):
 def _(observable_names, alt, cc_modes, mo, np, pl, spectrum):
     _short_names = [n.split("__")[-1] for n in observable_names]
     _n_display = min(len(spectrum.modes), 8)
-    _top_modes = sorted(
-        spectrum.modes, key=lambda m: np.abs(m.amplitude), reverse=True
-    )[:_n_display]
+    _top_modes = sorted(spectrum.modes, key=lambda m: np.abs(m.amplitude), reverse=True)[:_n_display]
 
     _rows = []
     for _j, _mode in enumerate(_top_modes):
@@ -466,11 +449,7 @@ def _(observable_names, alt, cc_modes, mo, np, pl, spectrum):
     _mode_df = pl.DataFrame(_rows)
     _mode_order = sorted(
         _mode_df["mode"].unique().to_list(),
-        key=lambda m: next(
-            r["mode_idx"]
-            for r in _rows
-            if r["mode"] == m
-        ),
+        key=lambda m: next(r["mode_idx"] for r in _rows if r["mode"] == m),
     )
 
     _heatmap = (
@@ -550,11 +529,7 @@ def _(alt, expected_cycle_time, mo, np, pl, spectrum):
     _cc_lines_df = pl.DataFrame({
         "freq": [_expected_freq * h for h in range(1, 5)],
     })
-    _cc_rules = (
-        alt.Chart(_cc_lines_df)
-        .mark_rule(strokeDash=[4, 4], color="crimson", opacity=0.6)
-        .encode(x="freq:Q")
-    )
+    _cc_rules = alt.Chart(_cc_lines_df).mark_rule(strokeDash=[4, 4], color="crimson", opacity=0.6).encode(x="freq:Q")
 
     power_chart = (_power_line + _cc_rules).properties(
         width=600,
@@ -603,7 +578,7 @@ def _(observable_names, alt, mo, np, pl, spectrum):
         alt.Chart(_props_df)
         .mark_bar()
         .encode(
-            x=alt.X("mode:N", title="Mode", sort=[f"Mode {i+1}" for i in range(8)]),
+            x=alt.X("mode:N", title="Mode", sort=[f"Mode {i + 1}" for i in range(8)]),
             y=alt.Y("energy:Q", title="Energy (|a|^2)"),
             color=alt.Color("dominant_observable:N", legend=alt.Legend(title="Dominant\nObservable")),
             tooltip=["mode", "energy", "frequency", "dominant_observable"],
@@ -838,8 +813,10 @@ def _(
 ):
     _spec = koopman_cc.spectrum
     if _spec is None:
-        mo.md("**No spectrum available from KoopmanCellCycleVariable** — "
-               "the cell cycle mode may not have been identified.")
+        mo.md(
+            "**No spectrum available from KoopmanCellCycleVariable** — "
+            "the cell cycle mode may not have been identified."
+        )
         plotly_fig = None
     else:
         plotly_fig = plot_koopman_spectrum(

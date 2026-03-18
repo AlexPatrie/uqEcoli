@@ -72,6 +72,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import polars
+from pydantic import BaseModel, ConfigDict
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq import (
@@ -85,12 +86,12 @@ from uq import (
 from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
-from uq.common import BaseClass
+from uq.common import BaseClass, get_repo_root
 from uq.generators.vecoli import VecoliSimulationFunc
 from uq.inputs import XSpace, XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
-from uq.pipeline.models import PipelineConfig, PipelineResult, StratificationLens, UqProfile
+from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
 from uq.pipeline.output_loader import OutputVariables, TimeseriesDataset, TimeseriesLoaderParquet, load_timeseries
 from uq.pipeline.workflow import (
     AggregationResult,
@@ -108,6 +109,7 @@ if TYPE_CHECKING:
 
 from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
+from uq.models import PipelineConfig
 from uq.outputs import OutputExtractor, OutputType
 from uq.pipeline.param_loader import ParameterDataset
 
@@ -230,6 +232,31 @@ class System(BaseClass):
 
 @dataclass
 class Pipeline(BaseClass):
+    """
+    Object which represents a full ./uq workflow.
+
+    Attributes:
+        experiment_ids: list[str]
+        sim_base_path: str | Path
+        observable_columns: list[str] | None = None
+        lb_generation: int | None = 2
+        lb_time: float | None = 100.0
+        n_bins: int = 10
+        polynomial_order: int = 3
+        n_samples: int = 200
+        expected_cycle_time: float = 3600.0
+        max_duration: float = 10800.0
+        prescreen_config: PCEParameterSelectionConfig | None = None
+        export_path: Path | None = None
+        precomputed_path: Path | str | None = None
+        sim_config_path: str | None = None
+        init: bool = True
+        cache: PrecomputedCache | None = field(init=False, default=None)
+        system: System | None = field(init=False, default=None)
+        result: PipelineResult | None = field(init=False, default=None)
+        _ds: DatasetMultiExperiment | None = field(init=False, default=None)
+    """
+
     experiment_ids: list[str]
     sim_base_path: str | Path
     observable_columns: list[str] | None = None
@@ -410,7 +437,7 @@ class Pipeline(BaseClass):
             result.export(self.export_path)
         return result
 
-    def _gsa(self):
+    def _gsa(self) -> PipelineResult:
         param_space = self.system.dataset.parameter_space
         f = self.system.simulation_func
 
