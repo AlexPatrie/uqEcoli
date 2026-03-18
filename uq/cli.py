@@ -62,6 +62,7 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
 
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from pprint import pp
@@ -326,6 +327,11 @@ def quantify(
         execute=True,
     )
     print_report(pipeline.result, export_path=export_path)
+
+
+@app.command()
+def dashboard() -> None:
+    _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
 
 
 # @app.command()

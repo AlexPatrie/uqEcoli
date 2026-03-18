@@ -18,7 +18,7 @@ from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
 from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate, SobolIndices
 from uq.viz import plot_koopman_spectrum
 
-OUTPUT_DIR = Path(__file__).parent.parent / "test_export_output"
+OUTPUT_DIR = Path(__file__).parent.parent / "examples" / "uq_artifacts" / "test_export_output"
 
 PARAM_NAMES = ["vio_expression", "vio_trl_eff", "mecillinam_concentration"]
 N_PARAMS = len(PARAM_NAMES)
@@ -87,21 +87,41 @@ def _make_synthetic_spectrum() -> KoopmanSpectrum:
     )
 
 
+def _make_multi_indices(n_params: int, order: int) -> np.ndarray:
+    """Generate multi-index matrix for total-degree PCE."""
+    from itertools import combinations_with_replacement
+
+    indices = []
+    for total_deg in range(order + 1):
+        for combo in combinations_with_replacement(range(n_params), total_deg):
+            idx = np.zeros(n_params, dtype=int)
+            for c in combo:
+                idx[c] += 1
+            indices.append(idx)
+    return np.array(indices)
+
+
 def _make_full_pipeline_result() -> tuple[PipelineResult, KoopmanSpectrum]:
     """Build a full PipelineResult with all fields populated."""
     rng = np.random.default_rng(42)
 
-    # Population surrogate
-    n_terms = 10
+    # Multi-indices for proper PCE basis (not all-zeros)
+    pop_mi = _make_multi_indices(N_PARAMS, order=3)
+    cc_mi = _make_multi_indices(N_PARAMS, order=2)
+    _bounds = np.array([[0.0, 5.0], [0.0, 2.0], [0.0, 10.0]])
+
+    # Population surrogate — coefficients shaped for meaningful predict()
+    pop_coeffs = rng.normal(0, 0.5, len(pop_mi))
+    pop_coeffs[0] = 1.5  # constant term (baseline mass-like)
     pop_surrogate = PCESurrogate(
-        coefficients=rng.normal(0, 1, n_terms),
-        multi_indices=np.zeros((n_terms, N_PARAMS), dtype=int),
+        coefficients=pop_coeffs,
+        multi_indices=pop_mi,
         basis_type="legendre",
         polynomial_order=3,
         input_dim=N_PARAMS,
         output_dim=len(OBS_NAMES),
         r_squared=0.92,
-        input_bounds=np.array([[0.0, 5.0], [0.0, 2.0], [0.0, 10.0]]),
+        input_bounds=_bounds,
     )
 
     # Population Sobol
@@ -112,15 +132,17 @@ def _make_full_pipeline_result() -> tuple[PipelineResult, KoopmanSpectrum]:
     )
 
     # Cell cycle surrogate
+    cc_coeffs = rng.normal(0, 0.3, len(cc_mi))
+    cc_coeffs[0] = 1.0
     cc_surrogate = PCESurrogate(
-        coefficients=rng.normal(0, 1, n_terms),
-        multi_indices=np.zeros((n_terms, N_PARAMS), dtype=int),
+        coefficients=cc_coeffs,
+        multi_indices=cc_mi,
         basis_type="legendre",
         polynomial_order=2,
         input_dim=N_PARAMS,
         output_dim=N_BINS,
         r_squared=0.87,
-        input_bounds=np.array([[0.0, 5.0], [0.0, 2.0], [0.0, 10.0]]),
+        input_bounds=_bounds,
     )
 
     # Per-stage Sobol with realistic cell-cycle-dependent patterns

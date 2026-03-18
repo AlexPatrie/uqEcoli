@@ -56,14 +56,14 @@
         0.1
       ],
       "first_order": {
-        "vio_expression": 0.5644541290936421,
-        "vio_trl_eff": 0.043190704555960586,
-        "mecillinam_concentration": 0.061676240160220906
+        "vio_expression": 0.6342494280261137,
+        "vio_trl_eff": 0.04593584983615385,
+        "mecillinam_concentration": 0.009632718127853882
       },
       "total_order": {
-        "vio_expression": 0.638041396372974,
-        "vio_trl_eff": 0.10989371438038631,
-        "mecillinam_concentration": 0.09335456263133896
+        "vio_expression": 0.6764770103882058,
+        "vio_trl_eff": 0.09410919851270233,
+        "mecillinam_concentration": 0.04100099967291103
       }
     },
     {
@@ -73,14 +73,14 @@
         0.2
       ],
       "first_order": {
-        "vio_expression": 0.5259692755666004,
-        "vio_trl_eff": 0.053654440643640784,
-        "mecillinam_concentration": 0.08738197834787965
+        "vio_expression": 0.5065815762703537,
+        "vio_trl_eff": 0.04159843523037472,
+        "mecillinam_concentration": 0.05026556352926281
       },
       "total_order": {
-        "vio_expression": 0.5869522127611477,
-        "vio_trl_eff": 0.11834016999810981,
-        "mecillinam_concentration": 0.16543256229393227
+        "vio_expression": 0.5667704159513043,
+        "vio_trl_eff": 0.08782755036271456,
+        "mecillinam_concentration": 0.12022625529273306
       }
     },
     {
@@ -90,14 +90,14 @@
         0.3
       ],
       "first_order": {
-        "vio_expression": 0.4346327181278538,
-        "vio_trl_eff": 0.04186227271752123,
-        "mecillinam_concentration": 0.14347938267726487
+        "vio_expression": 0.4148641448891238,
+        "vio_trl_eff": 0.055431542683051956,
+        "mecillinam_concentration": 0.10503470878133916
       },
       "total_order": {
-        "vio_expression": 0.466000999672911,
-        "vio_trl_eff": 0.06965756303764953,
-        "mecillinam_concentration": 0.1920216782508209
+        "vio_expression": 0.4831500063389319,
+        "vio_trl_eff": 0.09868024542486242,
+        "mecillinam_concentration": 0.1423343950171538
       }
     },
     {
@@ -107,14 +107,14 @@
         0.4
       ],
       "first_order": {
-        "vio_expression": 0.3652655635292628,
-        "vio_trl_eff": 0.056505927878247014,
-        "mecillinam_concentration": 0.19729762513610327
+        "vio_expression": 0.4161428633384457,
+        "vio_trl_eff": 0.05223595548774682,
+        "mecillinam_concentration": 0.19536740689215684
       },
       "total_order": {
-        "vio_expression": 0.43522625529273307,
-        "vio_trl_eff": 0.11852183399838195,
-        "mecillinam_concentration": 0.23603962361902575
+        "vio_expression": 0.43658459952350603,
+        "vio_trl_eff": 0.11945141813787513,
+        "mecillinam_concentration": 0.2552584582876788
       }
     },
     {
@@ -124,14 +124,14 @@
         0.5
       ],
       "first_order": {
-        "vio_expression": 0.3100347087813392,
-        "vio_trl_eff": 0.052321613230667204,
-        "mecillinam_concentration": 0.22850057427422185
+        "vio_expression": 0.28628532540433005,
+        "vio_trl_eff": 0.04680328783642699,
+        "mecillinam_concentration": 0.21088882037121615
       },
       "total_order": {
-        "vio_expression": 0.34733439501715385,
-        "vio_trl_eff": 0.11327134346916573,
-        "mecillinam_concentration": 0.25688572329078047
+        "vio_expression": 0.34040979716150366,
+        "vio_trl_eff": 0.07519110772408644,
+        "mecillinam_concentration": 0.23776062478337456
       }
     },
     {
@@ -141,14 +141,14 @@
         0.6
       ],
       "first_order": {
-        "vio_expression": 0.2903674068921568,
-        "vio_trl_eff": 0.050675790694888916,
-        "mecillinam_concentration": 0.28367358196069953
+        "vio_expression": 0.24402506652920267,
+        "vio_trl_eff": 0.05968278354591481,
+        "mecillinam_concentration": 0.2245139068515259
       },
       "total_order": {
-        "vio_expression": 0.3502584582876787,
-        "vio_trl_eff": 0.11298571341246902,
-        "mecillinam_concentration": 0.3505173238220176
+        "vio_expression": 0.3099249979741642,
+        "vio_trl_eff": 0.11776588274595026,
+        "mecillinam_concentration": 0.2777286708910056
       }
     },
     {
@@ -158,14 +158,14 @@
         0.7
       ],
       "first_order": {
-        "vio_expression": 0.19588882037121613,
-        "vio_trl_eff": 0.043611221517566585,
-        "mecillinam_concentration": 0.3167457324631995
+        "vio_expression": 0.23133679739378565,
+        "vio_trl_eff": 0.057933472351999256,
+        "mecillinam_concentration": 0.31453824783254686
       },
       "total_order": {
-        "vio_expression": 0.22276062478337455,
-        "vio_trl_eff": 0.10371539922499488,
-        "mecillinam_concentration": 0.36501150483178746
+        "vio_expression": 0.2775398407477274,
+        "vio_trl_eff": 0.090808552721171,
+        "mecillinam_concentration": 0.35904996645602505
       }
     },
     {
@@ -175,14 +175,14 @@
         0.8
       ],
       "first_order": {
-        "vio_expression": 0.09951390685152586,
-        "vio_trl_eff": 0.04665114970014225,
-        "mecillinam_concentration": 0.37988259195315016
+        "vio_expression": 0.11172941029986233,
+        "vio_trl_eff": 0.03866712785996519,
+        "mecillinam_concentration": 0.34741643141995165
       },
       "total_order": {
-        "vio_expression": 0.1527286708910056,
-        "vio_trl_eff": 0.10020357934486707,
-        "mecillinam_concentration": 0.4181195978369069
+        "vio_expression": 0.14861244382118213,
+        "vio_trl_eff": 0.07628275332596621,
+        "mecillinam_concentration": 0.40713142230356536
       }
     },
     {
@@ -192,14 +192,14 @@
         0.9
       ],
       "first_order": {
-        "vio_expression": 0.07953824783254689,
-        "vio_trl_eff": 0.04537648207335433,
-        "mecillinam_concentration": 0.4507392764377146
+        "vio_expression": 0.07718242060990399,
+        "vio_trl_eff": 0.05158539691076715,
+        "mecillinam_concentration": 0.4437677118190201
       },
       "total_order": {
-        "vio_expression": 0.12404996645602506,
-        "vio_trl_eff": 0.1165806664694443,
-        "mecillinam_concentration": 0.48477564558963504
+        "vio_expression": 0.12156563229630822,
+        "vio_trl_eff": 0.12042661999072922,
+        "mecillinam_concentration": 0.4737860870134823
       }
     },
     {
@@ -209,14 +209,14 @@
         1.0
       ],
       "first_order": {
-        "vio_expression": 0.002416431419951688,
-        "vio_trl_eff": 0.05497160744053764,
-        "mecillinam_concentration": 0.47927277208211694
+        "vio_expression": 0.019108384603047875,
+        "vio_trl_eff": 0.046182621060016714,
+        "mecillinam_concentration": 0.4391248106323288
       },
       "total_order": {
-        "vio_expression": 0.062131422303565394,
-        "vio_trl_eff": 0.10839353658101433,
-        "mecillinam_concentration": 0.5463066646285017
+        "vio_expression": 0.06682101841813112,
+        "vio_trl_eff": 0.07585892780203282,
+        "mecillinam_concentration": 0.4891874971385306
       }
     }
   ],
@@ -302,7 +302,7 @@
       "input_dim": 3,
       "output_dim": 2,
       "r_squared": 0.92,
-      "n_terms": 10
+      "n_terms": 20
     },
     "cell_cycle": {
       "basis_type": "legendre",
