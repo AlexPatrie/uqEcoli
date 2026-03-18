@@ -155,22 +155,34 @@ def _(mo, os):
     )
     use_cache_switch = mo.ui.switch(value=False, label="Load precomputed cache for Phase 1")
     n_samples_slider = mo.ui.slider(
-        start=10, stop=500, step=10, value=50,
+        start=10,
+        stop=500,
+        step=10,
+        value=50,
         label="PCE samples (N)",
         show_value=True,
     )
     polynomial_order_slider = mo.ui.slider(
-        start=1, stop=5, step=1, value=2,
+        start=1,
+        stop=5,
+        step=1,
+        value=2,
         label="Polynomial order (p)",
         show_value=True,
     )
     n_bins_slider = mo.ui.slider(
-        start=3, stop=20, step=1, value=10,
+        start=3,
+        stop=20,
+        step=1,
+        value=10,
         label="Cell cycle bins",
         show_value=True,
     )
     cycle_time_slider = mo.ui.slider(
-        start=600, stop=7200, step=300, value=3600,
+        start=600,
+        stop=7200,
+        step=300,
+        value=3600,
         label="Expected cycle time (s)",
         show_value=True,
     )
@@ -356,7 +368,8 @@ def _(agg_result, go, make_subplots, np, observable_columns):
     _n_display = len(_display_cols)
 
     agg_fig = make_subplots(
-        rows=1, cols=3,
+        rows=1,
+        cols=3,
         subplot_titles=[
             "Uniform Mean +/- Std",
             "Generation Convergence",
@@ -375,7 +388,8 @@ def _(agg_result, go, make_subplots, np, observable_columns):
             name="Uniform",
             showlegend=False,
         ),
-        row=1, col=1,
+        row=1,
+        col=1,
     )
 
     # Panel 2: Generation means
@@ -389,7 +403,8 @@ def _(agg_result, go, make_subplots, np, observable_columns):
                     name=_short_names[_j],
                     mode="lines+markers",
                 ),
-                row=1, col=2,
+                row=1,
+                col=2,
             )
     agg_fig.update_xaxes(title="Generation", row=1, col=2)
 
@@ -404,7 +419,8 @@ def _(agg_result, go, make_subplots, np, observable_columns):
                     name=_short_names[_j],
                     showlegend=False,
                 ),
-                row=1, col=3,
+                row=1,
+                col=3,
             )
     agg_fig.update_xaxes(title="Seed", row=1, col=3)
 
@@ -452,18 +468,30 @@ def _(agg_result, get_variance_decomposition, go, mo, np, observable_columns):
     _residual_frac = np.clip(1.0 - _gen_frac[:_n] - _seed_frac[:_n], 0, 1)
 
     decomp_fig = go.Figure()
-    decomp_fig.add_trace(go.Bar(
-        x=_short_names, y=_gen_frac[:_n] * 100,
-        name="Generation", marker_color="#e74c3c",
-    ))
-    decomp_fig.add_trace(go.Bar(
-        x=_short_names, y=_seed_frac[:_n] * 100,
-        name="Seed", marker_color="#3498db",
-    ))
-    decomp_fig.add_trace(go.Bar(
-        x=_short_names, y=_residual_frac * 100,
-        name="Residual (cell cycle)", marker_color="#2ecc71",
-    ))
+    decomp_fig.add_trace(
+        go.Bar(
+            x=_short_names,
+            y=_gen_frac[:_n] * 100,
+            name="Generation",
+            marker_color="#e74c3c",
+        )
+    )
+    decomp_fig.add_trace(
+        go.Bar(
+            x=_short_names,
+            y=_seed_frac[:_n] * 100,
+            name="Seed",
+            marker_color="#3498db",
+        )
+    )
+    decomp_fig.add_trace(
+        go.Bar(
+            x=_short_names,
+            y=_residual_frac * 100,
+            name="Residual (cell cycle)",
+            marker_color="#2ecc71",
+        )
+    )
     decomp_fig.update_layout(
         barmode="stack",
         yaxis_title="Variance Fraction (%)",
@@ -476,9 +504,9 @@ def _(agg_result, get_variance_decomposition, go, mo, np, observable_columns):
     mo.vstack([
         decomp_fig,
         mo.md(f"""
-**Mean fractions:** Generation {_gen_frac[:_n].mean()*100:.1f}% |
-Seed {_seed_frac[:_n].mean()*100:.1f}% |
-Residual {_residual_frac.mean()*100:.1f}%
+**Mean fractions:** Generation {_gen_frac[:_n].mean() * 100:.1f}% |
+Seed {_seed_frac[:_n].mean() * 100:.1f}% |
+Residual {_residual_frac.mean() * 100:.1f}%
 
 The **residual fraction** represents variance not explained by generation or
 seed effects — this is the cell-cycle-related variance that drives Phase 2.
@@ -519,8 +547,7 @@ def _(
     prescreen_config = None
 
     if not morris_switch.value or param_space.n_parameters < 2:
-        mo.md("*Morris prescreening skipped.*" if not morris_switch.value
-               else "*Skipped — fewer than 2 parameters.*")
+        mo.md("*Morris prescreening skipped.*" if not morris_switch.value else "*Skipped — fewer than 2 parameters.*")
     else:
         _wrapper = DataDrivenWrapper(
             parameter_space=param_space,
@@ -538,23 +565,31 @@ def _(
         _sigma = np.asarray(morris_indices.sigma)
 
         _morris_fig = go.Figure()
-        _morris_fig.add_trace(go.Scatter(
-            x=_mu_star, y=_sigma,
-            mode="markers+text",
-            text=morris_indices.parameter_names,
-            textposition="top center",
-            marker=dict(size=12, color="magenta"),
-        ))
+        _morris_fig.add_trace(
+            go.Scatter(
+                x=_mu_star,
+                y=_sigma,
+                mode="markers+text",
+                text=morris_indices.parameter_names,
+                textposition="top center",
+                marker=dict(size=12, color="magenta"),
+            )
+        )
         _max_mu = max(_mu_star) * 1.2 if len(_mu_star) > 0 else 1.0
-        _morris_fig.add_trace(go.Scatter(
-            x=[0, _max_mu], y=[0, 0.5 * _max_mu],
-            mode="lines", line=dict(dash="dash", color="gray"),
-            name="sigma = 0.5*mu* (linear threshold)",
-        ))
+        _morris_fig.add_trace(
+            go.Scatter(
+                x=[0, _max_mu],
+                y=[0, 0.5 * _max_mu],
+                mode="lines",
+                line=dict(dash="dash", color="gray"),
+                name="sigma = 0.5*mu* (linear threshold)",
+            )
+        )
         _morris_fig.update_layout(
             xaxis_title="mu* (mean absolute effect)",
             yaxis_title="sigma (interaction/nonlinearity)",
-            height=350, template="plotly_dark",
+            height=350,
+            template="plotly_dark",
             margin=dict(t=20, b=40),
         )
 
@@ -607,10 +642,7 @@ def _(decomp, mo, np, observable_columns):
     _residual = np.clip(1.0 - _gen_frac[:_n] - _seed_frac[:_n], 0, 1)
 
     _threshold = float(np.median(_residual))
-    relevant_observables = [
-        observable_columns[_i] for _i in range(_n)
-        if _residual[_i] >= _threshold
-    ]
+    relevant_observables = [observable_columns[_i] for _i in range(_n) if _residual[_i] >= _threshold]
     if not relevant_observables:
         relevant_observables = observable_columns[:1]
 
@@ -618,12 +650,12 @@ def _(decomp, mo, np, observable_columns):
     for _i, _col in enumerate(observable_columns[:15]):
         _short = _col.split("__")[-1]
         _sel = "**selected**" if _col in relevant_observables else ""
-        _rows += f"| `{_short}` | {_residual[_i]*100:.1f}% | {_sel} |\n"
+        _rows += f"| `{_short}` | {_residual[_i] * 100:.1f}% | {_sel} |\n"
     if len(observable_columns) > 15:
         _rows += f"| ... | ({len(observable_columns) - 15} more) | |\n"
 
     mo.md(f"""
-**Threshold:** {_threshold*100:.1f}% residual variance (median)
+**Threshold:** {_threshold * 100:.1f}% residual variance (median)
 
 | Observable | Residual Fraction | Status |
 |------------|-------------------|--------|
@@ -722,16 +754,22 @@ def _(go, mo, np, param_space, sobol_bulk):
     _names = param_space.parameter_names
 
     sobol_pop_fig = go.Figure()
-    sobol_pop_fig.add_trace(go.Bar(
-        x=_names, y=_first,
-        name="S_i (first order)",
-        marker_color="cyan",
-    ))
-    sobol_pop_fig.add_trace(go.Bar(
-        x=_names, y=_total,
-        name="S_Ti (total order)",
-        marker_color="magenta",
-    ))
+    sobol_pop_fig.add_trace(
+        go.Bar(
+            x=_names,
+            y=_first,
+            name="S_i (first order)",
+            marker_color="cyan",
+        )
+    )
+    sobol_pop_fig.add_trace(
+        go.Bar(
+            x=_names,
+            y=_total,
+            name="S_Ti (total order)",
+            marker_color="magenta",
+        )
+    )
     sobol_pop_fig.update_layout(
         barmode="group",
         yaxis_title="Sobol Index",
@@ -774,8 +812,12 @@ def _(mo, param_space, surrogate_bulk):
         _step = (_hi - _lo) / 100.0
         _slider_list.append(
             mo.ui.slider(
-                start=_lo, stop=_hi, step=max(_step, 0.001), value=_mid,
-                label=_name, show_value=True,
+                start=_lo,
+                stop=_hi,
+                step=max(_step, 0.001),
+                value=_mid,
+                label=_name,
+                show_value=True,
             )
         )
 
@@ -793,30 +835,38 @@ def _(explore_sliders, go, mo, np, observable_columns, param_space, surrogate_bu
     _default_pred = np.asarray(surrogate_bulk.predict(_defaults.reshape(1, -1))).flatten()
 
     _diff = _pred_arr - _default_pred
-    _display_cols = observable_columns[:len(_pred_arr)]
+    _display_cols = observable_columns[: len(_pred_arr)]
     _short_names = [c.split("__")[-1] for c in _display_cols]
 
     _fig = go.Figure()
-    _fig.add_trace(go.Bar(
-        x=_short_names, y=_default_pred[:len(_short_names)],
-        name="Baseline (midpoint params)",
-        marker_color="gray", opacity=0.5,
-    ))
-    _fig.add_trace(go.Bar(
-        x=_short_names, y=_pred_arr[:len(_short_names)],
-        name="Current params",
-        marker_color="cyan",
-    ))
+    _fig.add_trace(
+        go.Bar(
+            x=_short_names,
+            y=_default_pred[: len(_short_names)],
+            name="Baseline (midpoint params)",
+            marker_color="gray",
+            opacity=0.5,
+        )
+    )
+    _fig.add_trace(
+        go.Bar(
+            x=_short_names,
+            y=_pred_arr[: len(_short_names)],
+            name="Current params",
+            marker_color="cyan",
+        )
+    )
     _fig.update_layout(
-        barmode="group", yaxis_title="Predicted Output",
-        height=400, template="plotly_dark",
+        barmode="group",
+        yaxis_title="Predicted Output",
+        height=400,
+        template="plotly_dark",
         margin=dict(t=20, b=40),
         legend=dict(orientation="h", y=1.12),
     )
 
     _param_summary = "\n".join(
-        f"- `{param_space.parameter_names[_i]}`: {_params[_i]:.4f}"
-        for _i in range(len(_params))
+        f"- `{param_space.parameter_names[_i]}`: {_params[_i]:.4f}" for _i in range(len(_params))
     )
 
     _info = mo.vstack([
@@ -920,17 +970,19 @@ def _(go, mo, n_bins_slider, np, param_space, per_stage_sobol):
             _total = np.mean(_total, axis=0)
         _z[:, _stage] = _total[:_n_params]
 
-    _bin_labels = [f"{_s/_n_bins:.2f}-{(_s+1)/_n_bins:.2f}" for _s in range(_n_bins)]
+    _bin_labels = [f"{_s / _n_bins:.2f}-{(_s + 1) / _n_bins:.2f}" for _s in range(_n_bins)]
 
-    cc_heatmap = go.Figure(go.Heatmap(
-        z=_z,
-        x=_bin_labels,
-        y=_names,
-        colorscale="Viridis",
-        colorbar_title="S_Ti",
-        text=np.round(_z, 3),
-        texttemplate="%{text}",
-    ))
+    cc_heatmap = go.Figure(
+        go.Heatmap(
+            z=_z,
+            x=_bin_labels,
+            y=_names,
+            colorscale="Viridis",
+            colorbar_title="S_Ti",
+            text=np.round(_z, 3),
+            texttemplate="%{text}",
+        )
+    )
     cc_heatmap.update_layout(
         xaxis_title="Cell Cycle Stage (theta)",
         yaxis_title="Parameter",
@@ -982,13 +1034,10 @@ def _(
         mo.md("*No matching observable columns in data for Koopman analysis.*")
     else:
         _first_exp = sim_data["experiment_id"].unique()[0]
-        _first_seed = sim_data.filter(
-            sim_data["experiment_id"] == _first_exp
-        )["lineage_seed"].unique()[0]
+        _first_seed = sim_data.filter(sim_data["experiment_id"] == _first_exp)["lineage_seed"].unique()[0]
 
         _traj_df = sim_data.filter(
-            (sim_data["experiment_id"] == _first_exp) &
-            (sim_data["lineage_seed"] == _first_seed)
+            (sim_data["experiment_id"] == _first_exp) & (sim_data["lineage_seed"] == _first_seed)
         ).sort("time")
 
         _traj_data = _traj_df.select(_mass_cols).to_numpy()

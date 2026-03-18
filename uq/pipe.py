@@ -416,6 +416,9 @@ class Pipeline(BaseClass):
     def assemble_results(
         self, sobol_bulk, surrogate_bulk, morris_indices, per_stage_sobol, surrogate_cc, cc_relevance
     ) -> PipelineResult:
+        # --- Build cell cycle profile from timeseries ---
+        cc_profile = self._compute_cell_cycle_profile()
+
         # --- Assemble PipelineResult ---
         result = PipelineResult(
             population=UqProfile(
@@ -432,10 +435,65 @@ class Pipeline(BaseClass):
             aggregation=self.system.aggregation,
             morris_indices=morris_indices,
             cell_cycle_relevance=cc_relevance,
+            cell_cycle_profile=cc_profile,
         )
         if self.export_path is not None:
             result.export(self.export_path)
         return result
+
+    def _compute_cell_cycle_profile(self) -> dict[str, Any] | None:
+        """Compute per-stage observable means by binning timeseries via mass-based θ."""
+        try:
+            ds = self.system.dataset
+            y = ds.y
+            obs_cols = self.system.observable_cols
+
+            # Use mass-based cell cycle variable for profiling
+            mass_col = next(
+                (c for c in ["listeners__mass__dry_mass", "listeners__mass__cell_mass"] if c in y.columns),
+                None,
+            )
+            if mass_col is None or "generation" not in y.columns or "agent_id" not in y.columns:
+                return None
+
+            # Compute θ per row: normalized mass progression within each cell
+            import polars as pl
+
+            cell_stats = y.group_by(["generation", "agent_id"]).agg([
+                pl.col(mass_col).first().alias("_mass_birth"),
+                pl.col(mass_col).last().alias("_mass_div"),
+            ])
+            joined = y.join(cell_stats, on=["generation", "agent_id"], how="left")
+
+            mass = joined[mass_col].to_numpy().astype(np.float64)
+            m_birth = joined["_mass_birth"].to_numpy().astype(np.float64)
+            m_div = joined["_mass_div"].to_numpy().astype(np.float64)
+
+            log_mass = np.log(np.maximum(mass, 1e-10))
+            log_birth = np.log(np.maximum(m_birth, 1e-10))
+            log_div = np.log(np.maximum(m_div, 1e-10))
+            denom = log_div - log_birth
+            denom = np.where(denom > 0, denom, 1.0)
+            theta = np.clip((log_mass - log_birth) / denom, 0, 1)
+
+            # Bin into stages
+            n_bins = self.n_bins
+            stage_edges = np.linspace(0, 1, n_bins + 1)
+            bins = np.clip(np.digitize(theta, stage_edges) - 1, 0, n_bins - 1)
+
+            # Compute per-stage means for each observable
+            profile: dict[str, Any] = {"stages": list(range(n_bins))}
+            for col in obs_cols:
+                if col not in y.columns:
+                    continue
+                vals = y[col].to_numpy().astype(np.float64)
+                means = [float(np.nanmean(vals[bins == s])) if np.any(bins == s) else 0.0 for s in range(n_bins)]
+                short_name = col.split("__")[-1] if "__" in col else col
+                profile[f"{short_name}_mean"] = means
+
+            return profile
+        except Exception:
+            return None
 
     def _gsa(self) -> PipelineResult:
         param_space = self.system.dataset.parameter_space

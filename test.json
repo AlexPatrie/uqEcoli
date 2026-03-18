@@ -1,31 +1,31 @@
 {
-   "experiment_ids": [
-      "api_simulation_default",
-      "mecillinam",
-      "test_violacein_with_metabolism"
-   ],
-   "sim_base_path": "/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims",
-   "samples": {
-      "cache_dir": "uq_cache",
-      "n_samples": 22,
-      "seed": 42,
-      "max_workers": 4,
-      "generations": 1,
-      "live": true,
-      "include_vio": false,
-      "include_mecillinam": true
-   },
-   "observable_columns": null,
-   "lb_generation": 2,
-   "lb_time": 100.0,
-   "n_bins": 10,
-   "polynomial_order": 3,
-   "n_samples": 200,
-   "expected_cycle_time": 3600.0,
-   "max_duration": 10800.0,
-   "prescreen_config": null,
-   "export_path": "uq_results",
-   "precomputed_path": null,
-   "sim_config_path": null,
-   "init": true
+  "experiment_ids": [
+    "api_simulation_default",
+    "mecillinam",
+    "test_violacein_with_metabolism"
+  ],
+  "sim_base_path": "/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims",
+  "samples": {
+    "cache_dir": "uq_cache",
+    "n_samples": 22,
+    "seed": 42,
+    "max_workers": 4,
+    "generations": 1,
+    "live": true,
+    "include_vio": false,
+    "include_mecillinam": true
+  },
+  "observable_columns": null,
+  "lb_generation": 2,
+  "lb_time": 100.0,
+  "n_bins": 10,
+  "polynomial_order": 3,
+  "n_samples": 200,
+  "expected_cycle_time": 3600.0,
+  "max_duration": 10800.0,
+  "prescreen_config": null,
+  "export_path": "uq_results",
+  "precomputed_path": null,
+  "sim_config_path": null,
+  "init": true
 }

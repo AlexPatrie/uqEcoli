@@ -1,0 +1,246 @@
+  ---
+  1. Solo Parameter Selector (param_selector, line 87)
+
+  What it shows: A dropdown to pick one parameter, with color-coded badges for all parameters (cyan = vio_expression, amber = vio_trl_eff, pink =
+  mecillinam_concentration).
+
+  Why it's useful: This is the master control. Every reactive panel below highlights the selected ("soloed") parameter and dims the others. Like soloing a
+  channel in a DAW — you're isolating one parameter's contribution to hear it above the mix. A stakeholder can click through each parameter and instantly
+  see how its influence changes across the cell cycle, without the other parameters' curves cluttering the view.
+
+  Governing equation: The parameter space definition:
+
+  X = {x_1, ..., x_n},  x_i in [a_i, b_i]
+  where each x_i is one of the input variables with bounded support. The dropdown selects which x_i to isolate.
+
+  RFC006 call to action (§4, Activity 1): "Identify the scientifically most relevant input and output variables. Expected: Inputs: vio pathway presence,
+  mecillinam condition, gene knockouts."
+
+  ---
+  2. Header Strip (header_strip, line 122)
+
+  What it shows: Five at-a-glance metrics — number of parameters, number of cell cycle stages, Phase 1 surrogate R^2, Phase 2 surrogate R^2, and Morris
+  trajectory count.
+
+  Why it's useful: These are the "trust indicators" for the entire analysis. R^2 tells you how well the PCE polynomial approximates the real simulation —
+  if POP R^2 = 0.92, the surrogate explains 92% of output variance, and the Sobol indices derived from it are reliable. If R^2 were 0.3, everything
+  downstream would be suspect. Morris trajectory count tells you how well-sampled the prescreening was. A stakeholder can look at this strip and
+  immediately know whether to trust the results below.
+
+  Governing equation: PCE goodness-of-fit:
+
+  R^2 = 1 - sum(y_i - f_hat(x_i))^2 / sum(y_i - y_bar)^2
+  where f_hat(x) = sum_alpha c_alpha Psi_alpha(x) is the PCE surrogate and y_i are the simulation outputs at LHS sample points.
+
+  RFC006 call to action (§4, Activity 4): "Implement well established global sensitivity analysis methods based on the aggregation strategies (1-3).
+  Expected to use PCE surrogate method for the stochastic function (sim_data -> SIM output)."
+
+  ---
+  3. Parametric EQ (eq_strip, line 149)
+
+  What it shows: Three overlapping spline curves, one per parameter, plotted across θ (cell cycle position, 0 to 1). The soloed parameter is thick with a
+  filled area underneath; the others are ghosted. Two lines for the soloed param:
+  - Solid line = S_Ti (total-order Sobol index — includes all interactions)
+  - Dashed line = S_i (first-order — main effect only, no interactions)
+  - Semi-transparent bars = the gap between them (S_Ti - S_i = interaction contribution)
+
+  Why it's useful: This is the core visualization of the entire pipeline. It answers the central RFC006 question: "How does each parameter's importance
+  change across the cell cycle?"
+
+  In your data, you can see vio_expression (cyan) starts high at θ=0 (birth, S_Ti ≈ 0.64) and drops to near zero at θ=1 (pre-division). Mecillinam (pink)
+  does the opposite — negligible early, dominant late. This tells a biologist: "vio pathway matters most during early growth; mecillinam's PBP2 inhibition
+  matters most during septation/division." That's actionable — it tells you when in the cell cycle each drug/perturbation has its effect.
+
+  The EQ analogy: each parameter is a frequency band. The curve shape shows where in the cell cycle "spectrum" that parameter's energy concentrates.
+  Soloing isolates one band.
+
+  Governing equations: Per-stage Sobol indices from PCE coefficients (Phase 2, Strategy 4):
+
+  S_i^(k) = Var[E(Y_bar_k | X_i)] / Var(Y_bar_k)
+          = sum_{alpha: alpha_i>0, alpha_j=0 for j!=i} c_alpha^2 / sum_{alpha!=0} c_alpha^2
+
+  S_Ti^(k) = 1 - Var[E(Y_bar_k | X_~i)] / Var(Y_bar_k)
+  where Y_bar_k = mean(Y | theta in stage k) is the stage-binned output and the sums run over PCE multi-indices alpha. S_Ti - S_i is the interaction
+  contribution.
+
+  RFC006 call to action (§3): "A second type of analysis will need to be generated for the aggregation strategy (4), and will involve the definition of a
+  low-dimensional (possibly scalar) 'cell cycle variable' computed from omics variables. This variable or 'coordinate' will be used for deterministically
+  binning simulation data into cell stages, in order to then perform a 'phenotypic' sensitivity analysis across the physiological time dimension."
+
+  ---
+  4. Channel Strip (channel_strip, line 232)
+
+  Three sub-panels side by side:
+
+  Panel 1 — Population Faders (S_i / S_Ti): Vertical bars for each parameter's bulk Sobol indices (Phase 1). Wide bar = S_Ti, narrow inner bar = S_i.
+  Soloed param is full opacity; others dimmed.
+
+  Why it's useful: This is the "summary view" — one number per parameter for the entire population. It tells you the overall importance ranking without
+  cell-cycle resolution. A stakeholder can see at a glance: "vio_expression and mecillinam are roughly equal in total importance (0.55 and 0.50),
+  vio_trl_eff is negligible (0.08)." The gap between the wide and narrow bars is the interaction effect — if S_Ti is much larger than S_i, that parameter
+  interacts with others.
+
+  Governing equations: Population-level Sobol decomposition (Phase 1, Strategies 1-3):
+
+  Var(Y) = sum_i V_i + sum_{i<j} V_ij + ... + V_{1,2,...,n}
+  S_i  = V_i / Var(Y)
+  S_Ti = 1 - Var[E(Y|X_~i)] / Var(Y)
+  where Y = (1/N) sum Y_cell is the uniformly aggregated output (Strategy 1) and V_i = Var[E(Y|X_i)] is the variance due to parameter i alone.
+
+  RFC006 call to action (§4, Activity 4): "Implement well established global sensitivity analysis methods based on the aggregation strategies (1-3).
+  Expected to use PCE surrogate method for the stochastic function (sim_data -> SIM output)."
+
+  ---
+  Panel 2 — Morris Screening (mu vs sigma): Scatter plot of each parameter's Morris mu (x-axis, importance) vs sigma (y-axis, nonlinearity). A dashed
+  diagonal line at sigma = 0.5 * mu* separates "linear effect" (below) from "nonlinear/interactive" (above).
+
+  Why it's useful: Morris is the cheap prescreening step (O(n) evaluations vs O(n^2) for Sobol). It tells you which parameters to bother with before
+  running the expensive PCE. Parameters in the lower-right (high mu*, low sigma) have strong, predictable effects. Parameters above the line have nonlinear
+   or interactive effects — they may amplify or cancel depending on other parameter values. In your data, mecillinam has sigma = 0.22 vs mu* = 0.40,
+  putting it closer to the "interactive" zone — consistent with the fact that mecillinam's cell wall effects interact with vio pathway resource
+  competition.
+
+  Governing equations: Morris Elementary Effects:
+
+  EE_i(x) = [f(x + delta * e_i) - f(x)] / delta
+  mu*_i = mean(|EE_i|)   (robust importance)
+  sigma_i = std(EE_i)    (nonlinearity/interaction indicator)
+  Cost = r x (n+1) evaluations, where r = n_trajectories, n = n_params.
+
+  RFC006 call to action (§4, footnote): "using UQPy or PyTUQ libraries" — Morris is the prescreening method from these libraries that reduces n params to K
+   params (K << n) before the expensive PCE fitting.
+
+  ---
+  Panel 3 — Variance Decomposition Pie: Donut chart showing how total output variance splits into generation effects, lineage seed effects, and residual
+  (cell cycle + parameter sensitivity).
+
+  Why it's useful: This answers "Where does the uncertainty come from?" If generation_fraction were large, it would mean the simulation hasn't converged —
+  you'd need more generations. If seed_fraction were large, stochastic noise dominates and you'd need more lineage seeds. In your data, residual ≈ 99.99%,
+  meaning almost all variance is from parameter sensitivity and cell cycle dynamics, not from convergence artifacts or random seed effects. That's exactly
+  what you want to see — it means the Sobol indices are measuring real parameter effects, not noise.
+
+  Governing equations: ANOVA-style variance decomposition across Strategies 1-3:
+
+  Var(Y) = Var_gen + Var_seed + Var_residual
+  gen_fraction  = Var_between_generations / Var_total
+  seed_fraction = Var_between_seeds / Var_total
+  residual      = 1 - gen_fraction - seed_fraction
+  RFC006 call to action (§1): "This will enable us to deconvolve different types of uncertainty, and to model the relationship between 'bulk' and
+  'single-cell' attributes more accurately."
+
+  ---
+  5. Sensitivity Spectrogram + Cell Cycle Profile (heatmap_strip, line 349)
+
+  Top panel — Sensitivity Spectrogram: A heatmap with parameters on the y-axis, θ-bins on the x-axis, and S_Ti as color intensity (dark = low,
+  cyan/amber/pink = high). A ▶ arrow marks the soloed parameter's row.
+
+  Why it's useful: This is the "bird's eye view" of Phase 2. Instead of reading 10 separate Sobol tables, you see the entire parameter-vs-stage landscape
+  at once. Hot colors reveal where and which parameters drive variance. In your data, you'd see the upper-left corner lit up (vio_expression at early
+  stages) and the lower-right lit up (mecillinam at late stages), with vio_trl_eff as a dim band across the middle. This pattern tells a biologist that the
+   two perturbations affect the cell at different lifecycle phases — they're temporally orthogonal.
+
+  The DAW analogy: this is the spectrogram view in an audio editor — frequency (parameters) vs time (cell cycle), with intensity as color.
+
+  Bottom panel — Cell Cycle Profile: Two overlaid curves — dry mass (green, solid) and growth rate (amber, dashed, scaled to mass axis). Shaded vertical
+  bands mark approximate B, C, and D periods.
+
+  Why it's useful: This is the biological ground truth that the spectrogram above explains. Mass increases monotonically from ~1.03 to ~1.91 (the cell
+  doubles before dividing). Growth rate peaks in early/mid cycle then dips during D-period as resources shift to division machinery. The B/C/D shading lets
+   a biologist correlate the spectrogram patterns with known cell biology — "vio_expression dominates during B/C period (active growth), mecillinam
+  dominates during D period (cell wall synthesis for septation)."
+
+  Having the spectrogram directly above the profile with shared x-axes means you can visually trace: "stage 7 is where mass ≈ 1.65 and growth rate hits its
+   minimum — and that's exactly where mecillinam's S_Ti peaks."
+
+  Governing equations: Cell cycle variable θ and Strategy 4 binning:
+
+  lambda = |lambda| * e^(i*omega)       (Koopman eigenvalue from DMD)
+  theta(x) = arg(phi(x)) / 2*pi         (eigenfunction phase, theta in [0,1])
+  Stage k: theta in [k/n_bins, (k+1)/n_bins)
+  Y_bar_k = mean(Y | theta in stage k)  (per-stage aggregated output)
+  Profile values: mass_mean_k = mean(M | theta in stage k), growth_mean_k = mean(dM/dt | theta in stage k).
+
+  RFC006 call to action (§3): "The choice of the 'cell cycle variable' will be informed by the sensitivity analyses (1-3), will be explored through
+  dedicated visualisations, and will be discussed with all subteams. An established example for such a variable is the 'cell angle', and in principle, any
+  deterministic function of relevant process variables inside vEcoli may be considered if it has approximately cyclic behaviour."
+
+  ---
+  6. Observable Relevance + Surrogate Specs (relevance_strip, line 475)
+
+  Left panel — Observable Relevance: Horizontal bar chart showing which simulation observables were identified as cell-cycle-relevant by the GSA-informed
+  selection (Step 5b). Color-coded by score (green > 0.8, amber > 0.5, grey otherwise).
+
+  Why it's useful: This answers "Which outputs did we give to the Koopman DMD to define θ?" Not all simulation outputs carry cell-cycle information — some
+  vary due to generation convergence or seed noise. The relevance score is the residual variance fraction (1 - gen_frac - seed_frac): observables with high
+   residual are the ones whose variance is cell-cycle-driven. In your data, dry_mass (0.92) and growth (0.78) are both highly relevant. If an observable
+  had a score of 0.02, it would mean generation/seed effects explain almost all its variance and it's useless for defining the cell cycle coordinate.
+
+  Right panel — Surrogate Specs: A table comparing the two PCE surrogates (Population and Cell Cycle) — basis type, polynomial order, input/output
+  dimensions, R^2, and number of terms.
+
+  Why it's useful: This is the model card. A reviewer can check: "The population surrogate uses Legendre basis order 3 with R^2=0.92 — that's a good fit."
+  If R^2 were low, you'd know to increase polynomial_order or n_samples. The output_dim difference (2 for population vs 10 for cell cycle) reflects that
+  Phase 2 fits one surrogate across all 10 stages simultaneously.
+
+  Governing equations: Observable relevance (GSA-informed selection, Step 5b):
+
+  relevance_score_j = residual_j = 1 - gen_fraction_j - seed_fraction_j
+  where j indexes observables. High residual means the observable's variance is NOT explained by generation or seed effects — it's cell-cycle or
+  parameter-driven, making it informative input for Koopman DMD.
+
+  PCE surrogate structure:
+
+  f_hat(x) = sum_alpha c_alpha * prod_i P_{alpha_i}(x_i)
+  where P_n are Legendre polynomials, |alpha| <= p (polynomial order), and the number of terms = C(n+p, p).
+
+  RFC006 call to action (§3): "The choice of the 'cell cycle variable' will be informed by the sensitivity analyses (1-3)" — this is Step 5b, where
+  Strategies 1-3 determine which observables are relevant for defining the cell cycle variable.
+
+  ---
+  7. Mixer (stage_detail, line 552)
+
+  What it shows: Grouped bar chart — one cluster per cell cycle stage, with one bar per parameter colored by its identity. The soloed parameter is full
+  opacity; others are ghosted at 20%.
+
+  Why it's useful: This is the discrete, stage-by-stage version of the EQ curve. While the EQ shows smooth splines (good for seeing trends), the mixer
+  shows the exact S_Ti value at each stage as a bar you can compare across parameters. It answers "At stage 5 specifically, is mecillinam or vio_expression
+   more important?" You can read the bar heights directly. The grouping makes cross-parameter comparison at a single stage easy, whereas the EQ makes
+  cross-stage comparison for a single parameter easy — complementary views of the same data.
+
+  Governing equation: Same per-stage total-order Sobol as the EQ, displayed differently:
+
+  S_Ti^(k) for all params i, at each stage k
+  The mixer transposes the EQ's perspective: EQ sweeps across k for fixed i, the mixer compares across i at each fixed k.
+
+  RFC006 call to action (§4, Activity 5): "Apply the sensitivity analysis for aggregation strategies (1-3) for representative simulations from each use
+  case. Report (slides) containing explanation of methods and results on representative simulations." — the mixer is the per-stage view that would go into
+  such a report.
+
+  ---
+  8. Sidechain / Interaction Analyzer (interaction_analyzer, line 594)
+
+  What it shows: Spline curves of (S_Ti - S_i) for each parameter across stages. This is the interaction gap — the fraction of variance that comes from
+  joint effects between parameters rather than individual effects.
+
+  Why it's useful: This is the most subtle and potentially most important panel. If the interaction gap is near zero, parameters act independently — you
+  can study them in isolation. If it's large, parameters interact — changing vio_expression and mecillinam together produces effects that neither alone
+  would predict.
+
+  In your data, vio_expression has a larger interaction gap (~0.06) at early stages that shrinks to near zero at late stages. Mecillinam's gap grows from
+  ~0.03 to ~0.07 across the cycle. This means: at early stages, vio interacts with other parameters (probably mecillinam — they compete for cellular
+  resources during active growth). At late stages, mecillinam's interaction grows (PBP2 inhibition interacts with vio-induced metabolic load during
+  septation).
+
+  A biologist designing a combination treatment would look at this panel to know: "If I change both vio_expression and mecillinam_concentration
+  simultaneously, stages 7-9 are where the interaction is strongest — that's where synergistic or antagonistic drug effects would manifest." That's not
+  visible in the main-effect S_i alone.
+
+  Governing equation: Interaction decomposition from the Sobol ANOVA:
+
+  Interaction_i^(k) = S_Ti^(k) - S_i^(k) = sum_{j!=i} V_ij^(k) / Var(Y_bar_k) + higher-order terms
+  This captures all variance involving parameter i jointly with at least one other parameter. It equals zero if and only if parameter i acts independently
+  of all other parameters at stage k.
+
+  RFC006 call to action (§3): "We will extend this by directly applying well established global sensitivity analysis methods for the stochastic function
+  (sim_data -> SIM output), based on the aggregation strategies (1-3)." — Sobol total-order indices inherently decompose into main effects and
+  interactions; the sidechain panel makes that decomposition explicit and visible across the cell cycle.

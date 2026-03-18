@@ -19,6 +19,67 @@ Parameter Space → Load Data → Aggregate (4 strategies) → Variance Decompos
 Sobol Indices  ←  PCE Surrogate  ←  Morris Screening  ←────────┘
 ```
 
+## How it works
+
+### A.) The full workflow provided by `uq quantify` and `uq.pipe.pipeline()` allows for sensitivity analysis on a non-linear, stochastic system.
+
+- The pipeline performs global sensitivity analysis (Morris screening + PCE + Sobol indices) on vEcoli, which is indeed a nonlinear, stochastic whole-cell model. The stochasticity comes from multiple lineage seeds and cell-to-cell variation; the nonlinearity from the biochemical kinetics.
+
+### B.) Sensitivity analysis on this nonlinear stochastic system is enabled by PCE(Polynomial Chaos Expansion), which builds polynomial surrogates that capture nonlinear input-output relationships. Koopman/DMD is used specifically in Phase 2 to extract a data-driven cell cycle coordinate for stratification, enabling stage-resolved sensitivity analysis.
+
+- Phase 1 (population-level GSA) performs sensitivity analysis using PCE surrogates and Sobol indices
+   without any Koopman analysis at all. It works on aggregated statistics (uniform mean/std across
+  cells). PCE itself handles nonlinearity just fine — it's a polynomial approximation of the
+  input→output map, and Sobol indices decompose variance regardless of whether the underlying system is
+   linear or nonlinear. Phase 1 is the primary sensitivity analysis and does not use Koopman.
+
+- Phase 2 (cell-cycle-stratified GSA) is the only phase that uses Koopman/DMD. Its role is specifically to provide a cell cycle coordinate θ ∈ [0,1] so that data can be binned by cell cycle stage. Then PCE+Sobol are run per stage. Koopman here is a binning/stratification tool, not the mechanism that enables sensitivity analysis on a nonlinear system.
+
+### C.) The Koopman operator is an infinite-dimensional linear operator that acts on the space of observable functions. For a nonlinear dynamical system x_{t+1} = F(x_t), the Koopman operator K propagates observables: (Kg)(x) = g(F(x)). Linearity in this infinite-dimensional function space is exact, regardless of the nonlinearity of F.
+
+- It is not parameterized by a single timepoint as you stated. The Koopman operator K acts on
+  observable functions: `(Kg)(x) = g(F(x))` where F is the one-step dynamics map. It describes how
+  functions of the state evolve forward by one timestep. For continuous-time systems, there's a Koopman
+   semigroup K(t), but it's a family parameterized by duration, not "a given timepoint."
+
+- The operator acts on the space of observables (functions of state), not on the state space itself.
+It doesn't map `Y[t_i] → Y[t_i+1]` directly; it maps functions of state forward.
+
+### D.) Since K is infinite-dimensional, any computational method must approximate it with a finite-rank matrix. The resulting eigendecomposition naturally yields complex eigenvalues (encoding oscillation frequency and growth/decay rate) and complex eigenvectors (Koopman modes). Taking real parts for reconstruction is standard linear algebra, not a special 'decryption' — it's the same operation as reconstructing a real signal from its complex Fourier coefficients
+
+- Finite-rank approximation is needed because we can't work with infinite-dimensional operators
+  computationally — this part is correct.
+
+- Complex eigenvalues arise because the Koopman operator (like any linear operator) can have complex eigenvalues, which encode oscillatory dynamics. The imaginary part gives frequency, the real part gives growth/decay. This is standard spectral theory, not something unique to "needing a decryption key." It's the same reason a rotation matrix has complex eigenvalues.
+
+### E.) DMD finds the best-fit linear operator `A` such that `x_{t+1} ≈ Ax_t`, then eigendecomposes `A`. The eigenvalues encode frequencies and growth rates; the eigenvectors are spatial modes. This is a finite-rank approximation to the Koopman operator, not a reversible transform
+
+What DMD actually does (as implemented in `koopman.py:239-258`):
+
+1. Takes snapshot matrices `X = [x_1, ..., x_{N-1}]` and `X' = [x_2, ..., x_N]`
+2. Finds the best-fit linear operator A such that X' ≈ AX (via SVD-based pseudoinverse)
+3. Computes the eigendecomposition of A → eigenvalues λ_i and eigenvectors (modes) φ_i
+
+- This is a data-driven eigendecomposition of an approximate linear dynamics operator, not a  time-to-frequency transform. It's lossy (rank-truncated SVD), so it is not reversible — the  reconstruction error in KoopmanSpectrum.reconstruction_error quantifies this loss.
+
+### F.) DMD eigenvalues `λ_i` do encode frequencies: `ω_i = Im(log(λ_i))/(2π)`, as implemented at `koopman.py:86`. And the DMD modes are indeed finite-rank approximations of Koopman eigenfunctions projected onto the observable space.
+
+- Together both eigenvalues and eigenvectors define a modal decomposition, NOT a spectrum in the Fourier sense.
+
+### G.) DMD's final/second step recomposes/sums all harmonics from approximated frequency domain frequencies (`ω_i = Im(log(λ_i))/(2π)`) back to the original system's signal domain.
+
+`KoopmanSpectrum.reconstruct()` at line (154-172) is exactly this:
+
+```
+x(t) = Σ_j amplitude_j × mode_j × λ_j^(t/dt)
+```
+
+- This sums contributions from each mode (weighted by amplitude, with time evolution governed by the
+eigenvalue).
+
+- This is analogous to inverse Fourier synthesis but using DMD modes/eigenvalues instead of sinusoids. However, it's important to note this reconstruction is approximate — the number of modes is finite and rank-truncated.
+
+
 ## Installation
 
 ```bash
