@@ -1193,55 +1193,87 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             _result += _term
         return _result
 
-    # Evaluate population surrogate
+    # Evaluate population surrogate at current slider position
     _pop_y = _legendre_eval(_x_norm, surr_data["pop_coeffs"], surr_data["pop_mi"])
 
-    # Evaluate cell cycle surrogate
-    _cc_y = _legendre_eval(_x_norm, surr_data["cc_coeffs"], surr_data["cc_mi"])
+    # Sweep EVERY parameter across its range (others held at slider values)
+    _n_sweep = 60
+    _sweeps = {}  # param_name -> (sweep_vals, sweep_y)
+    for _pi, _p in enumerate(_params):
+        _sv = np.linspace(float(_bounds[_pi, 0]), float(_bounds[_pi, 1]), _n_sweep)
+        _sy = []
+        for _v in _sv:
+            _x_sw = _x.copy()
+            _x_sw[_pi] = _v
+            _x_sw_n = 2.0 * (_x_sw - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0
+            _sy.append(_legendre_eval(_x_sw_n, surr_data["pop_coeffs"], surr_data["pop_mi"]))
+        _sweeps[_p] = (_sv, np.array(_sy))
 
-    # Sweep the selected parameter across its range while holding others fixed
     _sel_idx = _params.index(_selected) if _selected in _params else 0
-    _sweep_vals = np.linspace(float(_bounds[_sel_idx, 0]), float(_bounds[_sel_idx, 1]), 50)
-    _sweep_y = []
-    for _v in _sweep_vals:
-        _x_sweep = _x.copy()
-        _x_sweep[_sel_idx] = _v
-        _x_s_norm = 2.0 * (_x_sweep - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0
-        _sweep_y.append(_legendre_eval(_x_s_norm, surr_data["pop_coeffs"], surr_data["pop_mi"]))
-    _sweep_y = np.array(_sweep_y)
-
-    _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
 
     _fig = make_subplots(
         rows=1, cols=2,
         subplot_titles=(
-            f"Response Curve: sweep {_selected}",
-            "Current Prediction (all params)",
+            "Response Curves (all params, solo highlighted)",
+            "Current Prediction",
         ),
-        column_widths=[0.55, 0.45],
+        column_widths=[0.6, 0.4],
         horizontal_spacing=0.08,
     )
 
-    # -- Left: sweep selected param, show response curve --
+    # -- Left: all response curves, soloed param highlighted --
+    for _pi, _p in enumerate(_params):
+        _sv, _sy = _sweeps[_p]
+        _pc = PARAM_COLORS.get(_p, "#666")
+        _is_sel = _p == _selected
+
+        # Normalize x-axis to [0,1] so all params share the same axis
+        _sv_norm = (_sv - _bounds[_pi, 0]) / (_bounds[_pi, 1] - _bounds[_pi, 0] + 1e-12)
+
+        _fig.add_trace(go.Scatter(
+            x=_sv_norm, y=_sy,
+            mode="lines",
+            name=_p,
+            line=dict(
+                color=_pc,
+                width=4 if _is_sel else 1.5,
+                shape="spline",
+            ),
+            opacity=1.0 if _is_sel else 0.25,
+            customdata=np.column_stack([_sv, _sy]),
+            hovertemplate=f"<b>{_p}</b><br>{_p}=%{{customdata[0]:.2f}}<br>Y\u0302=%{{customdata[1]:.4f}}<extra></extra>",
+        ), row=1, col=1)
+
+        # Current slider position marker for each param
+        _cur_norm = (_x[_pi] - _bounds[_pi, 0]) / (_bounds[_pi, 1] - _bounds[_pi, 0] + 1e-12)
+        _fig.add_trace(go.Scatter(
+            x=[_cur_norm], y=[_pop_y],
+            mode="markers",
+            name=f"{_p} (current)" if _is_sel else "",
+            showlegend=_is_sel,
+            marker=dict(
+                size=14 if _is_sel else 8,
+                color=_pc,
+                symbol="diamond" if _is_sel else "circle",
+                opacity=1.0 if _is_sel else 0.35,
+                line=dict(width=2 if _is_sel else 0, color="#fff"),
+            ),
+            hovertemplate=f"<b>{_p}</b>={_x[_pi]:.2f}<br>Y\u0302={_pop_y:.4f}<extra></extra>",
+        ), row=1, col=1)
+
+    # Fill under soloed param curve
+    _sel_sv_norm = (_sweeps[_selected][0] - _bounds[_sel_idx, 0]) / (_bounds[_sel_idx, 1] - _bounds[_sel_idx, 0] + 1e-12)
+    _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
     _fig.add_trace(go.Scatter(
-        x=_sweep_vals, y=_sweep_y,
-        mode="lines",
-        name=f"Y\u0302 vs {_selected}",
-        line=dict(color=_sel_color, width=3, shape="spline"),
-        hovertemplate=f"{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
+        x=_sel_sv_norm, y=_sweeps[_selected][1],
+        fill="tozeroy",
+        mode="none",
+        fillcolor=f"rgba({int(_sel_color[1:3], 16)},{int(_sel_color[3:5], 16)},{int(_sel_color[5:7], 16)},0.1)",
+        showlegend=False,
+        hoverinfo="skip",
     ), row=1, col=1)
 
-    # Mark current slider position
-    _fig.add_trace(go.Scatter(
-        x=[_x[_sel_idx]], y=[_pop_y],
-        mode="markers",
-        name="Current",
-        marker=dict(size=14, color=_sel_color, symbol="diamond",
-                    line=dict(width=2, color="#fff")),
-        hovertemplate=f"CURRENT<br>{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
-    ), row=1, col=1)
-
-    _fig.update_xaxes(title_text=_selected, row=1, col=1)
+    _fig.update_xaxes(title_text="Normalized parameter value [0 = min, 1 = max]", row=1, col=1)
     _fig.update_yaxes(title_text="Y\u0302 (predicted output)", row=1, col=1)
 
     # -- Right: current param values as horizontal bars with predicted output --
@@ -1262,7 +1294,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
 
     _fig.update_xaxes(title_text="Normalized [0,1]", range=[0, 1.3], row=1, col=2)
 
-    # Add prediction readout as annotation
+    # Prediction readout
     _fig.add_annotation(
         x=0.65, y=1.15,
         text=f"Y\u0302 = {_pop_y:.4f}",
@@ -1273,9 +1305,9 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
 
     _fig.update_layout(
         **DAW_LAYOUT,
-        height=320,
+        height=360,
         showlegend=True,
-        legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
+        legend=dict(orientation="h", y=-0.18, x=0, font=dict(size=10)),
     )
     for _ann in _fig.layout.annotations:
         if hasattr(_ann, "font") and _ann.font is not None:
