@@ -50,7 +50,6 @@ with app.setup:
 @app.cell
 def file_selector(set_file_input):
     file_area = mo.ui.file(kind="area", on_change=lambda v: set_file_input(v[0].name))
-
     return (file_area,)
 
 
@@ -92,8 +91,7 @@ def _(file_area, get_file_input, header, set_file_input):
         <div>{file_area}</div>
     </div>
     """)
-        ])
-    )
+        ]))
     return (file_input,)
 
 
@@ -101,8 +99,8 @@ def _(file_area, get_file_input, header, set_file_input):
 def load_data(file_area, file_input):
     _path = Path(file_input.value)
     if not _path.exists():
-        #
-        #
+        # 
+        # 
         if file_area.value:
             data = json.loads(file_area.value[0].contents)
         else:
@@ -120,8 +118,10 @@ def load_data(file_area, file_input):
 @app.cell
 def _():
     def header(text: str) -> mo.accordion:
-        key = f"{mo.icon('streamline-stickies-color:online-information-duo', size=30)}"
-        return mo.accordion({key: mo.md(text)})
+        key = f'{mo.icon("streamline-stickies-color:online-information-duo", size=30)}'
+        return mo.accordion({
+            key: mo.md(text)
+        })
 
     def render_info_panel(v, title):
         return mo.md(f"""
@@ -156,13 +156,13 @@ def param_selector(data, header):
     )
 
     _badges = " ".join(
-        f'<span style="background:{PARAM_COLORS.get(p, "#666")};color:#000;'
-        f"padding:2px 8px;border-radius:3px;font-size:11px;font-family:monospace;"
+        f'<span style="background:{PARAM_COLORS.get(p,"#666")};color:#000;'
+        f'padding:2px 8px;border-radius:3px;font-size:11px;font-family:monospace;'
         f'font-weight:bold;margin-right:4px;">{p}</span>'
         for p in _params
     )
 
-    _header = header(""" \
+    _header = header(f""" \
     ### 1. Parameter Selector
     >> A dropdown to pick one parameter, with color-coded badges for all parameters (cyan = vio_expression, amber = vio_trl_eff, pink =
     mecillinam_concentration).
@@ -179,6 +179,7 @@ def param_selector(data, header):
     <div style="display:flex;align-items:center;gap:16px;">
       <div style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:2px;">Solo Parameter</div>
       <div>{param_dropdown}</div>
+
     </div>
     <div style="margin-top:10px;">{_badges}</div>
     </div>
@@ -200,38 +201,80 @@ def header_strip(data, header):
     _n_params = data.get("n_parameters", "?")
     _morris = data.get("morris_screening")
     _n_traj = _morris.get("n_trajectories", "?") if _morris else "?"
-    _header = header(""" \
+    _header = header(f""" \
     ### 2. Header Strip (header_strip, line 122)
 
-    #### What it shows:
+    #### What it shows: 
 
     >> Five at-a-glance metrics — number of parameters, number of cell cycle stages, Phase 1 surrogate R^2, Phase 2 surrogate R^2, and Morris trajectory count.
 
-    #### Why it's useful:
+    #### Why it's useful: 
 
     >> These are the "trust indicators" for the entire analysis. R^2 tells you how well the PCE polynomial approximates the real simulation — if ```POP R^2 = 0.92```, the surrogate explains 92% of output variance, and the Sobol indices derived from it are reliable. If R^2 were 0.3, everything downstream would be suspect. Morris trajectory count tells you how well-sampled the prescreening was. A stakeholder can look at this strip and immediately know whether to trust the results below.
     """)
     mo.output.replace(
         mo.vstack([
-            mo.md(f"""
+
+        mo.md(f"""
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
         <div style="padding-bottom:22px;"> {_header} </div>
 
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px 16px;
             display:flex;gap:32px;align-items:center;font-family:monospace;font-size:12px;">
 
-      <div style="color:{C["accent1"]};"><b>PARAMS</b> <span style="color:#e0e0e0;">{_n_params}</span></div>
-      <div style="color:{C["accent3"]};"><b>STAGES</b> <span style="color:#e0e0e0;">{_n_stages}</span></div>
-      <div style="color:{C["accent4"]};"><b>POP R\u00b2</b> <span style="color:#e0e0e0;">{_pop_r2}</span></div>
-      <div style="color:{C["accent5"]};"><b>CC R\u00b2</b> <span style="color:#e0e0e0;">{_cc_r2}</span></div>
-      <div style="color:{C["accent2"]};"><b>MORRIS r</b> <span style="color:#e0e0e0;">{_n_traj}</span></div>
+      <div style="color:{C['accent1']};"><b>PARAMS</b> <span style="color:#e0e0e0;">{_n_params}</span></div>
+      <div style="color:{C['accent3']};"><b>STAGES</b> <span style="color:#e0e0e0;">{_n_stages}</span></div>
+      <div style="color:{C['accent4']};"><b>POP R\u00b2</b> <span style="color:#e0e0e0;">{_pop_r2}</span></div>
+      <div style="color:{C['accent5']};"><b>CC R\u00b2</b> <span style="color:#e0e0e0;">{_cc_r2}</span></div>
+      <div style="color:{C['accent2']};"><b>MORRIS r</b> <span style="color:#e0e0e0;">{_n_traj}</span></div>
       <div style="flex:1;"></div>
       <div style="color:#444;font-size:10px;letter-spacing:3px;">RFC006 // UQ DAW</div>
     </div>
     </div>
-    """)
-        ])
-    )
+    """)]))
+
+    def render_header_strip():
+        if data is None:
+            mo.stop(True)
+
+        _surr = data.get("surrogates", {})
+        _pop_r2 = _surr.get("population", {}).get("r_squared", "?")
+        _cc_r2 = _surr.get("cell_cycle", {}).get("r_squared", "?")
+        _n_stages = data.get("n_cell_cycle_stages", "?")
+        _n_params = data.get("n_parameters", "?")
+        _morris = data.get("morris_screening")
+        _n_traj = _morris.get("n_trajectories", "?") if _morris else "?"
+        _header = header(f""" \
+        ### 2. Header Strip (header_strip, line 122)
+
+        #### What it shows: 
+
+        >> Five at-a-glance metrics — number of parameters, number of cell cycle stages, Phase 1 surrogate R^2, Phase 2 surrogate R^2, and Morris trajectory count.
+
+        #### Why it's useful: 
+
+        >> These are the "trust indicators" for the entire analysis. R^2 tells you how well the PCE polynomial approximates the real simulation — if ```POP R^2 = 0.92```, the surrogate explains 92% of output variance, and the Sobol indices derived from it are reliable. If R^2 were 0.3, everything downstream would be suspect. Morris trajectory count tells you how well-sampled the prescreening was. A stakeholder can look at this strip and immediately know whether to trust the results below.
+        """)
+        return mo.vstack([
+
+            mo.md(f"""
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+            <div style="padding-bottom:22px;"> {_header} </div>
+
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px 16px;
+                display:flex;gap:32px;align-items:center;font-family:monospace;font-size:12px;">
+
+          <div style="color:{C['accent1']};"><b>PARAMS</b> <span style="color:#e0e0e0;">{_n_params}</span></div>
+          <div style="color:{C['accent3']};"><b>STAGES</b> <span style="color:#e0e0e0;">{_n_stages}</span></div>
+          <div style="color:{C['accent4']};"><b>POP R\u00b2</b> <span style="color:#e0e0e0;">{_pop_r2}</span></div>
+          <div style="color:{C['accent5']};"><b>CC R\u00b2</b> <span style="color:#e0e0e0;">{_cc_r2}</span></div>
+          <div style="color:{C['accent2']};"><b>MORRIS r</b> <span style="color:#e0e0e0;">{_n_traj}</span></div>
+          <div style="flex:1;"></div>
+          <div style="color:#444;font-size:10px;letter-spacing:3px;">RFC006 // UQ DAW</div>
+        </div>
+        </div>
+        """)])
+
     return
 
 
@@ -256,66 +299,54 @@ def eq_strip(data, header, param_dropdown):
     for _p in _params:
         _y = [s["total_order"].get(_p, 0) for s in _stages]
         _is_selected = _p == _selected
-        _fig.add_trace(
-            go.Scatter(
-                x=_x,
-                y=_y,
-                mode="lines",
-                name=_p,
-                line=dict(
-                    color=PARAM_COLORS.get(_p, "#666"),
-                    width=4 if _is_selected else 1.5,
-                    shape="spline",
-                ),
-                opacity=1.0 if _is_selected else 0.25,
-                hovertemplate=f"<b>{_p}</b><br>\u03b8=%{{x:.2f}}<br>S_Ti=%{{y:.3f}}<extra></extra>",
-            )
-        )
+        _fig.add_trace(go.Scatter(
+            x=_x, y=_y,
+            mode="lines",
+            name=_p,
+            line=dict(
+                color=PARAM_COLORS.get(_p, "#666"),
+                width=4 if _is_selected else 1.5,
+                shape="spline",
+            ),
+            opacity=1.0 if _is_selected else 0.25,
+            hovertemplate=f"<b>{_p}</b><br>\u03b8=%{{x:.2f}}<br>S_Ti=%{{y:.3f}}<extra></extra>",
+        ))
 
     # Fill under selected param
     _sel_y = [s["total_order"].get(_selected, 0) for s in _stages]
     _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
-    _fig.add_trace(
-        go.Scatter(
-            x=_x,
-            y=_sel_y,
-            fill="tozeroy",
-            mode="none",
-            # fillcolor=_sel_color.replace(")", ",0.12)").replace("rgb", "rgba") if "rgb" in _sel_color else _sel_color + "1a",
-            fillcolor="#ff0000",
-            showlegend=False,
-            hoverinfo="skip",
-        )
-    )
+    _fig.add_trace(go.Scatter(
+        x=_x, y=_sel_y,
+        fill="tozeroy",
+        mode="none",
+        # fillcolor=_sel_color.replace(")", ",0.12)").replace("rgb", "rgba") if "rgb" in _sel_color else _sel_color + "1a",
+        fillcolor="#ff0000",
+        showlegend=False,
+        hoverinfo="skip",
+    ))
 
     # First-order as dashed overlay for selected
     _sel_s1 = [s["first_order"].get(_selected, 0) for s in _stages]
-    _fig.add_trace(
-        go.Scatter(
-            x=_x,
-            y=_sel_s1,
-            mode="lines",
-            name=f"{_selected} (S\u1d62)",
-            line=dict(color=_sel_color, width=2, dash="dot"),
-            opacity=0.7,
-            hovertemplate=f"<b>{_selected} (main effect)</b><br>\u03b8=%{{x:.2f}}<br>S_i=%{{y:.3f}}<extra></extra>",
-        )
-    )
+    _fig.add_trace(go.Scatter(
+        x=_x, y=_sel_s1,
+        mode="lines",
+        name=f"{_selected} (S\u1d62)",
+        line=dict(color=_sel_color, width=2, dash="dot"),
+        opacity=0.7,
+        hovertemplate=f"<b>{_selected} (main effect)</b><br>\u03b8=%{{x:.2f}}<br>S_i=%{{y:.3f}}<extra></extra>",
+    ))
 
     # Interaction band (S_Ti - S_i)
     _interaction = [t - s for t, s in zip(_sel_y, _sel_s1)]
     if max(_interaction) > 0.01:
-        _fig.add_trace(
-            go.Bar(
-                x=_x,
-                y=_interaction,
-                name="Interactions",
-                marker_color=_sel_color,
-                opacity=0.15,
-                width=0.08,
-                hovertemplate="Interaction=%{y:.3f}<extra></extra>",
-            )
-        )
+        _fig.add_trace(go.Bar(
+            x=_x, y=_interaction,
+            name="Interactions",
+            marker_color=_sel_color,
+            opacity=0.15,
+            width=0.08,
+            hovertemplate="Interaction=%{y:.3f}<extra></extra>",
+        ))
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -330,9 +361,9 @@ def eq_strip(data, header, param_dropdown):
     _header = header(""" \
     ### 3. Parametric EQ (eq_strip, line 149)
 
-    #### What it shows: Three overlapping spline curves, one per parameter, plotted across `θ` (cell cycle position, 0 to 1).
+    #### What it shows: Three overlapping spline curves, one per parameter, plotted across `θ` (cell cycle position, 0 to 1). 
 
-    >> The soloed parameter is thick with a filled area underneath; the others are ghosted.
+    >> The soloed parameter is thick with a filled area underneath; the others are ghosted. 
 
     Two lines for the soloed param:
     - Solid line = S_Ti (total-order Sobol index — includes all interactions)
@@ -361,15 +392,14 @@ def eq_strip(data, header, param_dropdown):
 
     _RFC006 call to action (§3)_: "A second type of analysis will need to be generated for the aggregation strategy (4), and will involve the definition of a low-dimensional (possibly scalar) 'cell cycle variable' computed from omics variables. This variable or 'coordinate' will be used for deterministically binning simulation data into cell stages, in order to then perform a 'phenotypic' sensitivity analysis across the physiological time dimension."
     """)
-    mo.output.replace(
-        mo.vstack([
-            mo.md(f"""
+    mo.output.replace(mo.vstack([
+
+        mo.md(f"""
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
     <div style="padding-bottom:22px;"> {_header} </div>
     <div> {mo.ui.plotly(_fig)}</div>
     </div>""")
-        ])
-    )
+    ]))
     return
 
 
@@ -384,13 +414,8 @@ def channel_strip(data, header, param_dropdown, render_panel):
     _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
 
     _fig = make_subplots(
-        rows=1,
-        cols=3,
-        subplot_titles=(
-            "Population Faders (S\u1d62 / S_Ti)",
-            "Morris Screening (\u03bc* vs \u03c3)",
-            "Variance Decomposition",
-        ),
+        rows=1, cols=3,
+        subplot_titles=("Population Faders (S\u1d62 / S_Ti)", "Morris Screening (\u03bc* vs \u03c3)", "Variance Decomposition"),
         column_widths=[0.35, 0.35, 0.3],
         horizontal_spacing=0.08,
         specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "domain"}]],
@@ -403,34 +428,24 @@ def channel_strip(data, header, param_dropdown, render_panel):
         _st = _p1["total_order"].get(_p, 0)
         _pc = PARAM_COLORS.get(_p, "#666")
         _alpha = 1.0 if _p == _selected else 0.4
-        _fig.add_trace(
-            go.Bar(
-                x=[_p],
-                y=[_st],
-                name=f"{_p} S_Ti",
-                marker_color=_pc,
-                opacity=_alpha,
-                width=0.35,
-                showlegend=False,
-                hovertemplate=f"<b>{_p}</b><br>S_Ti={_st:.3f}<extra></extra>",
-            ),
-            row=1,
-            col=1,
-        )
-        _fig.add_trace(
-            go.Bar(
-                x=[_p],
-                y=[_s1],
-                name=f"{_p} S\u1d62",
-                marker_color=_pc,
-                opacity=_alpha * 0.5,
-                width=0.2,
-                showlegend=False,
-                hovertemplate=f"<b>{_p}</b><br>S_i={_s1:.3f}<extra></extra>",
-            ),
-            row=1,
-            col=1,
-        )
+        _fig.add_trace(go.Bar(
+            x=[_p], y=[_st],
+            name=f"{_p} S_Ti",
+            marker_color=_pc,
+            opacity=_alpha,
+            width=0.35,
+            showlegend=False,
+            hovertemplate=f"<b>{_p}</b><br>S_Ti={_st:.3f}<extra></extra>",
+        ), row=1, col=1)
+        _fig.add_trace(go.Bar(
+            x=[_p], y=[_s1],
+            name=f"{_p} S\u1d62",
+            marker_color=_pc,
+            opacity=_alpha * 0.5,
+            width=0.2,
+            showlegend=False,
+            hovertemplate=f"<b>{_p}</b><br>S_i={_s1:.3f}<extra></extra>",
+        ), row=1, col=1)
 
     _fig.update_yaxes(range=[0, 1], title_text="Index", row=1, col=1)
 
@@ -443,49 +458,36 @@ def channel_strip(data, header, param_dropdown, render_panel):
         for _i, _p in enumerate(_m_params):
             _pc = PARAM_COLORS.get(_p, "#666")
             _is_sel = _p == _selected
-            _fig.add_trace(
-                go.Scatter(
-                    x=[_mu_star[_i]],
-                    y=[_sigma[_i]],
-                    mode="markers+text",
-                    text=[_p.split("_")[-1]],
-                    textposition="top center",
-                    textfont=dict(color=_pc, size=10 if _is_sel else 8),
-                    marker=dict(
-                        size=18 if _is_sel else 10,
-                        color=_pc,
-                        opacity=1.0 if _is_sel else 0.4,
-                        symbol="diamond" if _is_sel else "circle",
-                        line=dict(width=2 if _is_sel else 0, color="#fff"),
-                    ),
-                    showlegend=False,
-                    hovertemplate=f"<b>{_p}</b><br>\u03bc*={_mu_star[_i]:.3f}<br>\u03c3={_sigma[_i]:.3f}<extra></extra>",
+            _fig.add_trace(go.Scatter(
+                x=[_mu_star[_i]], y=[_sigma[_i]],
+                mode="markers+text",
+                text=[_p.split("_")[-1]],
+                textposition="top center",
+                textfont=dict(color=_pc, size=10 if _is_sel else 8),
+                marker=dict(
+                    size=18 if _is_sel else 10,
+                    color=_pc,
+                    opacity=1.0 if _is_sel else 0.4,
+                    symbol="diamond" if _is_sel else "circle",
+                    line=dict(width=2 if _is_sel else 0, color="#fff"),
                 ),
-                row=1,
-                col=2,
-            )
+                showlegend=False,
+                hovertemplate=f"<b>{_p}</b><br>\u03bc*={_mu_star[_i]:.3f}<br>\u03c3={_sigma[_i]:.3f}<extra></extra>",
+            ), row=1, col=2)
         # Classification line: sigma = 0.5 * mu*
         _mx = max(_mu_star) * 1.2
-        _fig.add_trace(
-            go.Scatter(
-                x=[0, _mx],
-                y=[0, 0.5 * _mx],
-                mode="lines",
-                line=dict(color="#444", dash="dash", width=1),
-                showlegend=False,
-                hoverinfo="skip",
-            ),
-            row=1,
-            col=2,
-        )
+        _fig.add_trace(go.Scatter(
+            x=[0, _mx], y=[0, 0.5 * _mx],
+            mode="lines",
+            line=dict(color="#444", dash="dash", width=1),
+            showlegend=False,
+            hoverinfo="skip",
+        ), row=1, col=2)
         _fig.add_annotation(
-            x=_mx * 0.7,
-            y=0.5 * _mx * 0.7 + 0.02,
+            x=_mx * 0.7, y=0.5 * _mx * 0.7 + 0.02,
             text="nonlinear/interactive",
-            showarrow=False,
-            font=dict(color="#555", size=9),
-            xref="x2",
-            yref="y2",
+            showarrow=False, font=dict(color="#555", size=9),
+            xref="x2", yref="y2",
         )
 
     _fig.update_xaxes(title_text="\u03bc* (importance)", row=1, col=2)
@@ -497,19 +499,15 @@ def channel_strip(data, header, param_dropdown, render_panel):
     _seed_f = _decomp.get("seed_fraction", [0])[0]
     _resid_f = _decomp.get("residual_fraction", [1])[0]
 
-    _fig.add_trace(
-        go.Pie(
-            labels=["Generation", "Seed", "Residual (cell cycle)"],
-            values=[_gen_f, _seed_f, _resid_f],
-            marker=dict(colors=[C["accent4"], C["accent5"], C["accent3"]]),
-            textinfo="label+percent",
-            textfont=dict(size=10),
-            hole=0.45,
-            hovertemplate="%{label}: %{value:.4f} (%{percent})<extra></extra>",
-        ),
-        row=1,
-        col=3,
-    )
+    _fig.add_trace(go.Pie(
+        labels=["Generation", "Seed", "Residual (cell cycle)"],
+        values=[_gen_f, _seed_f, _resid_f],
+        marker=dict(colors=[C["accent4"], C["accent5"], C["accent3"]]),
+        textinfo="label+percent",
+        textfont=dict(size=10),
+        hole=0.45,
+        hovertemplate="%{label}: %{value:.4f} (%{percent})<extra></extra>",
+    ), row=1, col=3)
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -595,7 +593,10 @@ def channel_strip(data, header, param_dropdown, render_panel):
     >> RFC006 call to action (§1): "This will enable us to deconvolve different types of uncertainty, and to model the relationship between 'bulk' and 'single-cell' attributes more accurately."
 
     """)
-    mo.output.replace(mo.vstack([render_panel(_header, mo.ui.plotly(_fig))]))
+    mo.output.replace(
+        mo.vstack([
+            render_panel(_header, mo.ui.plotly(_fig))
+        ]))
     return
 
 
@@ -613,8 +614,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
     _profile = data.get("cell_cycle_profile")
 
     _fig = make_subplots(
-        rows=2,
-        cols=1,
+        rows=2, cols=1,
         row_heights=[0.6, 0.4],
         subplot_titles=("Sensitivity Spectrogram (S_Ti)", "Cell Cycle Profile"),
         vertical_spacing=0.12,
@@ -628,52 +628,41 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             _z[_i, _j] = _s["total_order"].get(_p, 0)
 
     _theta_labels = [f"{s['theta_range'][0]:.1f}-{s['theta_range'][1]:.1f}" for s in _stages]
-    _short_params = [
-        p.replace("mecillinam_concentration", "mecillinam")
-        .replace("vio_expression", "vio_exp")
-        .replace("vio_trl_eff", "vio_trl")
-        for p in _params
-    ]
+    _short_params = [p.replace("mecillinam_concentration", "mecillinam").replace("vio_expression", "vio_exp").replace("vio_trl_eff", "vio_trl") for p in _params]
 
     # Highlight row for selected param
     _sel_idx = _params.index(_selected) if _selected in _params else 0
 
-    _fig.add_trace(
-        go.Heatmap(
-            z=_z,
-            x=_theta_labels,
-            y=_short_params,
-            colorscale=[
-                [0.0, "#0d0d0d"],
-                [0.15, "#1a1a4e"],
-                [0.3, "#2a2a8e"],
-                [0.5, "#00b4d8"],
-                [0.7, "#00f0ff"],
-                [0.85, "#ffaa00"],
-                [1.0, "#ff3366"],
-            ],
-            colorbar=dict(title="S_Ti", len=0.45, y=0.78, thickness=12),
-            hovertemplate="Param: %{y}<br>\u03b8: %{x}<br>S_Ti: %{z:.3f}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
+    _fig.add_trace(go.Heatmap(
+        z=_z,
+        x=_theta_labels,
+        y=_short_params,
+        colorscale=[
+            [0.0, "#0d0d0d"],
+            [0.15, "#1a1a4e"],
+            [0.3, "#2a2a8e"],
+            [0.5, "#00b4d8"],
+            [0.7, "#00f0ff"],
+            [0.85, "#ffaa00"],
+            [1.0, "#ff3366"],
+        ],
+        colorbar=dict(title="S_Ti", len=0.45, y=0.78, thickness=12),
+        hovertemplate="Param: %{y}<br>\u03b8: %{x}<br>S_Ti: %{z:.3f}<extra></extra>",
+    ), row=1, col=1)
 
     # Selection indicator bracket on y-axis
     _fig.add_annotation(
-        x=-0.5,
-        y=_sel_idx,
+        x=-0.5, y=_sel_idx,
         text="\u25b6",
         showarrow=False,
         font=dict(color=PARAM_COLORS.get(_selected, "#fff"), size=16),
-        xref="x",
-        yref="y",
+        xref="x", yref="y",
     )
 
     # -- Panel 2: Cell cycle profile (mass + growth) --
     if _profile:
         _stages_x = _profile["stages"]
-        _x_labels_p = [f"{i / len(_stages_x):.1f}-{(i + 1) / len(_stages_x):.1f}" for i in _stages_x]
+        _x_labels_p = [f"{i/len(_stages_x):.1f}-{(i+1)/len(_stages_x):.1f}" for i in _stages_x]
 
         # Find mass and growth keys dynamically
         _mass_key = next((k for k in _profile if "mass" in k.lower() and "mean" in k.lower()), None)
@@ -681,19 +670,14 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
 
         if _mass_key:
             _mass = _profile[_mass_key]
-            _fig.add_trace(
-                go.Scatter(
-                    x=_x_labels_p,
-                    y=_mass,
-                    mode="lines+markers",
-                    name="Mass",
-                    line=dict(color=C["accent3"], width=3, shape="spline"),
-                    marker=dict(size=6, color=C["accent3"]),
-                    hovertemplate="Mass=%{y:.3f}<extra></extra>",
-                ),
-                row=2,
-                col=1,
-            )
+            _fig.add_trace(go.Scatter(
+                x=_x_labels_p, y=_mass,
+                mode="lines+markers",
+                name="Mass",
+                line=dict(color=C["accent3"], width=3, shape="spline"),
+                marker=dict(size=6, color=C["accent3"]),
+                hovertemplate="Mass=%{y:.3f}<extra></extra>",
+            ), row=2, col=1)
             _fig.update_yaxes(title_text="Dry Mass", row=2, col=1, title_font=dict(color=C["accent3"]))
 
         if _growth_key:
@@ -706,59 +690,27 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             else:
                 _g_norm = _growth
 
-            _fig.add_trace(
-                go.Scatter(
-                    x=_x_labels_p,
-                    y=_g_norm,
-                    mode="lines+markers",
-                    name="Growth Rate (scaled)",
-                    line=dict(color=C["accent4"], width=2, dash="dash", shape="spline"),
-                    marker=dict(size=5, color=C["accent4"], symbol="diamond"),
-                    hovertemplate="Growth=%{customdata:.5f}<extra></extra>",
-                    customdata=_growth,
-                ),
-                row=2,
-                col=1,
-            )
+            _fig.add_trace(go.Scatter(
+                x=_x_labels_p, y=_g_norm,
+                mode="lines+markers",
+                name="Growth Rate (scaled)",
+                line=dict(color=C["accent4"], width=2, dash="dash", shape="spline"),
+                marker=dict(size=5, color=C["accent4"], symbol="diamond"),
+                hovertemplate="Growth=%{customdata:.5f}<extra></extra>",
+                customdata=_growth,
+            ), row=2, col=1)
 
         # Add B/C/D period annotations
-        _fig.add_vrect(
-            x0=_x_labels_p[0],
-            x1=_x_labels_p[1],
-            fillcolor=C["accent1"],
-            opacity=0.06,
-            line_width=0,
-            row=2,
-            col=1,
-            annotation_text="B",
-            annotation_position="top left",
-            annotation=dict(font=dict(color=C["accent1"], size=10)),
-        )
+        _fig.add_vrect(x0=_x_labels_p[0], x1=_x_labels_p[1], fillcolor=C["accent1"], opacity=0.06,
+                       line_width=0, row=2, col=1, annotation_text="B", annotation_position="top left",
+                       annotation=dict(font=dict(color=C["accent1"], size=10)))
         if len(_x_labels_p) > 7:
-            _fig.add_vrect(
-                x0=_x_labels_p[2],
-                x1=_x_labels_p[6],
-                fillcolor=C["accent5"],
-                opacity=0.04,
-                line_width=0,
-                row=2,
-                col=1,
-                annotation_text="C",
-                annotation_position="top left",
-                annotation=dict(font=dict(color=C["accent5"], size=10)),
-            )
-            _fig.add_vrect(
-                x0=_x_labels_p[7],
-                x1=_x_labels_p[-1],
-                fillcolor=C["accent2"],
-                opacity=0.05,
-                line_width=0,
-                row=2,
-                col=1,
-                annotation_text="D",
-                annotation_position="top left",
-                annotation=dict(font=dict(color=C["accent2"], size=10)),
-            )
+            _fig.add_vrect(x0=_x_labels_p[2], x1=_x_labels_p[6], fillcolor=C["accent5"], opacity=0.04,
+                           line_width=0, row=2, col=1, annotation_text="C", annotation_position="top left",
+                           annotation=dict(font=dict(color=C["accent5"], size=10)))
+            _fig.add_vrect(x0=_x_labels_p[7], x1=_x_labels_p[-1], fillcolor=C["accent2"], opacity=0.05,
+                           line_width=0, row=2, col=1, annotation_text="D", annotation_position="top left",
+                           annotation=dict(font=dict(color=C["accent2"], size=10)))
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -815,7 +767,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
       Profile values: mass_mean_k = mean(M | theta in stage k), growth_mean_k = mean(dM/dt | theta in stage k).
     ```
 
-    #### RFC006 call to action (§3):
+    #### RFC006 call to action (§3): 
 
     "The choice of the 'cell cycle variable' will be informed by the
       sensitivity analyses (1-3), will be explored through dedicated visualisations, and will be discussed
@@ -824,7 +776,10 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
       approximately cyclic behaviour."
 
     """)
-    mo.output.replace(mo.vstack([render_panel(_header, mo.ui.plotly(_fig))]))
+    mo.output.replace(
+        mo.vstack([
+        render_panel(_header, mo.ui.plotly(_fig))
+        ]))
     return
 
 
@@ -838,8 +793,7 @@ def relevance_strip(data, header, render_panel):
     _surr = data.get("surrogates", {})
 
     _fig = make_subplots(
-        rows=1,
-        cols=2,
+        rows=1, cols=2,
         subplot_titles=("Observable Relevance (cell cycle)", "Surrogate Specs"),
         column_widths=[0.5, 0.5],
         horizontal_spacing=0.1,
@@ -852,68 +806,49 @@ def relevance_strip(data, header, render_panel):
         _names = [o.split("__")[-1] for o in _obs]
         _vals = [_scores.get(o, 0) for o in _obs]
 
-        _fig.add_trace(
-            go.Bar(
-                x=_vals,
-                y=_names,
-                orientation="h",
-                marker=dict(
-                    color=[C["accent3"] if v > 0.8 else C["accent4"] if v > 0.5 else C["text_dim"] for v in _vals],
-                ),
-                text=[f"{v:.2f}" for v in _vals],
-                textposition="outside",
-                textfont=dict(color=C["text"], size=11),
-                hovertemplate="%{y}: %{x:.3f}<extra></extra>",
-                showlegend=False,
+        _fig.add_trace(go.Bar(
+            x=_vals, y=_names,
+            orientation="h",
+            marker=dict(
+                color=[C["accent3"] if v > 0.8 else C["accent4"] if v > 0.5 else C["text_dim"] for v in _vals],
             ),
-            row=1,
-            col=1,
-        )
+            text=[f"{v:.2f}" for v in _vals],
+            textposition="outside",
+            textfont=dict(color=C["text"], size=11),
+            hovertemplate="%{y}: %{x:.3f}<extra></extra>",
+            showlegend=False,
+        ), row=1, col=1)
 
     _fig.update_xaxes(title_text="Relevance Score", range=[0, 1.1], row=1, col=1)
 
     # Surrogate specs table
     _pop = _surr.get("population", {})
     _cc = _surr.get("cell_cycle", {})
-    _fig.add_trace(
-        go.Table(
-            header=dict(
-                values=["", "Population", "Cell Cycle"],
-                fill_color=C["panel"],
-                font=dict(color=C["accent1"], size=11),
-                line=dict(color=C["panel_border"]),
-                align="left",
-            ),
-            cells=dict(
-                values=[
-                    ["Basis", "Order p", "Dim in", "Dim out", "R\u00b2", "Terms"],
-                    [
-                        _pop.get("basis_type", "?"),
-                        _pop.get("polynomial_order", "?"),
-                        _pop.get("input_dim", "?"),
-                        _pop.get("output_dim", "?"),
-                        f"{_pop.get('r_squared', 0):.3f}",
-                        _pop.get("n_terms", "?"),
-                    ],
-                    [
-                        _cc.get("basis_type", "?"),
-                        _cc.get("polynomial_order", "?"),
-                        _cc.get("input_dim", "?"),
-                        _cc.get("output_dim", "?"),
-                        f"{_cc.get('r_squared', 0):.3f}",
-                        _cc.get("n_terms", "?"),
-                    ],
-                ],
-                fill_color=C["bg"],
-                font=dict(color=C["text"], size=11, family="monospace"),
-                line=dict(color=C["panel_border"]),
-                align="left",
-                height=26,
-            ),
+    _fig.add_trace(go.Table(
+        header=dict(
+            values=["", "Population", "Cell Cycle"],
+            fill_color=C["panel"],
+            font=dict(color=C["accent1"], size=11),
+            line=dict(color=C["panel_border"]),
+            align="left",
         ),
-        row=1,
-        col=2,
-    )
+        cells=dict(
+            values=[
+                ["Basis", "Order p", "Dim in", "Dim out", "R\u00b2", "Terms"],
+                [_pop.get("basis_type", "?"), _pop.get("polynomial_order", "?"),
+                 _pop.get("input_dim", "?"), _pop.get("output_dim", "?"),
+                 f'{_pop.get("r_squared", 0):.3f}', _pop.get("n_terms", "?")],
+                [_cc.get("basis_type", "?"), _cc.get("polynomial_order", "?"),
+                 _cc.get("input_dim", "?"), _cc.get("output_dim", "?"),
+                 f'{_cc.get("r_squared", 0):.3f}', _cc.get("n_terms", "?")],
+            ],
+            fill_color=C["bg"],
+            font=dict(color=C["text"], size=11, family="monospace"),
+            line=dict(color=C["panel_border"]),
+            align="left",
+            height=26,
+        ),
+    ), row=1, col=2)
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -924,13 +859,13 @@ def relevance_strip(data, header, render_panel):
     _header = header("""
     ### 6. Observable Relevance + Surrogate Specs (relevance_strip, line 475)
 
-    #### Left panel — Observable Relevance:
+    #### Left panel — Observable Relevance: 
 
     Horizontal bar chart showing which simulation observables were
       identified as cell-cycle-relevant by the GSA-informed selection (Step 5b). Color-coded by score
       (green > 0.8, amber > 0.5, grey otherwise).
 
-    #### Why it's useful:
+    #### Why it's useful: 
 
     This answers "Which outputs did we give to the Koopman DMD to define θ?" Not all
       simulation outputs carry cell-cycle information — some vary due to generation convergence or seed
@@ -940,26 +875,26 @@ def relevance_strip(data, header, render_panel):
       generation/seed effects explain almost all its variance and it's useless for defining the cell cycle
       coordinate.
 
-    #### Right panel — Surrogate Specs:
+    #### Right panel — Surrogate Specs: 
 
     A table comparing the two PCE surrogates (Population and Cell Cycle) —
        basis type, polynomial order, input/output dimensions, R^2, and number of terms.
 
-    #### Why it's useful:
+    #### Why it's useful: 
 
     ### This is the model card. A reviewer can check: "The population surrogate uses
       `Legendre basis order 3` with `R^2=0.92` — that's a good fit." If R^2 were low, you'd know to increase
       polynomial_order or n_samples. The output_dim difference (2 for population vs 10 for cell cycle)
       reflects that Phase 2 fits one surrogate across all 10 stages simultaneously.
 
-    #### Governing equations:
+    #### Governing equations: 
 
     Observable relevance (GSA-informed selection, Step 5b):
 
     ```
       relevance_score_j = residual_j = 1 - gen_fraction_j - seed_fraction_j
 
-      ...where j indexes observables.
+      ...where j indexes observables. 
     ```
 
     High residual means the observable's variance is NOT explained by
@@ -981,7 +916,12 @@ def relevance_strip(data, header, render_panel):
 
 
         """)
-    mo.output.replace(mo.vstack([render_panel(_header, mo.ui.plotly(_fig))]))
+    mo.output.replace(
+        mo.vstack([
+
+
+        render_panel(_header, mo.ui.plotly(_fig))
+    ]))
     return
 
 
@@ -1005,16 +945,13 @@ def stage_detail(data, header, param_dropdown, render_panel):
         _is_sel = _p == _selected
 
         # Total order bars
-        _fig.add_trace(
-            go.Bar(
-                x=_x_stages,
-                y=_st,
-                name=f"{_p} S_Ti",
-                marker_color=_pc,
-                opacity=1.0 if _is_sel else 0.2,
-                hovertemplate=f"<b>{_p}</b> S_Ti=%{{y:.3f}}<extra></extra>",
-            )
-        )
+        _fig.add_trace(go.Bar(
+            x=_x_stages, y=_st,
+            name=f"{_p} S_Ti",
+            marker_color=_pc,
+            opacity=1.0 if _is_sel else 0.2,
+            hovertemplate=f"<b>{_p}</b> S_Ti=%{{y:.3f}}<extra></extra>",
+        ))
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -1026,14 +963,14 @@ def stage_detail(data, header, param_dropdown, render_panel):
         yaxis_range=[0, 0.7],
         legend=dict(orientation="h", y=-0.25, x=0, font=dict(size=10)),
     )
-    _header = header("""
+    _header =header("""
     ### 7. Mixer (stage_detail, line 552)
 
-    #### What it shows:
+    #### What it shows: 
 
     >> Grouped bar chart — one cluster per cell cycle stage, with one bar per parameter colored by its identity. The soloed parameter is full opacity; others are ghosted at 20%.
 
-    #### Why it's useful:
+    #### Why it's useful: 
 
     >> This is the discrete, stage-by-stage version of the EQ curve. While the EQ shows smooth splines (good for seeing trends), the mixer shows the exact S_Ti value at each stage as a bar you can compare across parameters. It answers "At stage 5 specifically, is mecillinam or vio_expression more important?" You can read the bar heights directly. The grouping makes cross-parameter comparison at a single stage easy, whereas the EQ makes cross-stage comparison for a single parameter easy — complementary views of the same data.
 
@@ -1045,11 +982,14 @@ def stage_detail(data, header, param_dropdown, render_panel):
 
     >> The mixer transposes the EQ's perspective: EQ sweeps across `k` for fixed `i`, the mixer compares across `i` at each fixed `k`.
 
-    #### RFC006 call to action (§4, Activity 5):
+    #### RFC006 call to action (§4, Activity 5): 
 
     >> "Apply the sensitivity analysis for aggregation strategies (1-3) for representative simulations from each use case. Report (slides) containing explanation of methods and results on representative simulations." — the mixer is the per-stage view that would go into such a report.
     """)
-    mo.output.replace(mo.vstack([render_panel(_header, mo.ui.plotly(_fig))]))
+    mo.output.replace(
+        mo.vstack([
+        render_panel(_header, mo.ui.plotly(_fig))
+    ]))
     return
 
 
@@ -1070,18 +1010,16 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
         _pc = PARAM_COLORS.get(_p, "#666")
         _is_sel = _p == _selected
 
-        _fig.add_trace(
-            go.Scatter(
-                x=list(range(len(_stages))),
-                y=_gaps,
-                mode="lines+markers",
-                name=_p,
-                line=dict(color=_pc, width=3 if _is_sel else 1, shape="spline"),
-                marker=dict(size=8 if _is_sel else 4),
-                opacity=1.0 if _is_sel else 0.3,
-                hovertemplate=f"<b>{_p}</b><br>Stage %{{x}}<br>Interaction=%{{y:.4f}}<extra></extra>",
-            )
-        )
+        _fig.add_trace(go.Scatter(
+            x=list(range(len(_stages))),
+            y=_gaps,
+            mode="lines+markers",
+            name=_p,
+            line=dict(color=_pc, width=3 if _is_sel else 1, shape="spline"),
+            marker=dict(size=8 if _is_sel else 4),
+            opacity=1.0 if _is_sel else 0.3,
+            hovertemplate=f"<b>{_p}</b><br>Stage %{{x}}<br>Interaction=%{{y:.4f}}<extra></extra>",
+        ))
 
     _fig.update_layout(
         **DAW_LAYOUT,
@@ -1094,13 +1032,13 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
     _header = header("""
     ### 8. Sidechain / Interaction Analyzer (interaction_analyzer, line 594)
 
-    #### What it shows:
+    #### What it shows: 
 
     Spline curves of (`S_Ti - S_i`) for each parameter across stages. This is the
     interaction gap — the fraction of variance that comes from joint effects between parameters rather
     than individual effects.
 
-    #### Why it's useful:
+    #### Why it's useful: 
 
     This is the most subtle and potentially most important panel. If the interaction gap
     is near zero, parameters act independently — you can study them in isolation. If it's large,
@@ -1127,11 +1065,14 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
     >> This captures all variance involving parameter i jointly with at least one other parameter. It equals
        zero if and only if parameter i acts independently of all other parameters at stage k.
 
-    #### RFC006 call to action (§3):
+    #### RFC006 call to action (§3): 
 
     >> "We will extend this by directly applying well established global sensitivity analysis methods for the stochastic function (sim_data -> SIM output), based on the aggregation strategies (1-3)." — Sobol total-order indices inherently decompose into main effects and  interactions; the sidechain panel makes that decomposition explicit and visible across the cell cycle.
     """)
-    mo.output.replace(mo.vstack([render_panel(_header, mo.ui.plotly(_fig))]))
+    mo.output.replace(
+        mo.vstack([
+         render_panel(_header,   
+        mo.ui.plotly(_fig))]))
     return
 
 
@@ -1166,10 +1107,16 @@ def load_surrogates(data, file_input):
     return (surr_data,)
 
 
+@app.cell
+def _():
+    return
+
+
 @app.function
 def get_sliders(_params, _bounds):
     return mo.ui.array([
         mo.ui.slider(
+            orientation="vertical",
             start=float(_bounds[_i, 0]),
             stop=float(_bounds[_i, 1]),
             step=float((_bounds[_i, 1] - _bounds[_i, 0]) / 100),
@@ -1228,14 +1175,15 @@ def pce_eq_sliders(data, header, surr_data):
     """),
             mo.md(f"""
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-      <div style="color:{C["accent3"]};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">
+      <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">
     PCE Surrogate Knobs
       </div>
-      {mo.vstack([_sliders[_i] for _i in range(len(_sliders))])}
+      {mo.hstack([_sliders[_i] for _i in range(len(_sliders))])}
     </div>
     """),
         ])
     )
+    param_sliders = _sliders
     return (param_sliders,)
 
 
@@ -1249,9 +1197,8 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
     _selected = param_dropdown.value
     _params = data["parameter_names"]
     _bounds = surr_data["bounds"]
-    _sliders = get_sliders(_params, _bounds)
 
-    # Current parameter values from sliders
+    # Current parameter values from the SAME sliders rendered in pce_eq_sliders
     _x = np.array([float(param_sliders[_i].value) for _i in range(len(_params))])
 
     # Normalize to [-1, 1]
@@ -1295,8 +1242,7 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
     _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
 
     _fig = make_subplots(
-        rows=1,
-        cols=2,
+        rows=1, cols=2,
         subplot_titles=(
             f"Response Curve: sweep {_selected}",
             "Current Prediction (all params)",
@@ -1306,32 +1252,23 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
     )
 
     # -- Left: sweep selected param, show response curve --
-    _fig.add_trace(
-        go.Scatter(
-            x=_sweep_vals,
-            y=_sweep_y,
-            mode="lines",
-            name=f"Y\u0302 vs {_selected}",
-            line=dict(color=_sel_color, width=3, shape="spline"),
-            hovertemplate=f"{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
+    _fig.add_trace(go.Scatter(
+        x=_sweep_vals, y=_sweep_y,
+        mode="lines",
+        name=f"Y\u0302 vs {_selected}",
+        line=dict(color=_sel_color, width=3, shape="spline"),
+        hovertemplate=f"{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
+    ), row=1, col=1)
 
     # Mark current slider position
-    _fig.add_trace(
-        go.Scatter(
-            x=[_x[_sel_idx]],
-            y=[_pop_y],
-            mode="markers",
-            name="Current",
-            marker=dict(size=14, color=_sel_color, symbol="diamond", line=dict(width=2, color="#fff")),
-            hovertemplate=f"CURRENT<br>{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
-        ),
-        row=1,
-        col=1,
-    )
+    _fig.add_trace(go.Scatter(
+        x=[_x[_sel_idx]], y=[_pop_y],
+        mode="markers",
+        name="Current",
+        marker=dict(size=14, color=_sel_color, symbol="diamond",
+                    line=dict(width=2, color="#fff")),
+        hovertemplate=f"CURRENT<br>{_selected}=%{{x:.2f}}<br>Y\u0302=%{{y:.4f}}<extra></extra>",
+    ), row=1, col=1)
 
     _fig.update_xaxes(title_text=_selected, row=1, col=1)
     _fig.update_yaxes(title_text="Y\u0302 (predicted output)", row=1, col=1)
@@ -1339,37 +1276,28 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
     # -- Right: current param values as horizontal bars with predicted output --
     _bar_colors = [PARAM_COLORS.get(_p, "#666") for _p in _params]
     _bar_opacities = [1.0 if _p == _selected else 0.5 for _p in _params]
-    _normalized_vals = [
-        (_x[_i] - _bounds[_i, 0]) / (_bounds[_i, 1] - _bounds[_i, 0] + 1e-12) for _i in range(len(_params))
-    ]
+    _normalized_vals = [(_x[_i] - _bounds[_i, 0]) / (_bounds[_i, 1] - _bounds[_i, 0] + 1e-12) for _i in range(len(_params))]
 
-    _fig.add_trace(
-        go.Bar(
-            y=_params,
-            x=_normalized_vals,
-            orientation="h",
-            marker=dict(color=_bar_colors, opacity=_bar_opacities),
-            text=[f"{_x[_i]:.2f}" for _i in range(len(_params))],
-            textposition="outside",
-            textfont=dict(color=C["text"], size=11),
-            showlegend=False,
-            hovertemplate="%{y}: %{text}<extra></extra>",
-        ),
-        row=1,
-        col=2,
-    )
+    _fig.add_trace(go.Bar(
+        y=_params, x=_normalized_vals,
+        orientation="h",
+        marker=dict(color=_bar_colors, opacity=_bar_opacities),
+        text=[f"{_x[_i]:.2f}" for _i in range(len(_params))],
+        textposition="outside",
+        textfont=dict(color=C["text"], size=11),
+        showlegend=False,
+        hovertemplate="%{y}: %{text}<extra></extra>",
+    ), row=1, col=2)
 
     _fig.update_xaxes(title_text="Normalized [0,1]", range=[0, 1.3], row=1, col=2)
 
     # Add prediction readout as annotation
     _fig.add_annotation(
-        x=0.65,
-        y=1.15,
+        x=0.65, y=1.15,
         text=f"Y\u0302 = {_pop_y:.4f}",
         showarrow=False,
         font=dict(color=C["accent3"], size=16, family="monospace"),
-        xref="x2 domain",
-        yref="y2 domain",
+        xref="x2 domain", yref="y2 domain",
     )
 
     _fig.update_layout(
@@ -1384,20 +1312,33 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
         else:
             _ann.font = dict(color=C["text_dim"], size=11)
 
-    mo.output.replace(mo.ui.plotly(_fig))
+
+    mo.output.replace(mo.md(f"""
+    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+        <div>{mo.ui.plotly(_fig)}</div>
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+            <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">PCE Surrogate Knobs</div>
+    
+          {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
+        </div>
+    </div>
+    """))
     return
 
 
 @app.cell
 def footer():
-    mo.output.replace(
-        mo.md("""
+    mo.output.replace(mo.md(f"""
     <div style="text-align:center;color:#333;font-size:10px;font-family:monospace;
             padding:12px;letter-spacing:2px;">
-    RFC006 // MILESTONE 08.4.2 // UQ DAW
+    {mo.icon('streamline-color:bacteria-virus-cells-biology', size=16)} RFC006 // MILESTONE 08.4.2 // UQ DAW {mo.icon('streamline-color:bacteria-virus-cells-biology', size=16)}
     </div>
-    """)
-    )
+    """))
+    return
+
+
+@app.cell
+def _():
     return
 
 
