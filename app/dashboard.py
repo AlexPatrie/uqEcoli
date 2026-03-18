@@ -1130,7 +1130,7 @@ def get_sliders(_params, _bounds):
 
 
 @app.cell
-def pce_eq_sliders(data, header, surr_data):
+def pce_eq_sliders(data, surr_data):
     """Parameter sliders for the PCE prediction EQ."""
     if data is None or not surr_data.get("available"):
         mo.stop(True)
@@ -1141,54 +1141,25 @@ def pce_eq_sliders(data, header, surr_data):
     _sliders = get_sliders(_params, _bounds)
     param_sliders = _sliders
 
-    mo.output.replace(
-        mo.vstack([
-            header(""" \
-    ### 9. PCE Prediction EQ (Surrogate Knobs)
-
-    #### What it shows:
-
-    >> Parameter sliders that directly control PCE surrogate evaluation. Drag a slider and the predicted
-    per-stage output curve updates instantly — no simulation needed. This IS the multiband EQ: parameter
-    values are the knobs, cell cycle stages are the frequency bands, and the predicted output is the
-    audio signal.
-
-    #### Why it's useful:
-
-    >> The Sobol panels (EQ, Spectrogram, Mixer) tell you WHICH parameters matter and WHERE in the cell
-    cycle. This panel lets you TURN THE KNOBS and see the effect. "What happens to stage-7 mass if I
-    increase mecillinam from 2.0 to 8.0?" — drag the slider and watch the curve reshape.
-
-    #### Governing equation: PCE surrogate evaluation:
-
-    ```
-      Y_hat(x) = sum_alpha c_alpha * prod_i P_{alpha_i}(x_i)
-    ```
-
-    ...where P_n are Legendre polynomials evaluated at the normalized parameter values x_i in [-1,1].
-    Each slider controls one x_i. The curve shows Y_hat across cell cycle stages.
-
-    #### RFC006 call to action (§4, Activity 3):
-
-    >> "Implement input->output wrapper functions that can be called from numerical libraries" — the PCE
-    surrogate IS that wrapper, distilled to a polynomial that evaluates in microseconds.
-    """),
-            mo.md(f"""
-    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-      <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">
-    PCE Surrogate Knobs
-      </div>
-      {mo.hstack([_sliders[_i] for _i in range(len(_sliders))])}
-    </div>
-    """),
-        ])
-    )
+    # mo.output.replace(
+    #     mo.vstack([
+    #         
+    #         mo.md(f"""
+    # <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+    #   <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">
+    # PCE Surrogate Knobs
+    #   </div>
+    #   {mo.hstack([_sliders[_i] for _i in range(len(_sliders))])}
+    # </div>
+    # """),
+    #     ])
+    # )
     param_sliders = _sliders
     return (param_sliders,)
 
 
 @app.cell
-def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
+def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     """PCE prediction EQ: evaluate surrogate at slider values, plot per-stage output."""
     if data is None or not surr_data.get("available"):
         mo.stop(True)
@@ -1313,8 +1284,40 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
             _ann.font = dict(color=C["text_dim"], size=11)
 
 
-    mo.output.replace(mo.md(f"""
+    _header = header(""" \
+    ### 9. PCE Prediction EQ (Surrogate Knobs)
+
+    #### What it shows:
+
+    >> Parameter sliders that directly control PCE surrogate evaluation. Drag a slider and the predicted
+    per-stage output curve updates instantly — no simulation needed. This IS the multiband EQ: parameter
+    values are the knobs, cell cycle stages are the frequency bands, and the predicted output is the
+    audio signal.
+
+    #### Why it's useful:
+
+    >> The Sobol panels (EQ, Spectrogram, Mixer) tell you WHICH parameters matter and WHERE in the cell
+    cycle. This panel lets you TURN THE KNOBS and see the effect. "What happens to stage-7 mass if I
+    increase mecillinam from 2.0 to 8.0?" — drag the slider and watch the curve reshape.
+
+    #### Governing equation: PCE surrogate evaluation:
+
+    ```
+      Y_hat(x) = sum_alpha c_alpha * prod_i P_{alpha_i}(x_i)
+    ```
+
+    ...where P_n are Legendre polynomials evaluated at the normalized parameter values x_i in [-1,1].
+    Each slider controls one x_i. The curve shows Y_hat across cell cycle stages.
+
+    #### RFC006 call to action (§4, Activity 3):
+
+    >> "Implement input->output wrapper functions that can be called from numerical libraries" — the PCE
+    surrogate IS that wrapper, distilled to a polynomial that evaluates in microseconds.
+    """)
+    mo.output.replace(mo.vstack([
+         mo.md(f"""
     <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+        <div>{_header}</div>
         <div>{mo.ui.plotly(_fig)}</div>
         <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
             <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">PCE Surrogate Knobs</div>
@@ -1322,7 +1325,7 @@ def pce_eq_plot(data, param_dropdown, param_sliders, surr_data):
           {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
         </div>
     </div>
-    """))
+    """)]))
     return
 
 
