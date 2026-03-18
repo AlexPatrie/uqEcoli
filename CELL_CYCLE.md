@@ -119,8 +119,8 @@ The n_bins=10 default is a practical choice:
 
 - 3 bins (B/C/D) would match biology but is too coarse for polynomial fitting — you can't fit a meaningful PCE with 3 data partitions
 - 10 bins gives enough resolution to see trends (e.g., "parameter X's importance increases linearly across the cycle") while keeping each bin well-populated enough for stable statistics
-- 100 bins would be too fine — not enough data per bin for reliable variance estimates                                                                                                   
-- The user can set n_bins to any value via --n-bins on the CLI                        
+- 100 bins would be too fine — not enough data per bin for reliable variance estimates
+- The user can set n_bins to any value via --n-bins on the CLI
 
-The bins are just uniform partitions of θ-space. They don't correspond 1:1 to B/C/D, but stages 0-1 approximately cover B, stages 2-7 approximately cover C, and stages 8-9 approximately cover D — weighted by the relative  
-durations of those periods under the specific growth conditions being simulated. 
+The bins are just uniform partitions of θ-space. They don't correspond 1:1 to B/C/D, but stages 0-1 approximately cover B, stages 2-7 approximately cover C, and stages 8-9 approximately cover D — weighted by the relative
+durations of those periods under the specific growth conditions being simulated.

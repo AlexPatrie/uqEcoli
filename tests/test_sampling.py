@@ -33,7 +33,9 @@ class CountingWrapper:
         """Return synthetic 2D timeseries. Increments call_count."""
         self.call_count += 1
         # Deterministic output based on x so results are reproducible
-        base = np.outer(np.linspace(0, 1, self.n_timesteps), x[:self.n_obs] if len(x) >= self.n_obs else np.ones(self.n_obs))
+        base = np.outer(
+            np.linspace(0, 1, self.n_timesteps), x[: self.n_obs] if len(x) >= self.n_obs else np.ones(self.n_obs)
+        )
         noise = self._rng.normal(0, 0.01, base.shape)
         return base + noise
 

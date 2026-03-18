@@ -1,0 +1,84 @@
+./uq_results/test_export_output
+├── cell_cycle_profile.json
+├── cell_cycle_sobol_stage_0
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_1
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_2
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_3
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_4
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_5
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_6
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_7
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_8
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_sobol_stage_9
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── cell_cycle_surrogate
+│   ├── class.txt
+│   ├── coefficients.npy
+│   ├── input_bounds.npy
+│   ├── metadata.json
+│   └── multi_indices.npy
+├── koopman_spectrum.html
+├── koopman_spectrum.pdf
+├── metadata.json
+├── morris_indices
+│   ├── class.txt
+│   ├── elementary_effects.npy
+│   ├── metadata.json
+│   ├── mu.npy
+│   ├── mu_star.npy
+│   └── sigma.npy
+├── population_sobol
+│   ├── class.txt
+│   ├── first_order.npy
+│   ├── metadata.json
+│   └── total_order.npy
+├── population_surrogate
+│   ├── class.txt
+│   ├── coefficients.npy
+│   ├── input_bounds.npy
+│   ├── metadata.json
+│   └── multi_indices.npy
+├── uq_artifact_analysis.md
+├── uq_results.json
+└── variance_decomposition.json
+
+15 directories, 67 files
