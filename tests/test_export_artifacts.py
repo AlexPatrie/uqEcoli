@@ -187,12 +187,28 @@ def _make_full_pipeline_result() -> tuple[PipelineResult, KoopmanSpectrum]:
     cc_profile = {
         "stages": list(range(N_BINS)),
         "dry_mass_mean": [
-            1.027, 1.104, 1.179, 1.263, 1.350,
-            1.443, 1.543, 1.653, 1.767, 1.908,
+            1.027,
+            1.104,
+            1.179,
+            1.263,
+            1.350,
+            1.443,
+            1.543,
+            1.653,
+            1.767,
+            1.908,
         ],
         "growth_mean": [
-            0.01086, 0.01138, 0.01165, 0.01145, 0.01067,
-            0.00971, 0.00879, 0.00833, 0.00842, 0.00894,
+            0.01086,
+            0.01138,
+            0.01165,
+            0.01145,
+            0.01067,
+            0.00971,
+            0.00879,
+            0.00833,
+            0.00842,
+            0.00894,
         ],
     }
 
@@ -298,12 +314,12 @@ class TestExportArtifacts:
         assert data["surrogates"]["population"]["r_squared"] == pytest.approx(0.92)
         assert data["surrogates"]["cell_cycle"]["r_squared"] == pytest.approx(0.87)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Export artifacts written to: {OUTPUT_DIR.resolve()}")
-        print(f"{'='*60}")
-        print(f"Files:")
+        print(f"{'=' * 60}")
+        print("Files:")
         for f in sorted(OUTPUT_DIR.rglob("*")):
             if f.is_file():
                 size = f.stat().st_size
                 print(f"  {f.relative_to(OUTPUT_DIR)}  ({size:,} bytes)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
