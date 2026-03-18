@@ -20,12 +20,53 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
   (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
   human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
   orthogonal decompositions.
+
+
+# TODO:
+  Path A: Precomputed Cache (No live sims required)
+
+  This is the realistic path. You already have api_simulation_default Parquet data on disk.
+
+  What's needed:
+
+  1. Generate (X, Y) pairs from existing sim data. You don't need to re-run sims. You already have outputs for one
+  parameter configuration. The gap is: the pipeline needs outputs at multiple parameter configurations (LHS samples
+  across the vio/mecillinam space) to fit a surrogate. A single experiment at one parameter point gives you
+  aggregation and variance decomposition, but not sensitivity analysis.
+  2. Run generate-samples against real vEcoli. This requires:
+    - ecoli package importable (hard imports in uq/pipe.py, uq/generators/vecoli.py)
+    - simData.cPickle at the expected path (you have this)
+    - Each LHS sample triggers EcoliSim to run a full whole-cell simulation — this is the expensive step (~minutes to
+  hours per sample depending on max_duration and generations)
+    - With n_samples=200 and even a 3-minute sim, that's ~10 hours serial, or ~1 hour with 10 workers
+  3. Once cached, quantify --precomputed-path ./cache runs Phase 1 + Phase 2 in seconds with no vEcoli dependency.
+
+  Concrete steps:
+  # Stage 1: Generate + cache (EXPENSIVE — run on HPC or with --max-workers)
+  uv run uq generate-samples api_simulation_default \
+      /path/to/sims ./cache \
+      --n-samples 50 --max-workers 4
+
+  # Stage 2: Analyze (FAST — seconds)
+  uv run uq quantify api_simulation_default \
+      /path/to/sims \
+      --precomputed-path ./cache \
+      --export-path ./results
+
+  Blockers for this path:
+  - ecoli package must be importable for Stage 1 (is it installed in this env?)
+  - Stage 1 wall-clock time depends on sim duration
+  - The VecoliSimulationFunc must correctly apply parameter variants (vio expression, mecillinam concentration) — this
+   was the knockout gap that MISSING.md documented as fixed
 """
 
+import json
+import os
 import tempfile
 from pathlib import Path
 from pprint import pp
 
+import dotenv
 import numpy as np
 import typer
 from rich import box
@@ -36,13 +77,16 @@ from rich.table import Table
 from rich.text import Text
 
 from uq import handlers
+from uq.common import get_repo_root
 from uq.handlers import generate_samples
+from uq.models import PipelineConfig, SamplingConfig
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import Pipeline, execute_pipeline
 from uq.pipeline import PipelineResult
 
 app = typer.Typer()
 console = Console()
+dotenv.load_dotenv()
 
 
 def _pct(v: float) -> str:
@@ -378,14 +422,26 @@ def demo(
 @app.command(name="generate-samples")
 def create_samples(
     experiment_ids: list[str],
-    sim_base_path: str,
-    cache_dir: str,
+    sim_base_path: str | None = None,
+    cache_dir: str | None = None,
     n_samples: int = 200,
     seed: int = 42,
     observable_columns: list[str] | None = None,
     max_workers: int | None = None,
+    max_duration: float = 10800.0,
+    generations: int = 1,
+    live: bool = True,
+    include_vio: bool | None = None,
+    include_mecillinam: bool = True,
 ) -> None:
-    """Generate LHS samples, evaluate simulation function, cache (X, Y)."""
+    """Generate LHS samples, evaluate simulation function, cache (X, Y).
+
+    By default uses a synthetic response surface (DataDrivenWrapper).
+    Pass --live to run real vEcoli simulations via VecoliSimulationFunc.
+
+    --include-vio auto-detects from sim_data (requires violacein-enabled
+    sim_data).  --include-mecillinam is on by default.
+    """
     samples = handlers.generate_samples(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
@@ -394,6 +450,11 @@ def create_samples(
         seed=seed,
         observable_columns=observable_columns,
         max_workers=max_workers,
+        max_duration=max_duration,
+        generations=generations,
+        live=live,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
     )
     print(samples)
 
@@ -448,6 +509,22 @@ def collect_results(
         observable_columns=observable_columns,
         cache_dir=cache_dir,
     )
+
+
+@app.command(name="configure-pipeline")
+def configure_pipeline(name: str, dest: str | None = None):
+    d = dest or os.path.join(os.getcwd(), f"{name}.json")
+    # from uq.pipe import PipelineConfig
+    config = PipelineConfig(
+        experiment_ids=["api_simulation_default", "mecillinam", "test_violacein_with_metabolism"],
+        sim_base_path=os.getenv("SIM_BASE_PATH"),
+        export_path="uq_results",
+        samples=SamplingConfig(
+            cache_dir="uq_cache", n_samples=22, max_workers=4, include_vio=False, include_mecillinam=True
+        ),
+    )
+    with open(d, "w") as fp:
+        json.dump(config.model_dump(), fp, indent=3)
 
 
 @app.command()

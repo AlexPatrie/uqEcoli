@@ -25,70 +25,249 @@ Sobol Indices  ←  PCE Surrogate  ←  Morris Screening  ←──────�
 uv sync
 ```
 
-## Quick Start
+---
+
+## CLI Reference
+
+The `uq` CLI exposes the following commands:
+
+| Command | Purpose |
+|---------|---------|
+| `uq generate-samples` | Generate LHS samples and cache (X, Y) pairs to disk |
+| `uq quantify` | Run the full RFC006 UQ pipeline (from data or cache) |
+| `uq demo` | Run a demo pipeline with default experiments |
+| `uq export-configs` | Export per-sample vEcoli configs for HPC/Nextflow batch execution |
+| `uq collect-results` | Assemble completed HPC batch outputs into a precomputed cache |
+| `uq configure-pipeline` | Write a default pipeline config JSON |
+| `uq readme` | Print the RFC006 workflow diagram |
+
+---
+
+## Getting Started
+
+### 1. Generate Samples
+
+Generate Latin Hypercube samples and evaluate them against a simulation function, caching the results to disk:
+
+```bash
+uv run uq generate-samples \
+    api_simulation_default mecillinam test_violacein_with_metabolism \
+    --sim-base-path /path/to/vEcoli/api_integration/sims \
+    --cache-dir ./uq_cache \
+    --n-samples 200
+```
+
+**Important:** By default this uses a **synthetic response surface** (`DataDrivenWrapper`) — it builds a linear model from the statistics of your existing Parquet data and evaluates it instantly. This is useful for testing the pipeline but does not produce biologically meaningful sensitivity indices.
+
+To run **real vEcoli simulations** at each sample point, add the `--live` flag:
+
+```bash
+uv run uq generate-samples \
+    api_simulation_default \
+    --sim-base-path /path/to/sims \
+    --cache-dir ./uq_cache \
+    --n-samples 50 \
+    --live \
+    --max-duration 300 \
+    --max-workers 4
+```
+
+**`generate-samples` options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--sim-base-path` | (required) | Root directory containing simulation Parquet outputs |
+| `--cache-dir` | None | Where to write cached X.npy, Y.npy, metadata.json |
+| `--n-samples` | 200 | Number of LHS sample points |
+| `--seed` | 42 | Random seed for reproducible sampling |
+| `--live` | off | Run real `EcoliSim` per sample (requires `ecoli` package) |
+| `--max-duration` | 10800 | Simulation wall-clock limit in seconds (live mode) |
+| `--generations` | 1 | Generations per simulation (live mode) |
+| `--max-workers` | None | Parallel workers for evaluation (None = sequential) |
+| `--include-vio` | auto | Include violacein pathway parameters (auto-detected from sim_data) |
+| `--include-mecillinam` | True | Include mecillinam concentration parameter |
+| `--observable-columns` | mass cols | Which output columns to extract |
+
+### 2. Run the Pipeline
+
+Once you have a cache, run the full UQ pipeline:
+
+```bash
+uv run uq quantify \
+    api_simulation_default mecillinam test_violacein_with_metabolism \
+    --sim-base-path /path/to/sims \
+    --precomputed-path ./uq_cache \
+    --export-path ./uq_results
+```
+
+This loads the cached (X, Y) data, fits PCE surrogates, computes Sobol indices, and prints a rich terminal report. No simulation calls are made.
+
+**`quantify` options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--sim-base-path` | (required) | Root simulation output directory |
+| `--precomputed-path` | None | Path to cache from `generate-samples` |
+| `--export-path` | None | Directory to write artifacts (Sobol, surrogates, Koopman PDF) |
+| `--lb-generation` | 2 | Skip initial transient generations |
+| `--lb-time` | 100.0 | Skip early transient timesteps |
+| `--n-bins` | 10 | Number of cell cycle bins (Phase 2) |
+| `--pce-polynomial-order` | 3 | PCE polynomial order |
+| `--n-samples` | 20 | Samples for PCE fitting (ignored if --precomputed-path used) |
+| `--expected-cycle-time` | 3600.0 | Expected cell cycle duration in seconds |
+| `--pce-n-trajectories` | 10 | Morris screening trajectories |
+| `--pce-n-selected-params` | 5 | Top-K parameters from Morris screening |
+
+### 3. Demo Mode
+
+Run the pipeline with default experiment IDs and built-in paths:
+
+```bash
+# Synthetic sample generation demo (fast)
+uv run uq demo
+
+# Full pipeline demo
+uv run uq demo --demo-type full
+```
+
+---
+
+## HPC Batch Workflow
+
+For production-scale analysis where each simulation takes minutes to hours, use the three-step HPC batch workflow. This avoids running simulations locally by exporting per-sample configs that a job scheduler (Nextflow, Slurm, etc.) can execute in parallel.
+
+### Step 1: Export Configs
+
+Generate LHS samples, apply parameter variants to `sim_data`, and write per-sample configs:
+
+```bash
+uv run uq export-configs \
+    /path/to/simData.cPickle \
+    ./batch \
+    --n-samples 200 \
+    --include-vio \
+    --include-mecillinam \
+    --generations 1
+```
+
+This produces:
+
+```
+batch/
+├── configs/          # Per-sample JSON configs (sample_0000.json, ...)
+├── sim_data/         # Per-sample pickled sim_data with variants applied
+└── metadata.json     # Maps sample index → parameter values
+```
+
+**`export-configs` options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `sim_data_path` | (positional) | Path to baseline `simData.cPickle` |
+| `batch_dir` | (positional) | Output directory for batch configs |
+| `--n-samples` | 200 | Number of LHS sample points |
+| `--seed` | 42 | Random seed |
+| `--include-vio` | True | Include violacein pathway parameters |
+| `--include-mecillinam` | True | Include mecillinam concentration parameter |
+| `--base-config-path` | None | Optional base JSON config to merge into |
+| `--generations` | 1 | Generations per simulation |
+| `--emitter` | parquet | Output emitter type |
+
+### Step 2: Run on Cluster
+
+Submit the configs to your job scheduler. Each sample is an independent simulation:
+
+```bash
+# Example with Nextflow (adapt to your scheduler)
+nextflow run vEcoli_batch.nf \
+    --configs ./batch/configs \
+    --sim_data ./batch/sim_data \
+    --outdir ./batch_outputs
+
+# Example with a simple parallel loop
+for cfg in ./batch/configs/sample_*.json; do
+    ecoli_master_sim --config "$cfg" --outdir ./batch_outputs/$(basename "$cfg" .json) &
+done
+wait
+```
+
+Each job reads its `sim_data` pickle + JSON config, runs `EcoliSim`, and writes Parquet output to the output directory.
+
+### Step 3: Collect Results
+
+Assemble the per-sample Parquet outputs into a `PrecomputedCache`:
+
+```bash
+uv run uq collect-results \
+    ./batch \
+    ./batch_outputs \
+    --cache-dir ./uq_cache
+```
+
+**`collect-results` options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `batch_dir` | (positional) | Directory from `export-configs` (contains metadata.json) |
+| `output_dir` | (positional) | Root dir with per-sample Parquet outputs |
+| `--observable-columns` | None | Which columns to extract (default: mass columns) |
+| `--cache-dir` | `{batch_dir}/cache` | Where to save the assembled cache |
+
+### Step 4: Analyze
+
+Run the pipeline against the collected cache — this is the same `quantify` command:
+
+```bash
+uv run uq quantify \
+    api_simulation_default \
+    --sim-base-path /path/to/sims \
+    --precomputed-path ./uq_cache \
+    --export-path ./uq_results
+```
+
+### Full HPC workflow at a glance
+
+```
+export-configs              →  run on cluster  →  collect-results  →  quantify
+(write per-sample configs)     (parallel sims)    (assemble cache)    (fit PCE + Sobol)
+         │                          │                    │                  │
+    batch/configs/             Parquet output        uq_cache/          uq_results/
+    batch/sim_data/            per sample            X.npy, Y.npy       sobol indices
+    batch/metadata.json                              metadata.json      koopman PDF
+```
+
+---
+
+## Python API
 
 ```python
 from uq import XSpaceVecoli
 from uq.pipeline.workflow import execute_pipeline
 
-# 1. Define input parameter space
-param_space = XSpaceVecoli(
-    include_vio=True,
-    include_mecillinam=True,
-    vio_expression_bounds=(0.0, 5.0),
-    vio_trl_eff_bounds=(0.0, 2.0),
-    mecillinam_conc_bounds=(0.0, 10.0),
-)
-
-# 2. Run the full pipeline — data loading, aggregation, variance
-#    decomposition, PCE surrogate, and Sobol indices are all handled
-#    internally. Just point it at your simulation output directory.
 result = execute_pipeline(
-    param_space=param_space,
-    simulation_func=your_simulation_wrapper,  # callable with evaluate_batch(X) → Y
-    experiment_id="mecillinam",
+    experiment_ids=["mecillinam"],
     sim_base_path="/path/to/vEcoli/api_integration/sims",
-    output_types=["higher_order_properties", "exchange_fluxes"],
-    generation_lower_bound=2,       # skip initial transient generations
-    time_lower_bound=100.0,         # skip early transient timesteps
+    simulation_func=your_simulation_wrapper,
     polynomial_order=3,
     n_samples=200,
     export_path="./uq_results",
 )
 
-# 3. Inspect population-level results (Phase 1)
-sobol = result.population.sobol_indices[0]
-for name, value in sobol.select(n=5):
+# Population-level Sobol indices (Phase 1)
+for name, value in result.population.sobol_indices[0].select(n=5):
     print(f"{name}: {value:.4f}")
 
-# 4. Variance decomposition (Step 4)
-print(f"Generation: {result.variance_decomposition['generation_fraction']}")
-print(f"Seed:       {result.variance_decomposition['seed_fraction']}")
+# Variance decomposition
+print(result.variance_decomposition)
 
-# 5. Inspect per-cell-cycle-stage results (Phase 2)
+# Per-cell-cycle-stage Sobol indices (Phase 2)
 for i, stage_sobol in enumerate(result.cell_cycle.sobol_indices):
     print(f"Stage {i}: {stage_sobol.select(n=3)}")
 
-# 6. Reload results later
+# Reload results later
 from uq.pipeline.models import PipelineResult
 loaded = PipelineResult.from_export("./uq_results")
 ```
-
-See [`examples/uq_pipeline.py`](examples/uq_pipeline.py) for a fully runnable end-to-end example.
-
-### Two-Stage Workflow
-
-For large parameter spaces or HPC environments, split sample generation from analysis:
-
-```bash
-# Stage 1: generate and cache (run once, can be batched on HPC)
-uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200
-
-# Stage 2: analyze from cache (fast, repeatable)
-uv run uq demo --precomputed-path ./cache --export-path ./results
-```
-
-Stage 1 generates LHS samples, evaluates the simulation function at each point, and caches `(X, Y)` plus per-sample timeseries to disk. Stage 2 loads the cache and fits PCE surrogates directly — no simulation calls needed. This lets you iterate on analysis parameters (polynomial order, number of bins) without re-running expensive simulations.
 
 ## Pipeline Output
 
@@ -98,6 +277,16 @@ The pipeline produces a `PipelineResult` with two profiles:
 |---------|-------------------|-------------|
 | **Population** (Phase 1) | Which parameters drive bulk variance | 1 set of Sobol indices + PCE surrogate |
 | **Cell Cycle** (Phase 2) | How sensitivity varies across the cell cycle | *n* sets of Sobol indices (one per stage) + PCE surrogate |
+
+When `--export-path` is provided, the following artifacts are written:
+
+| Artifact | Description |
+|----------|-------------|
+| `population_sobol/` | Serialized Phase 1 Sobol indices |
+| `cell_cycle_surrogate/` | Serialized Phase 2 PCE surrogate |
+| `koopman_spectrum.pdf` | 4-panel Koopman spectral decomposition |
+| `variance_decomposition.json` | Variance decomposition results |
+| `morris_indices/` | Morris screening results (if applicable) |
 
 ## Input Parameters
 

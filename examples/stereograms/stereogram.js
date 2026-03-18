@@ -6,7 +6,7 @@ function initBackground(maxX=1111, maxY=1111) {
 			let brightness = Math.round(Math.random()) * 255;
 			bg[x][y] = [brightness, brightness, brightness]
 		}
-	
+
 	}
 	return bg;
 }
@@ -29,9 +29,9 @@ function depthSphere(maxX, maxY) {
 			} else {
 				Z[x][y] = 0;
 			}
-		
+
 		}
-		
+
 	}
 	return Z
 }
@@ -92,7 +92,7 @@ class Stereogram {
 		this.maxY = maxY;
 		this.bg = initBackground(this.maxX, this.maxY);
 	}
-	
+
 	build(focalLen, eyeSep, dpi) {
 		setPixels(this.bg, this.maxX, this.maxY, focalLen, eyeSep, dpi);
 		displayBg(this.bg, this.maxX, this.maxY);

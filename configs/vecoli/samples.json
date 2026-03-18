@@ -11,10 +11,11 @@
   "emitter": "parquet",
   "variants": {},
   "emit_paths": [
-    "listeners__mass__dry_mass",
-    "listeners__mass__cell_mass",
-    "listeners__mass__volume",
-    "listeners__mass__growth"
+
+    ["listeners__mass__dry_mass"],
+    ("listeners__mass__cell_mass"),
+    ("listeners__mass__volume"),
+    ("listeners__mass__growth")
   ],
   "aws": {}
 }
