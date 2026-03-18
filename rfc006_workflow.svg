@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1250" font-family="'Segoe UI', Arial, Helvetica, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1680" font-family="'Segoe UI', Arial, Helvetica, sans-serif">
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
@@ -36,259 +36,326 @@
   </defs>
 
   <!-- Background -->
-  <rect width="1800" height="1250" fill="#f8fafc" rx="12"/>
+  <rect width="1800" height="1680" fill="#f8fafc" rx="12"/>
 
   <!-- ===== TITLE BAR ===== -->
-  <rect x="20" y="15" width="1760" height="60" rx="10" fill="url(#headerGrad)" filter="url(#shadow-lg)"/>
-  <text x="900" y="38" text-anchor="middle" fill="#f1f5f9" font-size="18" font-weight="700">RFC006 FULL UQ WORKFLOW</text>
-  <text x="100" y="58" fill="#94a3b8" font-size="10">
-    <tspan font-weight="600" fill="#cbd5e1">CLI:</tspan>
+  <rect x="20" y="15" width="1760" height="70" rx="10" fill="url(#headerGrad)" filter="url(#shadow-lg)"/>
+  <text x="900" y="40" text-anchor="middle" fill="#f1f5f9" font-size="19" font-weight="700">RFC006: Uncertainty Quantification Framework for vEcoli Whole-Cell Simulations</text>
+  <text x="900" y="58" text-anchor="middle" fill="#94a3b8" font-size="10">
+    <tspan font-weight="600" fill="#cbd5e1">Milestone 08.4.2:</tspan>
+    <tspan dx="4">Implement UQ framework to track prediction confidence</tspan>
+    <tspan dx="30" font-weight="600" fill="#cbd5e1">CLI:</tspan>
     <tspan dx="4">uv run uq quantify</tspan>
-    <tspan dx="20" font-weight="600" fill="#cbd5e1">Two-Stage:</tspan>
-    <tspan dx="4">generate-samples (Stage 1) &#x2192; quantify --precomputed-path (Stage 2)</tspan>
-    <tspan dx="20" font-weight="600" fill="#cbd5e1">Entry:</tspan>
+    <tspan dx="30" font-weight="600" fill="#cbd5e1">Entry:</tspan>
     <tspan dx="4">uq.pipe.Pipeline</tspan>
   </text>
+  <text x="900" y="74" text-anchor="middle" fill="#64748b" font-size="9" font-style="italic">Deconvolves generation, lineage seed, and cell cycle variance to model bulk vs. single-cell relationships (RFC006 &#xa7;1)</text>
 
-  <!-- ===== TOP ROW: Steps 1-4 (horizontal) — DATA PREPARATION ===== -->
+  <!-- ===== TOP ROW: Steps 1-4 (horizontal) ===== -->
 
   <!-- STEP 1 -->
-  <rect x="20" y="90" width="390" height="60" rx="7" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
-  <rect x="20" y="90" width="390" height="22" rx="7" fill="#0ea5e9" opacity="0.1"/>
-  <rect x="20" y="102" width="390" height="10" fill="#0ea5e9" opacity="0.1"/>
-  <text x="36" y="106" fill="#0369a1" font-size="11" font-weight="700">STEP 1: Define Parameter Space</text>
-  <text x="36" y="126" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">ParameterDataset &#x2192; XSpace (from simData.cPickle)</text>
-  <text x="36" y="140" fill="#64748b" font-size="9.5">&#x2192; n parameters with bounds</text>
+  <rect x="20" y="100" width="390" height="100" rx="7" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="20" y="100" width="390" height="22" rx="7" fill="#0ea5e9" opacity="0.1"/>
+  <rect x="20" y="112" width="390" height="10" fill="#0ea5e9" opacity="0.1"/>
+  <text x="36" y="116" fill="#0369a1" font-size="11" font-weight="700">STEP 1: Define Parameter Space</text>
+  <text x="36" y="138" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">X = {x_1, ..., x_n} with bounds [a_i, b_i]</text>
+  <text x="36" y="156" fill="#64748b" font-size="9">Input variables per RFC006 &#xa7;4 Activity 1:</text>
+  <text x="36" y="170" fill="#64748b" font-size="9">&#x2022; Vio pathway (expression, translation efficiency)</text>
+  <text x="36" y="184" fill="#64748b" font-size="9">&#x2022; Mecillinam concentration &#x2022; Gene knockouts</text>
 
-  <!-- Arrow 1&#x2192;2 -->
-  <line x1="410" y1="120" x2="435" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Arrow 1 to 2 -->
+  <line x1="410" y1="150" x2="435" y2="150" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- STEP 2 -->
-  <rect x="445" y="90" width="390" height="60" rx="7" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
-  <rect x="445" y="90" width="390" height="22" rx="7" fill="#0ea5e9" opacity="0.1"/>
-  <rect x="445" y="102" width="390" height="10" fill="#0ea5e9" opacity="0.1"/>
-  <text x="461" y="106" fill="#0369a1" font-size="11" font-weight="700">STEP 2: Load Simulation Data</text>
-  <text x="461" y="126" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">load_timeseries(sim_base_path, experiment_ids)</text>
-  <text x="461" y="140" fill="#64748b" font-size="9.5">&#x2192; Polars DataFrame (DuckDB + hive-partitioned Parquet)</text>
+  <rect x="445" y="100" width="390" height="100" rx="7" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="445" y="100" width="390" height="22" rx="7" fill="#0ea5e9" opacity="0.1"/>
+  <rect x="445" y="112" width="390" height="10" fill="#0ea5e9" opacity="0.1"/>
+  <text x="461" y="116" fill="#0369a1" font-size="11" font-weight="700">STEP 2: Load Simulation Data</text>
+  <text x="461" y="138" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">Y(t) = f(X) + &#x3b5;  (stochastic timeseries)</text>
+  <text x="461" y="156" fill="#64748b" font-size="9">Outputs per RFC006 &#xa7;4 Activity 1:</text>
+  <text x="461" y="170" fill="#64748b" font-size="9">&#x2022; Transcriptome, proteome, metabolic fluxes</text>
+  <text x="461" y="184" fill="#64748b" font-size="9">&#x2022; Higher-order properties (mass, volume, growth)</text>
 
-  <!-- Arrow 2&#x2192;3 -->
-  <line x1="835" y1="120" x2="860" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Arrow 2 to 3 -->
+  <line x1="835" y1="150" x2="860" y2="150" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- STEP 3: Aggregation -->
-  <rect x="870" y="90" width="510" height="60" rx="7" fill="#ffffff" stroke="#fbbf24" stroke-width="1.5" filter="url(#shadow)"/>
-  <rect x="870" y="90" width="510" height="22" rx="7" fill="#f59e0b" opacity="0.1"/>
-  <rect x="870" y="102" width="510" height="10" fill="#f59e0b" opacity="0.1"/>
-  <text x="886" y="106" fill="#b45309" font-size="11" font-weight="700">STEP 3: Aggregation Strategies 1-3</text>
-
+  <rect x="870" y="100" width="510" height="100" rx="7" fill="#ffffff" stroke="#fbbf24" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="870" y="100" width="510" height="22" rx="7" fill="#f59e0b" opacity="0.1"/>
+  <rect x="870" y="112" width="510" height="10" fill="#f59e0b" opacity="0.1"/>
+  <text x="886" y="116" fill="#b45309" font-size="11" font-weight="700">STEP 3: Aggregation Strategies 1-3 (RFC006 &#xa7;1)</text>
   <!-- 3 strategy mini-boxes -->
-  <rect x="886" y="118" width="140" height="26" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
-  <text x="956" y="135" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">UNIFORM</text>
-  <rect x="1040" y="118" width="160" height="26" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
-  <text x="1120" y="135" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">BY_GENERATION</text>
-  <rect x="1214" y="118" width="155" height="26" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
-  <text x="1292" y="135" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">BY_LINEAGE_SEED</text>
+  <rect x="886" y="128" width="140" height="40" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="956" y="142" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">S1: UNIFORM</text>
+  <text x="956" y="160" text-anchor="middle" fill="#78716c" font-size="8">Y&#x0304; = (1/N)&#x2211;Y_i</text>
+  <rect x="1040" y="128" width="160" height="40" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="1120" y="142" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">S2: BY GENERATION</text>
+  <text x="1120" y="160" text-anchor="middle" fill="#78716c" font-size="8">Y&#x0304;_g (convergence ctrl)</text>
+  <rect x="1214" y="128" width="155" height="40" rx="5" fill="#fffbeb" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="1292" y="142" text-anchor="middle" fill="#92400e" font-size="9" font-weight="600">S3: BY LINEAGE SEED</text>
+  <text x="1292" y="160" text-anchor="middle" fill="#78716c" font-size="8">Y&#x0304;_s (exogenous var ctrl)</text>
+  <text x="886" y="190" fill="#78716c" font-size="8" font-style="italic">Temporal aggregation of subsampled trajectories (RFC006 &#xa7;4, Step B)</text>
 
-  <!-- Arrow 3&#x2192;4 -->
-  <line x1="1380" y1="120" x2="1405" y2="120" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Arrow 3 to 4 -->
+  <line x1="1380" y1="150" x2="1405" y2="150" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- STEP 4: Variance Decomposition -->
-  <rect x="1415" y="85" width="365" height="70" rx="7" fill="#ffffff" stroke="#10b981" stroke-width="1.5" filter="url(#shadow)"/>
-  <rect x="1415" y="85" width="365" height="22" rx="7" fill="#10b981" opacity="0.12"/>
-  <rect x="1415" y="97" width="365" height="10" fill="#10b981" opacity="0.12"/>
-  <text x="1431" y="101" fill="#065f46" font-size="11" font-weight="700">STEP 4: Variance Decomposition</text>
-  <text x="1431" y="120" fill="#475569" font-size="9" font-family="'SF Mono', 'Fira Code', monospace">compute_variance_decomposition()</text>
-  <text x="1431" y="137" fill="#64748b" font-size="9">gen_frac | seed_frac | <tspan font-weight="600" fill="#065f46">residual_frac</tspan></text>
-  <text x="1431" y="148" fill="#64748b" font-size="8.5" font-style="italic">(convergence)&#x2003;(exogenous)&#x2003;(cell-cycle)</text>
+  <rect x="1415" y="100" width="365" height="100" rx="7" fill="#ffffff" stroke="#10b981" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="1415" y="100" width="365" height="22" rx="7" fill="#10b981" opacity="0.12"/>
+  <rect x="1415" y="112" width="365" height="10" fill="#10b981" opacity="0.12"/>
+  <text x="1431" y="116" fill="#065f46" font-size="11" font-weight="700">STEP 4: Variance Decomposition</text>
+  <text x="1431" y="140" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">Var(Y) = Var_gen + Var_seed + Var_resid</text>
+  <text x="1431" y="158" fill="#64748b" font-size="9">ANOVA-style decomposition per observable:</text>
+  <text x="1431" y="172" fill="#64748b" font-size="9">&#x2022; gen_frac = Var_between_gen / Var_total</text>
+  <text x="1431" y="186" fill="#64748b" font-size="9">&#x2022; <tspan font-weight="600" fill="#065f46">residual = cell cycle + param sensitivity</tspan></text>
 
   <!-- ===== BRANCHING ARROW from Step 4 into Phase 1 + Phase 2 ===== -->
-  <line x1="1597" y1="155" x2="1597" y2="180" stroke="#475569" stroke-width="2"/>
+  <line x1="1597" y1="200" x2="1597" y2="225" stroke="#475569" stroke-width="2"/>
   <!-- Left branch to Phase 1 -->
-  <line x1="1597" y1="180" x2="440" y2="180" stroke="#3b82f6" stroke-width="2"/>
-  <line x1="440" y1="180" x2="440" y2="210" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <line x1="1597" y1="225" x2="440" y2="225" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="440" y1="225" x2="440" y2="255" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
   <!-- Right branch to Phase 2 -->
-  <line x1="1597" y1="180" x2="1350" y2="180" stroke="#8b5cf6" stroke-width="2"/>
-  <line x1="1350" y1="180" x2="1350" y2="210" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <line x1="1597" y1="225" x2="1350" y2="225" stroke="#8b5cf6" stroke-width="2"/>
+  <line x1="1350" y1="225" x2="1350" y2="255" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow-purple)"/>
 
-  <!-- ===== PHASE 1 CONTAINER (GSA: Population) ===== -->
-  <rect x="20" y="215" width="860" height="680" rx="10" fill="url(#phase1Grad)" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow-lg)"/>
-  <text x="40" y="240" fill="#1e40af" font-size="14" font-weight="700">GSA PHASE 1</text>
-  <text x="155" y="240" fill="#3b82f6" font-size="11">(Population &#x2014; Bulk Sensitivity)</text>
+  <!-- Branch labels -->
+  <text x="700" y="220" fill="#3b82f6" font-size="9" font-weight="600">Bulk population analysis</text>
+  <text x="1400" y="220" fill="#8b5cf6" font-size="9" font-weight="600">Cell cycle conditioned analysis</text>
+
+  <!-- ===== PHASE 1 CONTAINER ===== -->
+  <rect x="20" y="260" width="860" height="680" rx="10" fill="url(#phase1Grad)" stroke="#93c5fd" stroke-width="1.5" filter="url(#shadow-lg)"/>
+  <text x="40" y="285" fill="#1e40af" font-size="14" font-weight="700">GSA PHASE 1: Population (Bulk)</text>
+  <text x="295" y="285" fill="#3b82f6" font-size="10" font-style="italic">&#x201c;Across all cells, all times &#x2014; which parameters drive output variance?&#x201d;</text>
 
   <!-- STEP 5a: Morris -->
-  <rect x="50" y="255" width="390" height="140" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="50" y="255" width="390" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
-  <rect x="50" y="267" width="390" height="10" fill="#3b82f6" opacity="0.12"/>
-  <text x="66" y="271" fill="#1e40af" font-size="11" font-weight="700">STEP 5a: Morris Prescreening</text>
-  <text x="66" y="296" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">prescreen_parameters(param_space, f)</text>
-  <text x="66" y="318" fill="#64748b" font-size="10">n params &#x2192; K params (K &#x226a; n)</text>
-  <text x="66" y="338" fill="#64748b" font-size="10">&#x2192; selected: list[Parameter]</text>
-  <text x="66" y="358" fill="#64748b" font-size="10">&#x2192; MorrisIndices (mu*, sigma)</text>
-  <rect x="350" y="368" width="75" height="18" rx="9" fill="#dbeafe"/>
-  <text x="387" y="380" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">SCREENING</text>
+  <rect x="50" y="300" width="390" height="175" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="50" y="300" width="390" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
+  <rect x="50" y="312" width="390" height="10" fill="#3b82f6" opacity="0.12"/>
+  <text x="66" y="316" fill="#1e40af" font-size="11" font-weight="700">STEP 5a: Morris Prescreening</text>
+  <text x="66" y="340" fill="#475569" font-size="9.5">Elementary Effect for parameter i at point x:</text>
+  <text x="66" y="358" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">EE_i = [f(x + &#x394;e_i) &#x2212; f(x)] / &#x394;</text>
+  <text x="66" y="380" fill="#64748b" font-size="9">&#x2022; &#x3bc;* = mean(|EE_i|) &#x2014; robust importance measure</text>
+  <text x="66" y="396" fill="#64748b" font-size="9">&#x2022; &#x3c3; = std(EE_i) &#x2014; high &#x2192; nonlinear or interactive</text>
+  <text x="66" y="416" fill="#64748b" font-size="9">Cost: O(r &#xd7; (n+1)) evaluations vs O(n&#xb2;) for Sobol MC</text>
+  <text x="66" y="436" fill="#64748b" font-size="9">n params &#x2192; K params (K &#x226a; n) for efficient PCE fitting</text>
+  <text x="66" y="456" fill="#64748b" font-size="9">&#x2192; MorrisIndices, selected: list[Parameter]</text>
+  <rect x="350" y="455" width="75" height="16" rx="8" fill="#dbeafe"/>
+  <text x="387" y="466" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">SCREENING</text>
 
-  <!-- Arrow 5a&#x2192;6a -->
-  <line x1="440" y1="330" x2="468" y2="330" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <!-- Arrow 5a to 6a -->
+  <line x1="440" y1="388" x2="468" y2="388" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
   <!-- STEP 6a: PCE Surrogate -->
-  <rect x="478" y="255" width="380" height="140" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="478" y="255" width="380" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
-  <rect x="478" y="267" width="380" height="10" fill="#3b82f6" opacity="0.12"/>
-  <text x="494" y="271" fill="#1e40af" font-size="11" font-weight="700">STEP 6a: PCE Surrogate (Strat 1-3)</text>
-  <text x="494" y="296" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">generate_surrogate(space, f, N)</text>
-  <text x="494" y="318" fill="#64748b" font-size="9.5">LHS samples &#x2192; evaluate f(x) &#x2192; fit Legendre PCE</text>
-  <text x="494" y="338" fill="#64748b" font-size="9.5">Or: load precomputed (X, Y) from cache</text>
-  <text x="494" y="358" fill="#64748b" font-size="10">&#x2192; PCESurrogate + PCEFitResult</text>
-  <rect x="770" y="368" width="75" height="18" rx="9" fill="#dbeafe"/>
-  <text x="807" y="380" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">SURROGATE</text>
+  <rect x="478" y="300" width="380" height="175" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="478" y="300" width="380" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
+  <rect x="478" y="312" width="380" height="10" fill="#3b82f6" opacity="0.12"/>
+  <text x="494" y="316" fill="#1e40af" font-size="11" font-weight="700">STEP 6a: PCE Surrogate (Strat 1-3)</text>
+  <text x="494" y="340" fill="#475569" font-size="9.5">Polynomial Chaos Expansion (Legendre basis):</text>
+  <text x="494" y="358" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">f(x) &#x2248; &#x2211; c_&#x3b1; &#x3a8;_&#x3b1;(x)</text>
+  <text x="494" y="378" fill="#64748b" font-size="9">&#x2022; &#x3a8;_&#x3b1;(x) = &#x220f; P_{&#x3b1;_i}(x_i) &#x2014; tensor-product Legendre polys</text>
+  <text x="494" y="394" fill="#64748b" font-size="9">&#x2022; c_&#x3b1; fit via least-squares on LHS samples (N points)</text>
+  <text x="494" y="410" fill="#64748b" font-size="9">&#x2022; |&#x3b1;| &#x2264; p (polynomial order, typically 2&#x2013;3)</text>
+  <text x="494" y="430" fill="#64748b" font-size="9">Or: load precomputed (X, Y) from cache (Stage 2 mode)</text>
+  <text x="494" y="456" fill="#64748b" font-size="9">&#x2192; PCESurrogate (instant predict(x), no simulation)</text>
+  <rect x="770" y="455" width="75" height="16" rx="8" fill="#dbeafe"/>
+  <text x="807" y="466" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">SURROGATE</text>
 
-  <!-- Arrow 6a&#x2192;7a -->
-  <line x1="440" y1="395" x2="440" y2="420" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <!-- Arrow 6a to 7a -->
+  <line x1="440" y1="475" x2="440" y2="500" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
   <!-- STEP 7a: Sobol Indices -->
-  <rect x="50" y="425" width="810" height="105" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="50" y="425" width="810" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
-  <rect x="50" y="437" width="810" height="10" fill="#3b82f6" opacity="0.12"/>
-  <text x="66" y="441" fill="#1e40af" font-size="11" font-weight="700">STEP 7a: Sobol Indices (from PCE)</text>
-  <text x="66" y="466" fill="#475569" font-size="10">S_i (first-order, main effects)&#x2003;&#x2003;S_Ti (total-order, includes interactions)</text>
-  <text x="66" y="488" fill="#64748b" font-size="10" font-style="italic">"Which parameters drive bulk output variance across all cells?"</text>
-  <text x="66" y="510" fill="#64748b" font-size="10">&#x2192; SobolIndices (variance-weighted across outputs)</text>
-  <rect x="770" y="503" width="75" height="18" rx="9" fill="#dbeafe"/>
-  <text x="807" y="515" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">ANALYSIS</text>
+  <rect x="50" y="505" width="810" height="130" rx="7" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="50" y="505" width="810" height="22" rx="7" fill="#3b82f6" opacity="0.12"/>
+  <rect x="50" y="517" width="810" height="10" fill="#3b82f6" opacity="0.12"/>
+  <text x="66" y="521" fill="#1e40af" font-size="11" font-weight="700">STEP 7a: Sobol Indices from PCE Coefficients</text>
+  <text x="66" y="545" fill="#475569" font-size="9.5">Variance-based sensitivity from the PCE expansion (no additional sampling):</text>
+  <text x="66" y="566" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">S_i  = Var_i[E(Y|X_i)] / Var(Y)  =  &#x2211;{&#x3b1;:&#x3b1;_i>0, &#x3b1;_j=0&#x2200;j&#x2260;i} c_&#x3b1;&#xb2; / &#x2211;{&#x3b1;&#x2260;0} c_&#x3b1;&#xb2;</text>
+  <text x="66" y="586" fill="#64748b" font-size="9">&#x2022; S_i = first-order (main effect) &#x2014; fraction of Var(Y) from x_i alone</text>
+  <text x="66" y="602" fill="#64748b" font-size="9">&#x2022; S_Ti = total-order &#x2014; includes all interactions involving x_i  (S_Ti &#x2265; S_i, gap = interactions)</text>
+  <text x="66" y="622" fill="#64748b" font-size="9">&#x2192; SobolIndices, variance-weighted across outputs</text>
+  <rect x="770" y="616" width="75" height="16" rx="8" fill="#dbeafe"/>
+  <text x="807" y="627" text-anchor="middle" fill="#1d4ed8" font-size="8" font-weight="600">ANALYSIS</text>
 
   <!-- Phase 1 outputs summary -->
-  <rect x="50" y="545" width="810" height="100" rx="7" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
-  <text x="66" y="566" fill="#1e40af" font-size="11" font-weight="700">Phase 1 Outputs (UqProfile: population):</text>
-  <text x="66" y="586" fill="#475569" font-size="10">&#x251c; AggregatedOutput &#xd7; 3&#x2003;&#x251c; variance decomposition (fractions)&#x2003;&#x251c; MorrisIndices</text>
-  <text x="66" y="606" fill="#475569" font-size="10">&#x251c; PCESurrogate (bulk)&#x2003;&#x2514; SobolIndices (bulk) &#x2014; 1 set</text>
-  <text x="66" y="630" fill="#64748b" font-size="9.5" font-style="italic">residual_fraction feeds into Phase 2 observable selection &#x2192;</text>
+  <rect x="50" y="650" width="810" height="80" rx="7" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="66" y="671" fill="#1e40af" font-size="11" font-weight="700">Phase 1 Output: UqProfile(stratification=POPULATION)</text>
+  <text x="66" y="691" fill="#475569" font-size="9.5">&#x251c; SobolIndices &#xd7; 1 (bulk)  &#x251c; PCESurrogate (bulk, instant predictions)  &#x251c; MorrisIndices (screening)</text>
+  <text x="66" y="707" fill="#475569" font-size="9.5">&#x251c; AggregatedOutput &#xd7; 3  &#x2514; variance_decomposition (gen_frac, seed_frac, <tspan font-weight="600" fill="#1e40af">residual_frac &#x2192; Phase 2</tspan>)</text>
+  <text x="66" y="723" fill="#64748b" font-size="9" font-style="italic">Example: &#x201c;vio_expression drives 60% of bulk mass variance, mecillinam_conc drives 25%&#x201d;</text>
 
-  <!-- ===== PHASE 2 CONTAINER (GSA: Cell Cycle) ===== -->
-  <rect x="910" y="215" width="870" height="680" rx="10" fill="url(#phase2Grad)" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow-lg)"/>
-  <text x="930" y="240" fill="#5b21b6" font-size="14" font-weight="700">GSA PHASE 2</text>
-  <text x="1055" y="240" fill="#8b5cf6" font-size="11">(Cell Cycle &#x2014; Phenotypic Sensitivity)</text>
+  <!-- ===== PHASE 2 CONTAINER ===== -->
+  <rect x="910" y="260" width="870" height="680" rx="10" fill="url(#phase2Grad)" stroke="#c4b5fd" stroke-width="1.5" filter="url(#shadow-lg)"/>
+  <text x="930" y="285" fill="#5b21b6" font-size="14" font-weight="700">GSA PHASE 2: Cell Cycle (Phenotypic)</text>
+  <text x="1190" y="285" fill="#8b5cf6" font-size="10" font-style="italic">&#x201c;Within each cell cycle stage &#x2014; which parameters matter?&#x201d;</text>
 
-  <!-- STEP 5b: GSA-Informed Observable Selection -->
-  <rect x="940" y="255" width="400" height="110" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="940" y="255" width="400" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
-  <rect x="940" y="267" width="400" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="956" y="271" fill="#5b21b6" font-size="11" font-weight="700">STEP 5b: GSA-Informed Observable Selection</text>
-  <text x="956" y="296" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">identify_cell_cycle_relevant_observables(decomp)</text>
-  <text x="956" y="318" fill="#64748b" font-size="10">Filter by high residual_fraction</text>
-  <text x="956" y="340" fill="#64748b" font-size="10">&#x2192; CellCycleRelevanceResult</text>
-  <rect x="1252" y="340" width="75" height="18" rx="9" fill="#ede9fe"/>
-  <text x="1289" y="352" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">SELECTION</text>
+  <!-- STEP 5b: Observable Selection -->
+  <rect x="940" y="300" width="400" height="145" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="940" y="300" width="400" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="940" y="312" width="400" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="956" y="316" fill="#5b21b6" font-size="11" font-weight="700">STEP 5b: GSA-Informed Observable Selection</text>
+  <text x="956" y="340" fill="#475569" font-size="9.5">Per RFC006 &#xa7;3: &#x201c;The choice of the cell cycle variable</text>
+  <text x="956" y="354" fill="#475569" font-size="9.5">will be informed by the sensitivity analyses (1-3)&#x201d;</text>
+  <text x="956" y="376" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">resid_i = 1 &#x2212; gen_frac_i &#x2212; seed_frac_i</text>
+  <text x="956" y="396" fill="#64748b" font-size="9">Rank observables by residual variance fraction.</text>
+  <text x="956" y="412" fill="#64748b" font-size="9">High residual &#x2192; variance NOT from gen/seed &#x2192; likely cell-cycle-driven</text>
+  <text x="956" y="428" fill="#64748b" font-size="9">&#x2192; CellCycleRelevanceResult (top-K observables)</text>
+  <rect x="1252" y="422" width="75" height="16" rx="8" fill="#ede9fe"/>
+  <text x="1289" y="433" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">SELECTION</text>
 
-  <!-- Arrow 5b&#x2192;6b -->
-  <line x1="1340" y1="330" x2="1368" y2="330" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <!-- Arrow 5b to 6b -->
+  <line x1="1340" y1="380" x2="1368" y2="380" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
   <!-- STEP 6b: Koopman DMD -->
-  <rect x="1378" y="255" width="380" height="110" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="1378" y="255" width="380" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
-  <rect x="1378" y="267" width="380" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="1394" y="271" fill="#5b21b6" font-size="11" font-weight="700">STEP 6b: Koopman DMD</text>
-  <text x="1394" y="296" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">KoopmanCellCycleVariable(obs=relevant_obs)</text>
-  <text x="1394" y="318" fill="#64748b" font-size="10">DMD/EDMD &#x2192; &#x3c9;_cc &#x2192; &#x3c6;_cc(x) &#x2192; &#x3b8; = arg(&#x3c6;)/2&#x3c0;</text>
-  <text x="1394" y="340" fill="#64748b" font-size="10">&#x2192; &#x3b8; &#x2208; [0, 1]</text>
-  <rect x="1670" y="340" width="75" height="18" rx="9" fill="#ede9fe"/>
-  <text x="1707" y="352" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">KOOPMAN</text>
+  <rect x="1378" y="300" width="380" height="145" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="1378" y="300" width="380" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="1378" y="312" width="380" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="1394" y="316" fill="#5b21b6" font-size="11" font-weight="700">STEP 6b: Koopman DMD &#x2192; Cell Cycle Variable &#x3b8;</text>
+  <text x="1394" y="340" fill="#475569" font-size="9.5">Dynamic Mode Decomposition on selected observables:</text>
+  <text x="1394" y="358" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">&#x3bb; = |&#x3bb;|e^(i&#x3c9;),  &#x3b8;(x) = arg(&#x3c6;(x)) / 2&#x3c0;</text>
+  <text x="1394" y="378" fill="#64748b" font-size="9">&#x2022; Identify mode at &#x3c9; &#x2248; 1/T_cycle (&#x2248;3600s)</text>
+  <text x="1394" y="394" fill="#64748b" font-size="9">&#x2022; Extract eigenfunction phase &#x2192; &#x3b8; &#x2208; [0, 1]</text>
+  <text x="1394" y="410" fill="#64748b" font-size="9">&#x2022; Data-driven, no mechanistic assumptions</text>
+  <text x="1394" y="428" fill="#64748b" font-size="9">Per RFC006: &#x201c;deterministic function with cyclic behaviour&#x201d;</text>
+  <rect x="1670" y="422" width="75" height="16" rx="8" fill="#ede9fe"/>
+  <text x="1707" y="433" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">KOOPMAN</text>
 
-  <!-- Arrow 6b&#x2192;6c -->
-  <line x1="1350" y1="365" x2="1350" y2="390" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <!-- Arrow 6b to 6c -->
+  <line x1="1350" y1="445" x2="1350" y2="470" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
-  <!-- STEP 6c: Strategy 4 Aggregation -->
-  <rect x="940" y="395" width="400" height="90" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="940" y="395" width="400" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
-  <rect x="940" y="407" width="400" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="956" y="411" fill="#5b21b6" font-size="11" font-weight="700">STEP 6c: Strategy 4 Aggregation</text>
-  <text x="956" y="436" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">CellCycleAggregator &#x2014; Bin by &#x3b8;</text>
-  <text x="956" y="458" fill="#64748b" font-size="10">&#x2192; per-stage mean, std &#x2192; stage_stats</text>
+  <!-- STEP 6c/6d combined: Strategy 4 -->
+  <rect x="940" y="475" width="818" height="125" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="940" y="475" width="818" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="940" y="487" width="818" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="956" y="491" fill="#5b21b6" font-size="11" font-weight="700">STEP 6c/6d: Strategy 4 &#x2014; Cell Cycle Stratification (RFC006 &#xa7;1, Strategy 4)</text>
+  <text x="956" y="515" fill="#475569" font-size="9.5">Bin timepoints into n_bins stages by &#x3b8; (default 10, uniform partitions of [0,1]):</text>
+  <text x="956" y="535" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">Stage k: &#x3b8; &#x2208; [k/n_bins, (k+1)/n_bins)  &#x2192;  Y&#x0304;_k = mean(Y | &#x3b8; &#x2208; stage k)</text>
+  <text x="956" y="555" fill="#64748b" font-size="9">&#x2022; &#x3b8; &#x2248; 0.0&#x2013;0.15: B-period (birth &#x2192; replication init)  &#x2022; &#x3b8; &#x2248; 0.2&#x2013;0.7: C-period (DNA replication)</text>
+  <text x="956" y="571" fill="#64748b" font-size="9">&#x2022; &#x3b8; &#x2248; 0.7&#x2013;1.0: D-period (post-replication &#x2192; division)  &#x2022; Mass doubles: ~1.03 &#x2192; 1.91 across cycle</text>
+  <text x="956" y="589" fill="#64748b" font-size="9">Strategy4Wrapper: f_stage4(x) = bin(&#x3b8;(f(x))) &#x2192; per-stage means as objective function for PCE</text>
 
-  <!-- Arrow 6c&#x2192;6d -->
-  <line x1="1340" y1="460" x2="1368" y2="460" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <!-- Arrow 6d to 7b -->
+  <line x1="1350" y1="600" x2="1350" y2="620" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
-  <!-- STEP 6d: Strategy4Wrapper -->
-  <rect x="1378" y="395" width="380" height="90" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="1378" y="395" width="380" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
-  <rect x="1378" y="407" width="380" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="1394" y="411" fill="#5b21b6" font-size="11" font-weight="700">STEP 6d: Strategy4Wrapper</text>
-  <text x="1394" y="436" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">f_stage4(x): raw&#x2192;&#x3b8;&#x2192;bin&#x2192;stage_means</text>
-  <text x="1394" y="458" fill="#64748b" font-size="10">&#x2192; stage-specific objective function</text>
-
-  <!-- Arrow 6d&#x2192;7b -->
-  <line x1="1350" y1="485" x2="1350" y2="510" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
-
-  <!-- STEP 7b: PCE + Sobol on Strategy 4 -->
-  <rect x="940" y="515" width="818" height="110" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
-  <rect x="940" y="515" width="818" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
-  <rect x="940" y="527" width="818" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="956" y="531" fill="#5b21b6" font-size="11" font-weight="700">STEP 7b: PCE + Sobol on Strategy 4</text>
-  <text x="956" y="558" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">generate_surrogate(param_space, f_stage4, n_samples)</text>
-  <text x="956" y="580" fill="#64748b" font-size="10" font-style="italic">"Which parameters drive variation WITHIN each cell cycle stage?"</text>
-  <text x="956" y="602" fill="#64748b" font-size="10">&#x2192; PCESurrogate (phenotypic) &#x2192; list[SobolIndices] (per-stage)</text>
+  <!-- STEP 7b: Per-Stage PCE + Sobol -->
+  <rect x="940" y="625" width="818" height="120" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="940" y="625" width="818" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="940" y="637" width="818" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="956" y="641" fill="#5b21b6" font-size="11" font-weight="700">STEP 7b: Per-Stage PCE + Sobol (Phenotypic GSA)</text>
+  <text x="956" y="665" fill="#475569" font-size="9.5">For each cell cycle stage k, fit independent PCE and compute Sobol:</text>
+  <text x="956" y="685" fill="#475569" font-size="10" font-family="'SF Mono', 'Fira Code', monospace">S_i^(k) = Var_i[E(Y&#x0304;_k | X_i)] / Var(Y&#x0304;_k)   for k = 0, ..., n_bins&#x2212;1</text>
+  <text x="956" y="705" fill="#64748b" font-size="9">Phase 2 Sobol are NOT time-averages of Phase 1 &#x2014; they are orthogonal decompositions</text>
+  <text x="956" y="721" fill="#64748b" font-size="9">(like &#x201c;between countries&#x201d; vs &#x201c;within countries&#x201d; for total variance of human height)</text>
+  <text x="956" y="737" fill="#64748b" font-size="9">&#x2192; list[SobolIndices] (n_bins sets) + PCESurrogate (phenotypic)</text>
 
   <!-- Phase 2 outputs summary -->
-  <rect x="940" y="640" width="818" height="100" rx="7" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
-  <text x="956" y="661" fill="#5b21b6" font-size="11" font-weight="700">Phase 2 Outputs (UqProfile: cell_cycle):</text>
-  <text x="956" y="681" fill="#475569" font-size="10">&#x251c; CellCycleRelevanceResult&#x2003;&#x251c; per-stage statistics&#x2003;&#x251c; relevant observables (GSA-selected)</text>
-  <text x="956" y="701" fill="#475569" font-size="10">&#x251c; PCESurrogate (phenotypic)&#x2003;&#x2514; list[SobolIndices] (n_bins sets)</text>
-  <text x="956" y="725" fill="#64748b" font-size="9.5" font-style="italic">&#x2190; depends on Phase 1 residual_fraction via feedback loop</text>
+  <rect x="940" y="760" width="818" height="70" rx="7" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="956" y="781" fill="#5b21b6" font-size="11" font-weight="700">Phase 2 Output: UqProfile(stratification=CELL_CYCLE)</text>
+  <text x="956" y="801" fill="#475569" font-size="9.5">&#x251c; list[SobolIndices] &#xd7; n_bins  &#x251c; PCESurrogate (phenotypic)  &#x251c; CellCycleRelevanceResult</text>
+  <text x="956" y="817" fill="#64748b" font-size="9" font-style="italic">Example: &#x201c;During C-period, mecillinam_conc drives 80% of variance; during D-period, vio_expression dominates&#x201d;</text>
 
   <!-- ===== FEEDBACK LOOP ===== -->
-  <rect x="20" y="910" width="1760" height="65" rx="8" fill="#fefce8" stroke="#facc15" stroke-width="1.2"/>
-  <text x="40" y="932" fill="#854d0e" font-size="12" font-weight="700">FEEDBACK LOOP</text>
-  <text x="175" y="932" fill="#a16207" font-size="10">(variance decomposition &#x2192; Phase 2)</text>
+  <rect x="20" y="955" width="1760" height="65" rx="8" fill="#fefce8" stroke="#facc15" stroke-width="1.2"/>
+  <text x="40" y="978" fill="#854d0e" font-size="12" font-weight="700">FEEDBACK LOOP</text>
+  <text x="175" y="978" fill="#a16207" font-size="10">(Phase 1 variance decomposition informs Phase 2 observable selection &#x2014; RFC006 &#xa7;3)</text>
 
   <!-- Feedback flow arrows -->
-  <line x1="40" y1="950" x2="350" y2="950" stroke="#d97706" stroke-width="1.5"/>
-  <text x="60" y="963" fill="#78716c" font-size="9.5">Step 4 residual_fraction</text>
-  <line x1="350" y1="950" x2="730" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
-  <text x="400" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 5b observable selection</text>
-  <line x1="740" y1="950" x2="1100" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
-  <text x="790" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 6b Koopman</text>
-  <line x1="1110" y1="950" x2="1500" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
-  <text x="1160" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 6c/6d aggregation + wrapper</text>
-  <line x1="1510" y1="950" x2="1760" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
-  <text x="1560" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 7b Sobol</text>
+  <line x1="40" y1="997" x2="350" y2="997" stroke="#d97706" stroke-width="1.5"/>
+  <text x="60" y="1009" fill="#78716c" font-size="9">Step 4: residual_frac per observable</text>
+  <line x1="350" y1="997" x2="730" y2="997" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+  <text x="400" y="1009" fill="#78716c" font-size="9">&#x2192; Step 5b: rank by residual, select top-K</text>
+  <line x1="740" y1="997" x2="1100" y2="997" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+  <text x="790" y="1009" fill="#78716c" font-size="9">&#x2192; Step 6b: Koopman DMD on selected obs</text>
+  <line x1="1110" y1="997" x2="1500" y2="997" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+  <text x="1160" y="1009" fill="#78716c" font-size="9">&#x2192; Step 6c/6d: &#x3b8;-binned aggregation</text>
+  <line x1="1510" y1="997" x2="1760" y2="997" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+  <text x="1545" y="1009" fill="#78716c" font-size="9">&#x2192; Step 7b: per-stage Sobol</text>
 
   <!-- ===== COMBINED OUTPUTS BAR ===== -->
-  <rect x="20" y="990" width="1760" height="145" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow-lg)"/>
-  <rect x="20" y="990" width="1760" height="28" rx="10" fill="#1e293b"/>
-  <rect x="20" y="1006" width="1760" height="12" fill="#1e293b"/>
-  <text x="900" y="1010" text-anchor="middle" fill="#f1f5f9" font-size="13" font-weight="700">PIPELINE OUTPUTS (PipelineResult) &#x2014; rendered by `uq quantify` report</text>
+  <rect x="20" y="1035" width="1760" height="180" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow-lg)"/>
+  <rect x="20" y="1035" width="1760" height="28" rx="10" fill="#1e293b"/>
+  <rect x="20" y="1051" width="1760" height="12" fill="#1e293b"/>
+  <text x="900" y="1055" text-anchor="middle" fill="#f1f5f9" font-size="13" font-weight="700">PipelineResult &#x2014; Complete RFC006 Output</text>
 
   <!-- Phase 1 outputs column -->
-  <text x="60" y="1042" fill="#1e40af" font-size="11" font-weight="700">From Phase 1 (Population):</text>
-  <text x="70" y="1062" fill="#475569" font-size="10">&#x251c; AggregatedOutput &#xd7; 3&#x2003;&#x251c; variance decomposition (fractions)&#x2003;&#x251c; MorrisIndices (parameter screening)</text>
-  <text x="70" y="1082" fill="#475569" font-size="10">&#x251c; PCESurrogate (bulk predictions)&#x2003;&#x2514; SobolIndices (bulk parameter rankings)</text>
+  <text x="60" y="1085" fill="#1e40af" font-size="11" font-weight="700">Phase 1 (Population / Bulk):</text>
+  <text x="70" y="1105" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">SobolIndices</tspan> (1 set) &#x2014; S_i, S_Ti per parameter across all cells</text>
+  <text x="70" y="1121" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">PCESurrogate</tspan> &#x2014; cheap polynomial approximation of f(x)</text>
+  <text x="70" y="1137" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">MorrisIndices</tspan> &#x2014; &#x3bc;*, &#x3c3; per parameter (prescreening)</text>
+  <text x="70" y="1153" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">variance_decomposition</tspan> &#x2014; gen_frac, seed_frac, residual per observable</text>
+  <text x="70" y="1169" fill="#475569" font-size="9.5">&#x2514; <tspan font-weight="600">AggregatedOutput &#xd7; 3</tspan> &#x2014; (mean, std) per strategy</text>
 
   <!-- Divider -->
-  <line x1="900" y1="1028" x2="900" y2="1125" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="900" y1="1073" x2="900" y2="1200" stroke="#e2e8f0" stroke-width="1"/>
 
   <!-- Phase 2 outputs column -->
-  <text x="940" y="1042" fill="#5b21b6" font-size="11" font-weight="700">From Phase 2 (Cell Cycle):</text>
-  <text x="950" y="1062" fill="#475569" font-size="10">&#x251c; CellCycleRelevanceResult&#x2003;&#x251c; per-stage statistics&#x2003;&#x251c; relevant observables (GSA-selected)</text>
-  <text x="950" y="1082" fill="#475569" font-size="10">&#x251c; PCESurrogate (phenotypic)&#x2003;&#x2514; list[SobolIndices] (n_bins sets, per cell cycle stage)</text>
+  <text x="940" y="1085" fill="#5b21b6" font-size="11" font-weight="700">Phase 2 (Cell Cycle / Phenotypic):</text>
+  <text x="950" y="1105" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">list[SobolIndices]</tspan> (n_bins sets) &#x2014; S_i^(k), S_Ti^(k) per cell cycle stage</text>
+  <text x="950" y="1121" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">PCESurrogate</tspan> &#x2014; phenotypic (stage-conditioned predictions)</text>
+  <text x="950" y="1137" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">CellCycleRelevanceResult</tspan> &#x2014; which observables track the cell cycle</text>
+  <text x="950" y="1153" fill="#475569" font-size="9.5">&#x251c; <tspan font-weight="600">cell_cycle_profile</tspan> &#x2014; per-stage mass/growth means across &#x3b8;-bins</text>
+  <text x="950" y="1169" fill="#475569" font-size="9.5">&#x2514; <tspan font-weight="600">Koopman spectrum</tspan> &#x2014; eigenvalues, frequencies, mode shapes</text>
 
-  <!-- Key modules reference -->
-  <text x="60" y="1118" fill="#94a3b8" font-size="9.5" font-style="italic">Key modules: pipe.py (Pipeline) | generators/vecoli.py (VecoliSimulationFunc) | sampling.py (PrecomputedCache) | sensitivity.py (SobolIndices, MorrisIndices) | cell_cycle.py | koopman.py | cli.py (quantify)</text>
+  <!-- Key interpretation -->
+  <text x="60" y="1200" fill="#94a3b8" font-size="9" font-style="italic">Phase 1 and Phase 2 are orthogonal decompositions of the same total variance. Phase 1 collapses time; Phase 2 conditions on cell cycle stage.</text>
 
   <!-- ===== TWO-STAGE WORKFLOW BAR ===== -->
-  <rect x="20" y="1150" width="1760" height="85" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="40" y="1175" fill="#065f46" font-size="12" font-weight="700">TWO-STAGE WORKFLOW (CLI)</text>
+  <rect x="20" y="1230" width="1760" height="85" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="40" y="1255" fill="#065f46" font-size="12" font-weight="700">TWO-STAGE WORKFLOW (CLI)</text>
 
   <!-- Stage 1 -->
-  <rect x="50" y="1188" width="580" height="35" rx="6" fill="#ffffff" stroke="#059669" stroke-width="1"/>
-  <text x="66" y="1210" fill="#065f46" font-size="10" font-weight="600">Stage 1:</text>
-  <text x="120" y="1210" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200</text>
+  <rect x="50" y="1268" width="580" height="35" rx="6" fill="#ffffff" stroke="#059669" stroke-width="1"/>
+  <text x="66" y="1290" fill="#065f46" font-size="10" font-weight="600">Stage 1 (compute-intensive):</text>
+  <text x="210" y="1290" fill="#475569" font-size="9" font-family="'SF Mono', 'Fira Code', monospace">uv run uq generate-samples ... --n-samples 200 --live</text>
 
-  <!-- Arrow Stage 1 &#x2192; Stage 2 -->
-  <line x1="640" y1="1205" x2="670" y2="1205" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <!-- Arrow Stage 1 to Stage 2 -->
+  <line x1="640" y1="1285" x2="670" y2="1285" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
 
   <!-- Stage 2 -->
-  <rect x="680" y="1188" width="770" height="35" rx="6" fill="#ffffff" stroke="#059669" stroke-width="1"/>
-  <text x="696" y="1210" fill="#065f46" font-size="10" font-weight="600">Stage 2:</text>
-  <text x="750" y="1210" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">uv run uq quantify exp1 exp2 /sims --precomputed-path ./cache --export-path ./results</text>
+  <rect x="680" y="1268" width="770" height="35" rx="6" fill="#ffffff" stroke="#059669" stroke-width="1"/>
+  <text x="696" y="1290" fill="#065f46" font-size="10" font-weight="600">Stage 2 (fast, repeatable):</text>
+  <text x="840" y="1290" fill="#475569" font-size="9" font-family="'SF Mono', 'Fira Code', monospace">uv run uq quantify ... --precomputed-path ./cache --export-path ./results</text>
 
-  <!-- Note about cache contract -->
-  <text x="1470" y="1210" fill="#059669" font-size="9" font-weight="600">metadata.json = contract</text>
+  <text x="1470" y="1290" fill="#059669" font-size="9" font-weight="600">PrecomputedCache</text>
+
+  <!-- ===== MATHEMATICAL GLOSSARY ===== -->
+  <rect x="20" y="1330" width="1760" height="335" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow-lg)"/>
+  <rect x="20" y="1330" width="1760" height="28" rx="10" fill="#334155"/>
+  <rect x="20" y="1346" width="1760" height="12" fill="#334155"/>
+  <text x="900" y="1350" text-anchor="middle" fill="#f1f5f9" font-size="13" font-weight="700">Key Concepts &#x2014; Mathematical and Biological Reference</text>
+
+  <!-- Column 1: Math -->
+  <text x="60" y="1385" fill="#1e40af" font-size="11" font-weight="700">Global Sensitivity Analysis (GSA)</text>
+  <text x="60" y="1405" fill="#475569" font-size="9.5">Quantifies how input parameter uncertainty propagates to output variance.</text>
+  <text x="60" y="1423" fill="#475569" font-size="9.5">Sobol decomposition: Var(Y) = &#x2211;V_i + &#x2211;V_ij + &#x2026; + V_12...n</text>
+  <text x="60" y="1441" fill="#475569" font-size="9.5">S_i = V_i / Var(Y) &#x2014; main effect of parameter i</text>
+  <text x="60" y="1459" fill="#475569" font-size="9.5">S_Ti = 1 &#x2212; Var(E[Y|X_~i]) / Var(Y) &#x2014; total effect including all interactions</text>
+  <text x="60" y="1477" fill="#475569" font-size="9.5">PCE avoids brute-force Monte Carlo: Sobol indices are computed analytically</text>
+  <text x="60" y="1495" fill="#475569" font-size="9.5">from the PCE coefficient matrix &#x2014; no additional sampling required.</text>
+
+  <text x="60" y="1525" fill="#1e40af" font-size="11" font-weight="700">Polynomial Chaos Expansion (PCE)</text>
+  <text x="60" y="1545" fill="#475569" font-size="9.5">Approximate stochastic model response by orthogonal polynomial expansion.</text>
+  <text x="60" y="1563" fill="#475569" font-size="9.5">For uniform inputs on [a,b]: use Legendre polynomials P_n(x).</text>
+  <text x="60" y="1581" fill="#475569" font-size="9.5">Coefficients fitted via least-squares regression on Latin Hypercube Samples.</text>
+  <text x="60" y="1599" fill="#475569" font-size="9.5">Result: a fast-evaluating surrogate f&#x0302;(x) &#x2248; f(x) with R&#xb2; goodness-of-fit.</text>
+
+  <!-- Column 2: Biology -->
+  <line x1="900" y1="1370" x2="900" y2="1650" stroke="#e2e8f0" stroke-width="1"/>
+
+  <text x="940" y="1385" fill="#5b21b6" font-size="11" font-weight="700">E. coli Cell Cycle (B-C-D periods)</text>
+  <text x="940" y="1405" fill="#475569" font-size="9.5"><tspan font-weight="600">B period</tspan> (&#x3b8; &#x2248; 0.0&#x2013;0.15): Birth to replication initiation. Duration varies with growth rate.</text>
+  <text x="940" y="1423" fill="#475569" font-size="9.5"><tspan font-weight="600">C period</tspan> (&#x3b8; &#x2248; 0.2&#x2013;0.7): Active DNA replication (oriC &#x2192; terC), ~40 min, relatively constant.</text>
+  <text x="940" y="1441" fill="#475569" font-size="9.5"><tspan font-weight="600">D period</tspan> (&#x3b8; &#x2248; 0.7&#x2013;1.0): Post-replication to division, ~20 min. Septation and cell division.</text>
+  <text x="940" y="1459" fill="#475569" font-size="9.5">Mass approximately doubles per cycle. Growth rate dips during D-period (septation).</text>
+  <text x="940" y="1477" fill="#475569" font-size="9.5">&#x3b8; &#x2208; [0,1] is a continuous coordinate, not the 3 discrete phases &#x2014; 10 bins</text>
+  <text x="940" y="1495" fill="#475569" font-size="9.5">give enough resolution for polynomial fitting while keeping bins well-populated.</text>
+
+  <text x="940" y="1525" fill="#5b21b6" font-size="11" font-weight="700">Koopman Spectral Analysis</text>
+  <text x="940" y="1545" fill="#475569" font-size="9.5">DMD approximates the Koopman operator K: g(x_{t+1}) = K g(x_t)</text>
+  <text x="940" y="1563" fill="#475569" font-size="9.5">Identifies oscillatory modes as eigenvalues &#x3bb; = |&#x3bb;|e^(i&#x3c9;) on the unit circle.</text>
+  <text x="940" y="1581" fill="#475569" font-size="9.5">The mode nearest &#x3c9; &#x2248; 2&#x3c0;/T_cycle is the cell cycle mode.</text>
+  <text x="940" y="1599" fill="#475569" font-size="9.5">Its eigenfunction phase provides a data-driven, assumption-free cell cycle</text>
+  <text x="940" y="1617" fill="#475569" font-size="9.5">coordinate. Robust to noise and individual cell variation.</text>
+
+  <!-- Footer -->
+  <text x="900" y="1655" text-anchor="middle" fill="#94a3b8" font-size="9">RFC006 &#x2014; Roadmap for uncertainty quantification framework | Milestone 08.4.2 | Key modules: pipe.py, sensitivity.py, cell_cycle.py, koopman.py, pce/surrogate.py</text>
 </svg>

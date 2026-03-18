@@ -367,7 +367,7 @@ def quantify(
 @app.command()
 def demo(
     demo_type: str = "sampling",
-    export_path: str | None = None,
+    export_path: str = "uq_results",
     precomputed_path: str | None = None,
 ) -> None:
     experiment_ids = [

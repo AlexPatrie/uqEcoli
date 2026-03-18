@@ -732,17 +732,21 @@ class PipelineResult:
     aggregation: Any = None  # AggregationResult from workflow, not serialized
     morris_indices: Optional["MorrisIndices"] = None
     cell_cycle_relevance: Optional["CellCycleRelevanceResult"] = None
+    cell_cycle_profile: Optional[dict[str, Any]] = None  # per-stage observable means/stds
 
     def export(self, path: str | Path) -> None:
         """Serialize the full pipeline result to disk.
 
         Creates:
-            path/population_surrogate/   — PCESurrogate export
-            path/cell_cycle_surrogate/   — PCESurrogate export
-            path/population_sobol/       — DataclassIO export
-            path/cell_cycle_sobol_stage_N/ — DataclassIO export per stage
-            path/variance_decomposition.json — Step 4 fractions
-            path/metadata.json           — Pipeline metadata
+            path/population_surrogate/        — PCESurrogate export
+            path/cell_cycle_surrogate/        — PCESurrogate export
+            path/population_sobol/            — DataclassIO export
+            path/cell_cycle_sobol_stage_N/    — DataclassIO export per stage
+            path/variance_decomposition.json  — Step 4 fractions
+            path/morris_indices/              — DataclassIO export (if available)
+            path/metadata.json                — Pipeline metadata
+            path/uq_results.json              — Comprehensive human-readable summary
+            path/koopman_spectrum.pdf          — Koopman eigenmode visualization (if available)
         """
         from uq.io import DataclassIO
 
@@ -778,6 +782,145 @@ class PipelineResult:
         }
         (path / "metadata.json").write_text(json.dumps(meta, indent=2))
 
+        # Export cell cycle profile (Step 6c per-stage means)
+        if self.cell_cycle_profile is not None:
+            profile_serializable = {
+                k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in self.cell_cycle_profile.items()
+            }
+            (path / "cell_cycle_profile.json").write_text(json.dumps(profile_serializable, indent=2))
+
+        # Comprehensive human-readable summary
+        self._write_uq_results_json(path / "uq_results.json")
+
+        # Koopman spectrum visualization
+        self._write_koopman_pdf(path / "koopman_spectrum.pdf")
+
+    def _write_uq_results_json(self, filepath: Path) -> None:
+        """Write a comprehensive, lossless JSON summary of all pipeline outputs."""
+        pop_sobol = self.population.sobol_indices[0]
+        param_names = pop_sobol.parameter_names
+
+        # Phase 1: population Sobol
+        phase1_sobol = {
+            "first_order": {name: float(pop_sobol.first_order[i]) for i, name in enumerate(param_names)},
+            "total_order": {name: float(pop_sobol.total_order[i]) for i, name in enumerate(param_names)},
+        }
+        if pop_sobol.second_order is not None:
+            phase1_sobol["second_order"] = pop_sobol.second_order.tolist()
+
+        # Phase 2: per-stage Sobol
+        n_stages = len(self.cell_cycle.sobol_indices)
+        phase2_sobol_per_stage = []
+        for k, sobol in enumerate(self.cell_cycle.sobol_indices):
+            stage_entry = {
+                "stage": k,
+                "theta_range": [k / n_stages, (k + 1) / n_stages],
+                "first_order": {
+                    name: float(sobol.first_order[i]) if i < len(sobol.first_order) else 0.0
+                    for i, name in enumerate(param_names)
+                },
+                "total_order": {
+                    name: float(sobol.total_order[i]) if i < len(sobol.total_order) else 0.0
+                    for i, name in enumerate(param_names)
+                },
+            }
+            phase2_sobol_per_stage.append(stage_entry)
+
+        # Variance decomposition
+        decomp = {}
+        if self.variance_decomposition:
+            decomp = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in self.variance_decomposition.items()}
+
+        # Morris indices
+        morris = None
+        if self.morris_indices is not None:
+            mi = self.morris_indices
+            morris = {
+                "parameter_names": mi.parameter_names,
+                "mu": mi.mu.tolist(),
+                "mu_star": mi.mu_star.tolist(),
+                "sigma": mi.sigma.tolist(),
+                "n_trajectories": int(mi.n_trajectories) if hasattr(mi, "n_trajectories") else None,
+            }
+
+        # Cell cycle relevance
+        cc_relevance = None
+        if self.cell_cycle_relevance is not None:
+            ccr = self.cell_cycle_relevance
+            cc_relevance = {
+                "relevant_observables": ccr.relevant_observables,
+                "relevance_scores": {k: float(v) for k, v in ccr.relevance_scores.items()},
+            }
+            if ccr.residual_variance_fraction is not None:
+                cc_relevance["residual_variance_fraction"] = ccr.residual_variance_fraction.tolist()
+
+        # Surrogate summary
+        pop_surr = self.population.surrogate
+        cc_surr = self.cell_cycle.surrogate
+        surrogates = {
+            "population": {
+                "basis_type": pop_surr.basis_type,
+                "polynomial_order": pop_surr.polynomial_order,
+                "input_dim": pop_surr.input_dim,
+                "output_dim": pop_surr.output_dim,
+                "r_squared": float(pop_surr.r_squared),
+                "n_terms": len(pop_surr.coefficients),
+            },
+            "cell_cycle": {
+                "basis_type": cc_surr.basis_type,
+                "polynomial_order": cc_surr.polynomial_order,
+                "input_dim": cc_surr.input_dim,
+                "output_dim": cc_surr.output_dim,
+                "r_squared": float(cc_surr.r_squared),
+                "n_terms": len(cc_surr.coefficients),
+            },
+        }
+
+        # Cell cycle profile (per-stage observable means)
+        cc_profile = None
+        if self.cell_cycle_profile is not None:
+            cc_profile = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in self.cell_cycle_profile.items()}
+
+        result = {
+            "parameter_names": param_names,
+            "n_parameters": len(param_names),
+            "n_cell_cycle_stages": n_stages,
+            "variance_decomposition": decomp,
+            "phase1_population_sobol": phase1_sobol,
+            "phase2_cell_cycle_sobol_per_stage": phase2_sobol_per_stage,
+            "cell_cycle_profile": cc_profile,
+            "morris_screening": morris,
+            "cell_cycle_relevance": cc_relevance,
+            "surrogates": surrogates,
+        }
+
+        filepath.write_text(json.dumps(result, indent=2))
+
+    def _write_koopman_pdf(self, filepath: Path) -> None:
+        """Write Koopman spectrum 4-panel figure as PDF if spectrum data is available."""
+        try:
+            # The cell cycle relevance result may have a koopman spectrum
+            # attached, or we can check the cell cycle surrogate metadata.
+            # The spectrum is available when GSAInformedCellCycleVariable was used.
+            spectrum = None
+
+            if self.cell_cycle_relevance is not None:
+                # Check if relevance result has a koopman reference
+                ccr = self.cell_cycle_relevance
+                if hasattr(ccr, "koopman_spectrum") and ccr.koopman_spectrum is not None:
+                    spectrum = ccr.koopman_spectrum
+
+            if spectrum is None:
+                return
+
+            from uq.viz import plot_koopman_spectrum
+
+            fig = plot_koopman_spectrum(spectrum)
+            fig.write_image(str(filepath))
+        except Exception:
+            # Don't fail the export if PDF generation fails (missing kaleido, etc.)
+            pass
+
     @classmethod
     def from_export(cls, path: str | Path) -> "PipelineResult":
         """Load a PipelineResult from a previously exported directory."""
@@ -808,6 +951,13 @@ class PipelineResult:
         if (path / "morris_indices").exists():
             morris_indices = DataclassIO.load(path / "morris_indices", MorrisIndices)
 
+        # Load cell cycle profile if available
+        cell_cycle_profile = None
+        profile_path = path / "cell_cycle_profile.json"
+        if profile_path.exists():
+            raw = json.loads(profile_path.read_text())
+            cell_cycle_profile = {k: np.array(v) if isinstance(v, list) else v for k, v in raw.items()}
+
         return cls(
             population=UqProfile(
                 stratification=StratificationLens.POPULATION,
@@ -821,6 +971,7 @@ class PipelineResult:
             ),
             variance_decomposition=variance_decomposition,
             morris_indices=morris_indices,
+            cell_cycle_profile=cell_cycle_profile,
         )
 
 

@@ -1,0 +1,316 @@
+{
+  "parameter_names": [
+    "vio_expression",
+    "vio_trl_eff",
+    "mecillinam_concentration"
+  ],
+  "n_parameters": 3,
+  "n_cell_cycle_stages": 10,
+  "variance_decomposition": {
+    "total_variance": [
+      0.086,
+      2e-06
+    ],
+    "generation_fraction": [
+      0.0001,
+      0.0
+    ],
+    "seed_fraction": [
+      5e-05,
+      0.0
+    ],
+    "residual_fraction": [
+      0.9999,
+      1.0
+    ],
+    "between_generation_variance": [
+      8.6e-06,
+      0.0
+    ],
+    "between_seed_variance": [
+      4.3e-06,
+      0.0
+    ],
+    "within_group_variance": [
+      0.0859,
+      2e-06
+    ]
+  },
+  "phase1_population_sobol": {
+    "first_order": {
+      "vio_expression": 0.45,
+      "vio_trl_eff": 0.05,
+      "mecillinam_concentration": 0.4
+    },
+    "total_order": {
+      "vio_expression": 0.55,
+      "vio_trl_eff": 0.08,
+      "mecillinam_concentration": 0.5
+    }
+  },
+  "phase2_cell_cycle_sobol_per_stage": [
+    {
+      "stage": 0,
+      "theta_range": [
+        0.0,
+        0.1
+      ],
+      "first_order": {
+        "vio_expression": 0.5644541290936421,
+        "vio_trl_eff": 0.043190704555960586,
+        "mecillinam_concentration": 0.061676240160220906
+      },
+      "total_order": {
+        "vio_expression": 0.638041396372974,
+        "vio_trl_eff": 0.10989371438038631,
+        "mecillinam_concentration": 0.09335456263133896
+      }
+    },
+    {
+      "stage": 1,
+      "theta_range": [
+        0.1,
+        0.2
+      ],
+      "first_order": {
+        "vio_expression": 0.5259692755666004,
+        "vio_trl_eff": 0.053654440643640784,
+        "mecillinam_concentration": 0.08738197834787965
+      },
+      "total_order": {
+        "vio_expression": 0.5869522127611477,
+        "vio_trl_eff": 0.11834016999810981,
+        "mecillinam_concentration": 0.16543256229393227
+      }
+    },
+    {
+      "stage": 2,
+      "theta_range": [
+        0.2,
+        0.3
+      ],
+      "first_order": {
+        "vio_expression": 0.4346327181278538,
+        "vio_trl_eff": 0.04186227271752123,
+        "mecillinam_concentration": 0.14347938267726487
+      },
+      "total_order": {
+        "vio_expression": 0.466000999672911,
+        "vio_trl_eff": 0.06965756303764953,
+        "mecillinam_concentration": 0.1920216782508209
+      }
+    },
+    {
+      "stage": 3,
+      "theta_range": [
+        0.3,
+        0.4
+      ],
+      "first_order": {
+        "vio_expression": 0.3652655635292628,
+        "vio_trl_eff": 0.056505927878247014,
+        "mecillinam_concentration": 0.19729762513610327
+      },
+      "total_order": {
+        "vio_expression": 0.43522625529273307,
+        "vio_trl_eff": 0.11852183399838195,
+        "mecillinam_concentration": 0.23603962361902575
+      }
+    },
+    {
+      "stage": 4,
+      "theta_range": [
+        0.4,
+        0.5
+      ],
+      "first_order": {
+        "vio_expression": 0.3100347087813392,
+        "vio_trl_eff": 0.052321613230667204,
+        "mecillinam_concentration": 0.22850057427422185
+      },
+      "total_order": {
+        "vio_expression": 0.34733439501715385,
+        "vio_trl_eff": 0.11327134346916573,
+        "mecillinam_concentration": 0.25688572329078047
+      }
+    },
+    {
+      "stage": 5,
+      "theta_range": [
+        0.5,
+        0.6
+      ],
+      "first_order": {
+        "vio_expression": 0.2903674068921568,
+        "vio_trl_eff": 0.050675790694888916,
+        "mecillinam_concentration": 0.28367358196069953
+      },
+      "total_order": {
+        "vio_expression": 0.3502584582876787,
+        "vio_trl_eff": 0.11298571341246902,
+        "mecillinam_concentration": 0.3505173238220176
+      }
+    },
+    {
+      "stage": 6,
+      "theta_range": [
+        0.6,
+        0.7
+      ],
+      "first_order": {
+        "vio_expression": 0.19588882037121613,
+        "vio_trl_eff": 0.043611221517566585,
+        "mecillinam_concentration": 0.3167457324631995
+      },
+      "total_order": {
+        "vio_expression": 0.22276062478337455,
+        "vio_trl_eff": 0.10371539922499488,
+        "mecillinam_concentration": 0.36501150483178746
+      }
+    },
+    {
+      "stage": 7,
+      "theta_range": [
+        0.7,
+        0.8
+      ],
+      "first_order": {
+        "vio_expression": 0.09951390685152586,
+        "vio_trl_eff": 0.04665114970014225,
+        "mecillinam_concentration": 0.37988259195315016
+      },
+      "total_order": {
+        "vio_expression": 0.1527286708910056,
+        "vio_trl_eff": 0.10020357934486707,
+        "mecillinam_concentration": 0.4181195978369069
+      }
+    },
+    {
+      "stage": 8,
+      "theta_range": [
+        0.8,
+        0.9
+      ],
+      "first_order": {
+        "vio_expression": 0.07953824783254689,
+        "vio_trl_eff": 0.04537648207335433,
+        "mecillinam_concentration": 0.4507392764377146
+      },
+      "total_order": {
+        "vio_expression": 0.12404996645602506,
+        "vio_trl_eff": 0.1165806664694443,
+        "mecillinam_concentration": 0.48477564558963504
+      }
+    },
+    {
+      "stage": 9,
+      "theta_range": [
+        0.9,
+        1.0
+      ],
+      "first_order": {
+        "vio_expression": 0.002416431419951688,
+        "vio_trl_eff": 0.05497160744053764,
+        "mecillinam_concentration": 0.47927277208211694
+      },
+      "total_order": {
+        "vio_expression": 0.062131422303565394,
+        "vio_trl_eff": 0.10839353658101433,
+        "mecillinam_concentration": 0.5463066646285017
+      }
+    }
+  ],
+  "cell_cycle_profile": {
+    "stages": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "dry_mass_mean": [
+      1.027,
+      1.104,
+      1.179,
+      1.263,
+      1.35,
+      1.443,
+      1.543,
+      1.653,
+      1.767,
+      1.908
+    ],
+    "growth_mean": [
+      0.01086,
+      0.01138,
+      0.01165,
+      0.01145,
+      0.01067,
+      0.00971,
+      0.00879,
+      0.00833,
+      0.00842,
+      0.00894
+    ]
+  },
+  "morris_screening": {
+    "parameter_names": [
+      "vio_expression",
+      "vio_trl_eff",
+      "mecillinam_concentration"
+    ],
+    "mu": [
+      0.42,
+      0.01,
+      0.38
+    ],
+    "mu_star": [
+      0.45,
+      0.03,
+      0.4
+    ],
+    "sigma": [
+      0.15,
+      0.01,
+      0.22
+    ],
+    "n_trajectories": 10
+  },
+  "cell_cycle_relevance": {
+    "relevant_observables": [
+      "listeners__mass__dry_mass",
+      "listeners__mass__growth"
+    ],
+    "relevance_scores": {
+      "listeners__mass__dry_mass": 0.92,
+      "listeners__mass__growth": 0.78
+    },
+    "residual_variance_fraction": [
+      0.9999,
+      1.0
+    ]
+  },
+  "surrogates": {
+    "population": {
+      "basis_type": "legendre",
+      "polynomial_order": 3,
+      "input_dim": 3,
+      "output_dim": 2,
+      "r_squared": 0.92,
+      "n_terms": 10
+    },
+    "cell_cycle": {
+      "basis_type": "legendre",
+      "polynomial_order": 2,
+      "input_dim": 3,
+      "output_dim": 10,
+      "r_squared": 0.87,
+      "n_terms": 10
+    }
+  }
+}

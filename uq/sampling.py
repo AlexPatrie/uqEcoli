@@ -118,6 +118,11 @@ def generate_lhs_samples(
     return qmc.scale(X_unit, bounds[:, 0], bounds[:, 1])
 
 
+def _evaluate_sample(simulation_func: Callable, x: np.ndarray) -> np.ndarray:
+    """Evaluate one sample — top-level function for ProcessPoolExecutor."""
+    return simulation_func(x)
+
+
 def run_and_cache(
     parameter_space: XSpace,
     simulation_func: Callable,
@@ -129,54 +134,59 @@ def run_and_cache(
 ) -> PrecomputedCache:
     """Generate LHS samples, evaluate simulation_func, save to disk.
 
-    The simulation_func is called twice per sample when ``store_timeseries``
-    is True:
-      - ``simulation_func(x)`` returns raw timeseries (n_timesteps, n_obs)
-      - ``simulation_func.evaluate_batch(X)`` returns aggregated (n_samples, n_outputs)
+    Each sample is evaluated **once** via ``simulation_func(x)``, which
+    returns raw timeseries of shape ``(n_timesteps, n_obs)``.  The
+    aggregated output Y (for Phase 1) is derived by taking the time-mean
+    of each timeseries.  This avoids the previous double-evaluation where
+    ``evaluate_batch`` and ``__call__`` each ran a full simulation.
 
-    If simulation_func does not return 2D timeseries from ``__call__``,
-    timeseries storage is skipped.
+    If ``simulation_func(x)`` returns a 1D array (no timeseries), the
+    function falls back to ``evaluate_batch`` for Y and skips timeseries
+    storage.
 
     Args:
         parameter_space: Input parameter space with bounds.
-        simulation_func: Callable with ``__call__(x)`` and ``evaluate_batch(X)``.
+        simulation_func: Callable with ``__call__(x)`` returning
+            ``(n_timesteps, n_obs)`` timeseries.  Also used as fallback
+            via ``evaluate_batch(X)`` if ``__call__`` returns 1D.
         n_samples: Number of LHS samples to generate.
         cache_dir: Directory to write cached data.
         seed: Random seed for LHS generation.
-        store_timeseries: Whether to cache per-sample raw timeseries for Phase 2.
-        max_workers: If > 1, use parallel evaluation (passed to
-            ``evaluate_batch``).  None = sequential.
+        store_timeseries: Whether to cache per-sample raw timeseries
+            for Phase 2.
+        max_workers: If > 1, use parallel evaluation via
+            ProcessPoolExecutor.  None = sequential.
 
     Returns:
-        PrecomputedCache with X, Y, and optionally timeseries.
+        PrecomputedCache with X, Y, and optionally Y_timeseries.
     """
     X = generate_lhs_samples(parameter_space, n_samples, seed=seed)
 
-    # Evaluate aggregated outputs (Phase 1)
-    # Pass max_workers if the simulation_func supports it
-    if max_workers and hasattr(simulation_func, "evaluate_batch"):
-        import inspect
+    # Single-pass evaluation: call simulation_func(x) once per sample,
+    # collect raw timeseries, derive aggregated Y by time-mean.
+    if max_workers and max_workers > 1:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
 
-        sig = inspect.signature(simulation_func.evaluate_batch)
-        if "max_workers" in sig.parameters:
-            Y = simulation_func.evaluate_batch(X, max_workers=max_workers)
-        else:
-            Y = simulation_func.evaluate_batch(X)
+        timeseries_list: list[np.ndarray | None] = [None] * len(X)
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            future_to_idx = {pool.submit(_evaluate_sample, simulation_func, X[i]): i for i in range(len(X))}
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                timeseries_list[idx] = future.result()
     else:
-        Y = simulation_func.evaluate_batch(X)
+        timeseries_list = [simulation_func(x) for x in X]
 
-    # Optionally collect per-sample timeseries (Phase 2)
-    Y_timeseries = None
-    if store_timeseries:
-        Y_timeseries = []
-        for x in X:
-            ts = simulation_func(x)
-            if ts.ndim == 2:
-                Y_timeseries.append(ts)
-            else:
-                # simulation_func returns 1D — no timeseries to store
-                Y_timeseries = None
-                break
+    # Check if we got 2D timeseries or 1D scalars
+    has_timeseries = timeseries_list[0] is not None and timeseries_list[0].ndim == 2
+
+    if has_timeseries:
+        # Derive Y from timeseries (time-mean) — no second evaluation needed
+        Y = np.vstack([ts.mean(axis=0) for ts in timeseries_list])
+        Y_timeseries = timeseries_list if store_timeseries else None
+    else:
+        # Fallback: simulation_func returns 1D, use evaluate_batch for Y
+        Y = np.vstack([ts if ts.ndim == 1 else ts.ravel() for ts in timeseries_list])
+        Y_timeseries = None
 
     bounds = np.array(parameter_space.parameter_bounds)
     cache = PrecomputedCache(

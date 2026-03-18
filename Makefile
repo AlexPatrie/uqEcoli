@@ -2,7 +2,7 @@ PACKAGE_LOCATION=/Users/alexanderpatrie/sms/uqEcoli/uq
 
 .PHONY: test-sampling
 test-sampling:
-	@uv run uq generate-samples \
+	@time uv run uq generate-samples \
       api_simulation_default mecillinam test_violacein_with_metabolism \
       --sim-base-path /Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims \
       --cache-dir ./uq_cache \

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import ConfigDict, BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class _BaseModel(BaseModel):
@@ -19,6 +19,7 @@ class SamplingConfig(_BaseModel):
         include_vio: bool | None = None
         include_mecillinam: bool = True
     """
+
     cache_dir: str | None = None
     n_samples: int = 200
     seed: int = 42
@@ -71,6 +72,7 @@ class PipelineConfig(_BaseModel):
         sim_config_path: str | None = None
         init: bool = True
     """
+
     experiment_ids: list[str]
     sim_base_path: str
     samples: SamplingConfig
