@@ -87,7 +87,7 @@ from uq import (
     calculate_cell_cycle as _cell_cycle,
 )
 from uq.common import BaseClass, get_repo_root
-from uq.generators.vecoli import VecoliSimulationFunc
+from uq.generators.vecoli import TimeseriesGeneratorVecoli
 from uq.inputs import XSpace, XSpaceInterface
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pce.surrogate import generate_surrogate as _generate_surrogate
@@ -224,7 +224,7 @@ def test_initialize_data():
 class System(BaseClass):
     dataset: DatasetMultiExperiment
     observable_cols: list[str]
-    simulation_func: VecoliSimulationFunc | DataDrivenWrapper
+    simulation_func: TimeseriesGeneratorVecoli | DataDrivenWrapper
     aggregation: AggregationResult
     decomposition: dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
     baseline_sim_data: SimulationDataEcoli | None = None
@@ -345,7 +345,7 @@ class Pipeline(BaseClass):
             baseline_sim_data = next(filter(lambda ds_i: "baseline" in ds_i.experiment_id, ds.x))
             baseline_sim_data = ds.x[0].sim_data if ds.x else None
             if baseline_sim_data is not None:
-                simulation_func = VecoliSimulationFunc(
+                simulation_func = TimeseriesGeneratorVecoli(
                     baseline_sim_data=baseline_sim_data,
                     param_space=ds.parameter_space,
                     sim_config_path=self.sim_config_path,
@@ -605,7 +605,7 @@ def execute_pipeline(
     Returns:
         PipelineResult with all RFC006 pipeline outputs.
     """
-    from uq.generators.vecoli import VecoliSimulationFunc
+    from uq.generators.vecoli import TimeseriesGeneratorVecoli
     from uq.wrappers import DataDrivenWrapper
 
     # --- Step 1: Load x and y for given experiment ids ---
@@ -641,7 +641,7 @@ def execute_pipeline(
     if cache is None:
         baseline_sim_data = ds.x[0].sim_data if ds.x else None
         if baseline_sim_data is not None:
-            simulation_func = VecoliSimulationFunc(
+            simulation_func = TimeseriesGeneratorVecoli(
                 baseline_sim_data=baseline_sim_data,
                 param_space=param_space,
                 sim_config_path=sim_config_path,

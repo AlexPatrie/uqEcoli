@@ -13,6 +13,7 @@ import numpy as np
 import polars
 import pytest
 from ecoli.library.sim_data import LoadSimData
+from pydantic import ConfigDict
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq.common.models import BaseClass
@@ -329,18 +330,35 @@ class SimulationConfig(BaseClass, abc.ABC):
 
 @dataclass
 class VariantVecoli(BaseClass):
-    id: Literal["new_gene_internal_shift_variable_strength", "condition", "mecillinam_timeline"]
+    """
+    Attributes:
+        id: str variant module name in vecoli
+        config: dict[str, Any] kwarg values to be evaluated as the `params` parameter of ecoli.variants.apply_variants()
+    """
+    # id: Literal["new_gene_internal_shift_variable_strength", "condition", "mecillinam_timeline"]
+    id: str
     config: dict[str, Any]
 
 
 @dataclass
 class SimulationConfigVecoli(SimulationConfig):
-    """Vecoli simulation config (JSON), 1:1"""
+    """
+    Attributes:
+        experiment_id: str
+        sim_data_path: str | None = None
+        n_init_sims: int = field(default=1)
+        generations: int = field(default=1)
+        variants: list[VariantVecoli] = field(default_factory=list)
+        emitter_arg: OutputEmitterConfig | dict = field(
+            default_factory=dict
+        )  # OutputEmitterConfig(type="parquet", out_uri=get_bucket())
+    """
 
     experiment_id: str
     sim_data_path: str | None = None
     n_init_sims: int = field(default=1)
     generations: int = field(default=1)
+    max_duration: float = field(default=10800.0)
     variants: list[VariantVecoli] = field(default_factory=list)
     emitter_arg: OutputEmitterConfig | dict = field(
         default_factory=dict
@@ -358,7 +376,7 @@ class SimulationConfigVecoli(SimulationConfig):
         return True
 
     def model_dump(self) -> dict[str, Any]:
-        attrs = [self.experiment_id, self.sim_data_path]
+        attrs = [self.experiment_id, self.sim_data_path, self.n_init_sims, self.generations, self.max_duration]
         config = dict(zip(attrs, [getattr(self, attr) for attr in attrs]))
         config.update(self._format_emitter())
         config.update({"variants": {variant.id: variant.config for variant in self.variants}})

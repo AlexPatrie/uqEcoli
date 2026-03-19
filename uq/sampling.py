@@ -202,3 +202,60 @@ def run_and_cache(
     )
     cache.save()
     return cache
+
+
+def run_batch_and_cache(
+    parameter_space: XSpace,
+    simulation_func: Any,
+    n_samples: int,
+    cache_dir: Path,
+    seed: int = 42,
+    store_timeseries: bool = True,
+    max_workers: int | None = None,
+) -> PrecomputedCache:
+    """Generate LHS samples, run batch simulation via subprocesses, cache.
+
+    Unlike ``run_and_cache()`` which calls ``simulation_func(x)`` per
+    sample, this function delegates to ``simulation_func._run_batch(X)``
+    which runs all simulations as subprocesses with Parquet output and
+    collects results in a single pass.
+
+    This is the preferred path for vEcoli live simulations: no EcoliSim
+    is held in the UQ process memory.
+
+    Args:
+        parameter_space: Input parameter space with bounds.
+        simulation_func: Object with ``_run_batch(X, max_workers)``
+            method (e.g., ``TimeseriesGeneratorVecoli``).
+        n_samples: Number of LHS samples to generate.
+        cache_dir: Directory to write cached data.
+        seed: Random seed for LHS generation.
+        store_timeseries: Whether to cache per-sample raw timeseries.
+        max_workers: Max parallel subprocesses. None = sequential.
+
+    Returns:
+        PrecomputedCache with X, Y, and optionally Y_timeseries.
+    """
+    X = generate_lhs_samples(parameter_space, n_samples, seed=seed)
+
+    Y, Y_timeseries = simulation_func._run_batch(
+        X, max_workers=max_workers,
+    )
+
+    if not store_timeseries:
+        Y_timeseries = None
+
+    bounds = np.array(parameter_space.parameter_bounds)
+    cache = PrecomputedCache(
+        cache_dir=Path(cache_dir),
+        X=X,
+        Y=Y,
+        parameter_names=parameter_space.parameter_names,
+        metadata={
+            "bounds": bounds.tolist(),
+            "seed": seed,
+        },
+        Y_timeseries=Y_timeseries,
+    )
+    cache.save()
+    return cache

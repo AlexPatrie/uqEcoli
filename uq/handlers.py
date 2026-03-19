@@ -299,19 +299,29 @@ def generate_samples(
         )
 
     if live:
-        # Real vEcoli simulation: each LHS sample triggers EcoliSim
-        from uq.generators.vecoli import VecoliSimulationFunc
+        # Real vEcoli simulation via subprocesses (no in-process EcoliSim)
+        from uq.generators.vecoli import TimeseriesGeneratorVecoli
+        from uq.sampling import run_batch_and_cache
 
-        sim_func = VecoliSimulationFunc(
+        sim_func = TimeseriesGeneratorVecoli(
             baseline_sim_data=ds.x[0].sim_data,
             param_space=param_space,
             max_duration=max_duration,
             output_keys=[c.split("__")[-1] for c in observable_columns],
         )
         console.print(
-            f"[bold cyan]Live mode:[/bold cyan] VecoliSimulationFunc "
+            f"[bold cyan]Live mode:[/bold cyan] subprocess execution "
             f"(max_duration={max_duration:.0f}s, generations={generations}, "
             f"params={param_space.parameter_names})"
+        )
+
+        cache = run_batch_and_cache(
+            parameter_space=param_space,
+            simulation_func=sim_func,
+            n_samples=n_samples,
+            cache_dir=Path(cache_dir),
+            seed=seed,
+            max_workers=max_workers,
         )
     else:
         # Synthetic response surface built from existing data statistics
@@ -323,14 +333,14 @@ def generate_samples(
         )
         console.print("[bold yellow]Synthetic mode:[/bold yellow] DataDrivenWrapper")
 
-    cache = run_and_cache(
-        parameter_space=param_space,
-        simulation_func=sim_func,
-        n_samples=n_samples,
-        cache_dir=Path(cache_dir),
-        seed=seed,
-        max_workers=max_workers,
-    )
+        cache = run_and_cache(
+            parameter_space=param_space,
+            simulation_func=sim_func,
+            n_samples=n_samples,
+            cache_dir=Path(cache_dir),
+            seed=seed,
+            max_workers=max_workers,
+        )
 
     console.print(
         f"[bold green]Cached {cache.X.shape[0]} samples[/bold green] "
@@ -362,7 +372,7 @@ def export_configs(
     Returns:
         Path to the batch directory.
     """
-    from uq.generators.vecoli import VecoliSimulationFunc, export_batch_configs
+    from uq.generators.vecoli import TimeseriesGeneratorVecoli, export_batch_configs
     from uq.pipeline.param_loader import ParameterDataset
     from uq.sampling import generate_lhs_samples
 
@@ -375,7 +385,7 @@ def export_configs(
     if param_space.n_parameters == 0:
         raise ValueError("Parameter space is empty. Set include_vio=True and/or include_mecillinam=True.")
 
-    sim_func = VecoliSimulationFunc(
+    sim_func = TimeseriesGeneratorVecoli(
         baseline_sim_data=ds.sim_data,
         param_space=param_space,
     )

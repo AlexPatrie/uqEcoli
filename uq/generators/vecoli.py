@@ -5,8 +5,9 @@ This module provides a parameter-agnostic simulation wrapper that:
 1. Accepts x as a numpy array positionally aligned with XSpace parameters
 2. Converts x -> UQInputParametersVecoli -> variant param dicts via XSpace
 3. Applies vEcoli variant functions (apply_variant) to a deep-copied sim_data
-4. Runs a single-cell EcoliSim with the timeseries emitter
-5. Extracts outputs (y) matching the format expected by the ./uq workflow
+4. Runs vEcoli simulations as **subprocesses** via ecoli_master_sim CLI
+   with the Parquet emitter (no in-process EcoliSim)
+5. Collects Parquet outputs and returns timeseries arrays
 
 The simulation function does NOT know which parameters are being varied --
 that is controlled by the XSpace / parameter space layer. Morris prescreening
@@ -17,12 +18,16 @@ handle complex multi-step sim_data mutations (e.g., new gene expression
 adjustment, internal_shift_dict setup, condition/timeline changes) that
 cannot be reduced to simple setattr calls.
 """
-
+import abc
 import copy
 import importlib
 import json as _json
+import logging
 import os
 import pickle
+import shutil
+import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -30,12 +35,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from ecoli.experiments.ecoli_master_sim import EcoliSim
+import polars as pl
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq.common import BaseClass
 from uq.io import get_bucket
 from uq.pipeline.models import SimulationConfig
+
+logger = logging.getLogger(__name__)
 
 # -- Helpers ----------------------------------------------------------------
 
@@ -135,111 +142,244 @@ def _apply_variants(
     return sim_data
 
 
-# -- RAMEmitter -> numpy extraction ----------------------------------------
+# -- Parquet column mapping --------------------------------------------------
 
-# Parquet columns use "__" separators; the RAMEmitter stores nested dicts.
-# e.g. "listeners__mass__dry_mass" -> ["listeners"]["mass"]["dry_mass"]
-
-# Higher-order scalar properties (always extracted)
-_LISTENER_SCALARS: dict[str, list[str]] = {
-    "cell_mass": ["listeners", "mass", "cell_mass"],
-    "dry_mass": ["listeners", "mass", "dry_mass"],
-    "volume": ["listeners", "mass", "volume"],
+# Map short observable names (used in output_keys) to Parquet column names
+_SHORT_TO_PARQUET: dict[str, str] = {
+    "cell_mass": "listeners__mass__cell_mass",
+    "dry_mass": "listeners__mass__dry_mass",
+    "volume": "listeners__mass__volume",
+    "growth": "listeners__mass__growth",
+    "growth_rate": "listeners__mass__growth",
 }
 
-# Array-valued listeners (extracted when requested via output_keys)
-_LISTENER_ARRAYS: dict[str, list[str]] = {
-    "mRNA_cistron_counts": ["listeners", "rna_counts", "mRNA_cistron_counts"],
-    "monomer_counts": ["listeners", "monomer_counts"],
-    "base_reaction_fluxes": ["listeners", "fba_results", "base_reaction_fluxes"],
-}
+# Default observable columns to extract from Parquet output
+_DEFAULT_PARQUET_COLUMNS = [
+    "listeners__mass__dry_mass",
+    "listeners__mass__cell_mass",
+    "listeners__mass__volume",
+    "listeners__mass__growth",
+]
 
 
-def _extract_timeseries(
-    raw_data: dict[float, dict],
-    agent_id: str = "0",
-    output_keys: list[str] | None = None,
-) -> tuple[np.ndarray, list[str], np.ndarray]:
-    """Extract a (n_timesteps, n_obs) array from RAMEmitter data.
+def _resolve_parquet_columns(output_keys: list[str] | None) -> list[str]:
+    """Convert short output key names to full Parquet column names."""
+    if output_keys is None:
+        return list(_DEFAULT_PARQUET_COLUMNS)
+    resolved = []
+    for key in output_keys:
+        resolved.append(_SHORT_TO_PARQUET.get(key, key))
+    return resolved
+
+
+def _read_parquet_timeseries(
+    output_dir: Path,
+    experiment_id: str,
+    observable_columns: list[str],
+) -> tuple[np.ndarray, list[str]]:
+    """Read hive-partitioned Parquet output and extract timeseries.
 
     Args:
-        raw_data: Output of ``sim.query()`` with ``raw_output=True``.
-            Structure: ``{time: {"agents": {"0": {nested state}}}, ...}``
-        agent_id: Agent ID to extract (default "0" for single-cell).
-        output_keys: Which outputs to include.  If *None*, extracts all
-            scalar listeners (cell_mass, dry_mass, volume) plus growth_rate.
+        output_dir: Root output directory (the ``out_dir`` passed to emitter).
+        experiment_id: The experiment ID used in the simulation config.
+        observable_columns: Full Parquet column names to extract.
 
     Returns:
         Tuple of:
         - timeseries array of shape ``(n_timesteps, n_obs)``
-        - list of observable column names (length ``n_obs``)
-        - 1-D array of time values
+        - list of observable column names
     """
-    sorted_times = sorted(raw_data.keys())
-    if not sorted_times:
-        return np.empty((0, 0)), [], np.array([])
+    # Parquet emitter writes to:
+    # {out_dir}/{experiment_id}/history/experiment_id={id}/variant=.../.../*.pq
+    history_base = output_dir / experiment_id / "history"
 
-    # Determine which listeners to extract
-    if output_keys is None:
-        extract_scalars = dict(_LISTENER_SCALARS)
-        extract_arrays: dict[str, list[str]] = {}
-    else:
-        extract_scalars = {k: v for k, v in _LISTENER_SCALARS.items() if k in output_keys}
-        extract_arrays = {k: v for k, v in _LISTENER_ARRAYS.items() if k in output_keys}
+    # Try both .pq and .parquet extensions
+    pq_files = list(history_base.rglob("*.pq"))
+    if not pq_files:
+        pq_files = list(history_base.rglob("*.parquet"))
+    if not pq_files:
+        raise FileNotFoundError(
+            f"No Parquet files found under {history_base}. "
+            f"Check that the simulation completed successfully."
+        )
 
-    # Collect raw values per timestep
-    rows: list[list[float]] = []
-    obs_names: list[str] | None = None
+    df = pl.read_parquet(
+        [str(p) for p in pq_files],
+        hive_partitioning=True,
+    )
 
-    for t in sorted_times:
-        state = raw_data[t]
-        try:
-            agent_state = state["agents"][agent_id]
-        except (KeyError, TypeError):
-            continue
+    # Filter to available observable columns
+    available = [c for c in observable_columns if c in df.columns]
+    if not available:
+        raise ValueError(
+            f"None of {observable_columns} found in Parquet columns: "
+            f"{df.columns[:20]}..."
+        )
 
-        row: list[float] = []
-        names: list[str] = []
+    # Sort by time if available
+    if "time" in df.columns:
+        df = df.sort("time")
 
-        # Scalar listeners
-        for name, path in extract_scalars.items():
-            val = _get_nested_dict(agent_state, path)
-            row.append(float(val))
-            names.append(name)
+    obs_df = df.select(available).fill_null(0.0)
+    ts_array = obs_df.to_numpy().astype(np.float64)
 
-        # Array listeners (flattened)
-        for name, path in extract_arrays.items():
-            val = _get_nested_dict(agent_state, path)
-            arr = np.asarray(val, dtype=float).ravel()
-            row.extend(arr.tolist())
-            names.extend([f"{name}_{i}" for i in range(len(arr))])
+    # Use short names for the observable labels
+    parquet_to_short = {v: k for k, v in _SHORT_TO_PARQUET.items()}
+    obs_names = [parquet_to_short.get(c, c) for c in available]
 
-        rows.append(row)
-        if obs_names is None:
-            obs_names = names
+    return ts_array, obs_names
 
-    if not rows:
-        return np.empty((0, 0)), [], np.array([])
 
-    timeseries = np.array(rows)
+# -- Subprocess simulation runner -------------------------------------------
 
-    # Derive growth_rate from dry_mass if present
-    if obs_names and "dry_mass" in obs_names:
-        dm_idx = obs_names.index("dry_mass")
-        dm = timeseries[:, dm_idx]
-        gr = np.zeros_like(dm)
-        gr[1:] = np.diff(dm) / np.where(dm[1:] != 0, dm[1:], 1.0)
-        timeseries = np.column_stack([timeseries, gr])
-        obs_names.append("growth_rate")
 
-    return timeseries, obs_names or [], np.array(sorted_times)
+def _build_sim_config(
+    sim_data_path: str,
+    experiment_id: str,
+    output_dir: str,
+    max_duration: float,
+    variant_index: int = 0,
+    seed: int = 0,
+    generations: int = 1,
+    base_config_path: str | None = None,
+) -> dict[str, Any]:
+    """Build a vEcoli simulation config dict for subprocess execution."""
+    config: dict[str, Any] = {}
+    if base_config_path is not None:
+        config = _json.loads(Path(base_config_path).read_text())
+
+    config.update({
+        "sim_data_path": str(sim_data_path),
+        "experiment_id": experiment_id,
+        "emitter": "parquet",
+        "emitter_arg": {"out_dir": str(output_dir)},
+        "max_duration": max_duration,
+        "generations": generations,
+        "seed": seed,
+        "variant": variant_index,
+        "n_init_sims": 1,
+        "lineage_seed": 0,
+        "divide": False,
+        "variants": {},  # variants already baked into sim_data
+        "raw_output": True,
+    })
+    return config
+
+
+def _run_sim_subprocess(
+    config_path: Path,
+    cwd: str | None = None,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess:
+    """Run ecoli_master_sim.py as a subprocess.
+
+    Args:
+        config_path: Path to the JSON config file.
+        cwd: Working directory for the subprocess.
+        timeout: Timeout in seconds (None = no timeout).
+
+    Returns:
+        CompletedProcess result.
+
+    Raises:
+        RuntimeError: If the subprocess exits with non-zero status.
+    """
+    cmd = [
+        sys.executable,
+        "-m", "ecoli.experiments.ecoli_master_sim",
+        "--config", str(config_path),
+    ]
+
+    logger.info("Running vEcoli simulation: %s", " ".join(cmd))
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        timeout=timeout,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"vEcoli simulation failed (exit code {result.returncode}).\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"Stderr:\n{result.stderr[-2000:]}"
+        )
+
+    return result
 
 
 # -- Simulation wrapper class -----------------------------------------------
 
 
 @dataclass
-class VecoliSimulationFunc:
+class ITimeseriesBatchProcessor(BaseClass, abc.ABC):
+    """
+    Methods:
+        _apply_parameter_mutations(x:np.ndarray) -> Any
+        _run_batch(X, config) -> np.ndarray
+    """
+    @abc.abstractmethod
+    def _apply_parameter_mutations(self, x: np.ndarray) -> Any:
+        """Deep-copy baseline sim_data and apply variant mutations from x.
+
+        Flow:
+            x (numpy array)
+            -> param_space.sample_to_params(x) -> UQInputParameters
+            -> .to_simulation_config() -> {"variants": {name: [params]}, ...}
+            -> _apply_variants(sim_data, variants) using real apply_variant() (for example, in vecoli)
+        """
+        pass
+
+    @abc.abstractmethod
+    def _run_batch(
+        self,
+        X: np.ndarray,
+        max_workers: int | None = None,
+        batch_dir: Path | None = None,
+    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+        """Run simulations for a batch of parameter vectors.
+
+        Args:
+            X: Parameter array of shape ``(n_samples, n_params)``.
+            max_workers: Max parallel subprocesses. None = sequential.
+            batch_dir: Working directory for batch artifacts. If None,
+                a temporary directory is created.
+
+        Returns:
+            Tuple of:
+            - Y_aggregated: (n_samples, n_outputs) time-mean array
+            - Y_timeseries: list of per-sample timeseries arrays, or None
+        """
+        pass
+
+
+@dataclass
+class TimeseriesGenerator(ITimeseriesBatchProcessor):
+    param_space: Any  # XSpace — avoid circular import
+    max_duration: float
+    output_keys: list[str] | None = None
+    _obs_names: list[str] | None = field(default=None, init=False, repr=False)
+
+    def _apply_parameter_mutations(self, x: np.ndarray) -> Any:
+        pass
+
+    def _run_batch(
+        self,
+        X: np.ndarray,
+        max_workers: int | None = None,
+        batch_dir: Path | None = None,
+    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+        raise NotImplementedError("TODO: implement this to pass general func/callable")
+
+    def evaluate_batch(self, X: np.ndarray, max_workers: int | None = None) -> np.ndarray:
+        Y_agg, _ = self._run_batch(X, max_workers=max_workers)
+        return Y_agg
+
+
+@dataclass
+class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
     """Parameter-agnostic vEcoli simulation wrapper for the UQ pipeline.
 
     Implements the dual interface required by the ``./uq`` workflow:
@@ -248,6 +388,10 @@ class VecoliSimulationFunc:
       (used by ``Strategy4Wrapper`` in Phase 2)
     - ``evaluate_batch(X)`` -> aggregated outputs ``(n_samples, n_outputs)``
       (used by ``SensitivityAnalyzer`` in Phase 1)
+
+    All simulations are executed as **subprocesses** via
+    ``ecoli_master_sim.py`` with the Parquet emitter. No ``EcoliSim``
+    object is held in the UQ process memory.
 
     The parameter vector ``x`` is a 1-D numpy array whose elements
     correspond positionally to ``param_space.parameter_names``.  The
@@ -261,14 +405,10 @@ class VecoliSimulationFunc:
     Args:
         baseline_sim_data: The unperturbed SimulationDataEcoli object.
         param_space: XSpace instance that converts x -> UQInputParametersVecoli.
-            Provides parameter_names for Sobol labeling and sample_to_params()
-            for converting numpy arrays to variant-compatible param dicts.
-        sim_config_path: Path to EcoliSim JSON config file (optional,
-            uses default if None).
+        sim_config_path: Path to a base vEcoli JSON config file (optional).
         max_duration: Simulation duration in seconds.
-        output_keys: Which outputs to extract from the timeseries.
-            If None, extracts scalar listeners (cell_mass, dry_mass,
-            volume) plus derived growth_rate.
+        output_keys: Which outputs to extract from the Parquet timeseries.
+            If None, extracts default mass listeners.
     """
 
     baseline_sim_data: SimulationDataEcoli
@@ -290,7 +430,7 @@ class VecoliSimulationFunc:
             raise RuntimeError("Observable names not yet known. Run at least one simulation to populate obs_names.")
         return self._obs_names
 
-    def _mutate_sim_data(self, x: np.ndarray) -> SimulationDataEcoli:
+    def _apply_parameter_mutations(self, x: np.ndarray) -> SimulationDataEcoli:
         """Deep-copy baseline sim_data and apply variant mutations from x.
 
         Flow:
@@ -311,34 +451,65 @@ class VecoliSimulationFunc:
 
         return sd
 
-    def _run_single(self, x: np.ndarray) -> dict[float, dict]:
-        """Run a single-cell EcoliSim and return RAMEmitter raw data."""
-        sd = self._mutate_sim_data(x)
+    def _run_subprocess(
+        self,
+        x: np.ndarray,
+        work_dir: Path | None = None,
+        experiment_id: str = "uq_single",
+        variant_index: int = 0,
+    ) -> tuple[np.ndarray, list[str]]:
+        """Run a single simulation as a subprocess and return timeseries.
 
-        # Write mutated sim_data to a temp pickle
-        fd, variant_path = tempfile.mkstemp(suffix=".cPickle")
+        Args:
+            x: Parameter vector, shape ``(n_params,)``.
+            work_dir: Working directory. If None, creates a temp dir.
+            experiment_id: Experiment ID for Parquet output structure.
+            variant_index: Variant index for hive partitioning.
+
+        Returns:
+            Tuple of (timeseries array, observable names).
+        """
+        cleanup = work_dir is None
+        if work_dir is None:
+            work_dir = Path(tempfile.mkdtemp(prefix="uq_sim_"))
+
         try:
-            with os.fdopen(fd, "wb") as f:
+            # 1. Apply parameter mutations and pickle variant sim_data
+            sd = self._apply_parameter_mutations(x)
+            pickle_path = work_dir / "sim_data.cPickle"
+            with open(pickle_path, "wb") as f:
                 pickle.dump(sd, f)
 
-            # Build and run EcoliSim
-            if self.sim_config_path is not None:
-                sim = EcoliSim.from_file(self.sim_config_path)
-            else:
-                sim = EcoliSim.from_file()
+            # 2. Build config JSON
+            output_dir = work_dir / "output"
+            output_dir.mkdir(exist_ok=True)
+            config = _build_sim_config(
+                sim_data_path=str(pickle_path),
+                experiment_id=experiment_id,
+                output_dir=str(output_dir),
+                max_duration=self.max_duration,
+                variant_index=variant_index,
+                base_config_path=self.sim_config_path,
+            )
+            config_path = work_dir / "config.json"
+            config_path.write_text(_json.dumps(config, indent=2))
 
-            sim.config["sim_data_path"] = variant_path
-            sim.emitter = "timeseries"
-            sim.raw_output = True
-            sim.max_duration = self.max_duration
+            # 3. Run simulation as subprocess
+            _run_sim_subprocess(config_path)
 
-            sim.build_ecoli()
-            sim.run()
-            data = sim.query()
+            # 4. Read Parquet output
+            parquet_cols = _resolve_parquet_columns(self.output_keys)
+            timeseries, obs_names = _read_parquet_timeseries(
+                output_dir=output_dir,
+                experiment_id=experiment_id,
+                observable_columns=parquet_cols,
+            )
+
+            return timeseries, obs_names
+
         finally:
-            os.unlink(variant_path)
-
-        return data
+            if cleanup:
+                shutil.rmtree(work_dir, ignore_errors=True)
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         """Run simulation for a single parameter vector.
@@ -350,13 +521,186 @@ class VecoliSimulationFunc:
             Raw timeseries array of shape ``(n_timesteps, n_obs)``.
             This is the format expected by ``Strategy4Wrapper`` in Phase 2.
         """
-        raw_data = self._run_single(x)
-        timeseries, obs_names, _ = _extract_timeseries(
-            raw_data,
-            output_keys=self.output_keys,
-        )
+        timeseries, obs_names = self._run_subprocess(x)
         self._obs_names = obs_names
         return timeseries
+
+    def _run_batch(
+        self,
+        X: np.ndarray,
+        max_workers: int | None = None,
+        batch_dir: Path | None = None,
+    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+        """Run simulations for a batch of parameter vectors via subprocesses.
+
+        For each row in X:
+        1. Deep-copy baseline sim_data and apply variant mutations
+        2. Pickle variant sim_data to ``{batch_dir}/sim_data/{i}.cPickle``
+        3. Write a per-sample JSON config
+        4. Run ``ecoli_master_sim.py`` as a subprocess with Parquet emitter
+        5. Collect Parquet output
+
+        Args:
+            X: Parameter array of shape ``(n_samples, n_params)``.
+            max_workers: Max parallel subprocesses. None = sequential.
+            batch_dir: Working directory for batch artifacts. If None,
+                a temporary directory is created and cleaned up after.
+
+        Returns:
+            Tuple of:
+            - Y_aggregated: (n_samples, n_outputs) time-mean array
+            - Y_timeseries: list of per-sample raw timeseries arrays
+        """
+        cleanup = batch_dir is None
+        if batch_dir is None:
+            batch_dir = Path(tempfile.mkdtemp(prefix="uq_batch_"))
+
+        n_samples = X.shape[0]
+        sim_data_dir = batch_dir / "sim_data"
+        configs_dir = batch_dir / "configs"
+        output_dir = batch_dir / "output"
+        sim_data_dir.mkdir(parents=True, exist_ok=True)
+        configs_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        experiment_id = "uq_batch"
+        parquet_cols = _resolve_parquet_columns(self.output_keys)
+
+        try:
+            # --- Phase A: Create all variant pickles and configs ---
+            config_paths: list[Path] = []
+            for i in range(n_samples):
+                sd = self._apply_parameter_mutations(X[i])
+                pickle_path = sim_data_dir / f"{i:04d}.cPickle"
+                with open(pickle_path, "wb") as f:
+                    pickle.dump(sd, f)
+
+                config = _build_sim_config(
+                    sim_data_path=str(pickle_path),
+                    experiment_id=experiment_id,
+                    output_dir=str(output_dir),
+                    max_duration=self.max_duration,
+                    variant_index=i,
+                    seed=i,
+                    base_config_path=self.sim_config_path,
+                )
+                config_path = configs_dir / f"{i:04d}.json"
+                config_path.write_text(_json.dumps(config, indent=2))
+                config_paths.append(config_path)
+
+            logger.info(
+                "Created %d variant pickles and configs in %s",
+                n_samples, batch_dir,
+            )
+
+            # --- Phase B: Run simulations ---
+            if max_workers is not None and max_workers > 1:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                errors: list[tuple[int, Exception]] = []
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    future_to_idx = {
+                        pool.submit(_run_sim_subprocess, config_paths[i]): i
+                        for i in range(n_samples)
+                    }
+                    for future in as_completed(future_to_idx):
+                        idx = future_to_idx[future]
+                        try:
+                            future.result()
+                            logger.info("Sample %d/%d complete", idx + 1, n_samples)
+                        except Exception as e:
+                            errors.append((idx, e))
+                            logger.error("Sample %d failed: %s", idx, e)
+
+                if errors:
+                    failed = [str(i) for i, _ in errors]
+                    raise RuntimeError(
+                        f"Batch simulation failed for samples: {', '.join(failed)}. "
+                        f"First error: {errors[0][1]}"
+                    )
+            else:
+                for i in range(n_samples):
+                    logger.info("Running sample %d/%d...", i + 1, n_samples)
+                    _run_sim_subprocess(config_paths[i])
+
+            # --- Phase C: Collect Parquet outputs ---
+            # All samples write to the same output_dir with different
+            # variant indices. The hive structure is:
+            # {output_dir}/{experiment_id}/history/experiment_id={id}/variant={i}/...
+            history_base = output_dir / experiment_id / "history"
+
+            pq_files = list(history_base.rglob("*.pq"))
+            if not pq_files:
+                pq_files = list(history_base.rglob("*.parquet"))
+            if not pq_files:
+                raise FileNotFoundError(
+                    f"No Parquet files found under {history_base}"
+                )
+
+            df = pl.read_parquet(
+                [str(p) for p in pq_files],
+                hive_partitioning=True,
+            )
+
+            # Filter to available observable columns
+            available = [c for c in parquet_cols if c in df.columns]
+            if not available:
+                raise ValueError(
+                    f"None of {parquet_cols} found in Parquet columns: "
+                    f"{df.columns[:20]}..."
+                )
+
+            parquet_to_short = {v: k for k, v in _SHORT_TO_PARQUET.items()}
+            obs_names = [parquet_to_short.get(c, c) for c in available]
+            self._obs_names = obs_names
+
+            # Sort by time within each variant
+            sort_cols = []
+            if "variant" in df.columns:
+                sort_cols.append("variant")
+            if "time" in df.columns:
+                sort_cols.append("time")
+            if sort_cols:
+                df = df.sort(sort_cols)
+
+            Y_list: list[np.ndarray] = []
+            Y_timeseries: list[np.ndarray] = []
+
+            for i in range(n_samples):
+                if "variant" in df.columns:
+                    sample_df = df.filter(pl.col("variant") == i)
+                else:
+                    # Fallback: no variant column (shouldn't happen)
+                    sample_df = df
+
+                obs_df = sample_df.select(available).fill_null(0.0)
+                ts_array = obs_df.to_numpy().astype(np.float64)
+                Y_timeseries.append(ts_array)
+                Y_list.append(ts_array.mean(axis=0))
+
+            Y_aggregated = np.vstack(Y_list)
+
+            # Write batch metadata for potential later collection
+            meta = {
+                "parameter_names": self.parameter_names,
+                "n_samples": n_samples,
+                "n_params": int(X.shape[1]),
+                "observable_columns": available,
+                "obs_names": obs_names,
+                "bounds": np.array(self.param_space.parameter_bounds).tolist(),
+                "samples": {
+                    str(i): {"x": X[i].tolist()} for i in range(n_samples)
+                },
+            }
+            (batch_dir / "metadata.json").write_text(
+                _json.dumps(meta, indent=2)
+            )
+
+            return Y_aggregated, Y_timeseries
+
+        finally:
+            if cleanup:
+                shutil.rmtree(batch_dir, ignore_errors=True)
 
     def evaluate_batch(
         self,
@@ -367,49 +711,21 @@ class VecoliSimulationFunc:
 
         Args:
             X: Parameter array of shape ``(n_samples, n_params)``.
-            max_workers: Max parallel processes.  ``None`` = sequential
-                (safe default since EcoliSim is memory-heavy).  Set to
-                e.g. 4 for local parallelism.
+            max_workers: Max parallel subprocesses. None = sequential.
 
         Returns:
             Aggregated (time-mean) output array of shape
-            ``(n_samples, n_outputs)``.  This is the format expected by
-            ``SensitivityAnalyzer.analyze_with_pce()`` in Phase 1.
+            ``(n_samples, n_outputs)``.
         """
-        if max_workers is None or max_workers <= 1:
-            results = []
-            for x in X:
-                ts = self(x)  # (n_timesteps, n_obs)
-                results.append(ts.mean(axis=0))  # aggregate -> (n_obs,)
-            return np.vstack(results)
-
-        from concurrent.futures import ProcessPoolExecutor, as_completed
-
-        results = [None] * len(X)
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            future_to_idx = {pool.submit(_evaluate_single, self, X[i]): i for i in range(len(X))}
-            for future in as_completed(future_to_idx):
-                idx = future_to_idx[future]
-                results[idx] = future.result()
-
-        return np.vstack(results)
-
-
-# -- Module-level helper for ProcessPoolExecutor ----------------------------
-# ProcessPoolExecutor requires a top-level picklable callable.
-
-
-def _evaluate_single(sim_func: "VecoliSimulationFunc", x: np.ndarray) -> np.ndarray:
-    """Evaluate one sample and return time-mean output (picklable target)."""
-    ts = sim_func(x)
-    return ts.mean(axis=0)
+        Y_agg, _ = self._run_batch(X, max_workers=max_workers)
+        return Y_agg
 
 
 # -- Batch config export / collection --------------------------------------
 
 
 def export_batch_configs(
-    sim_func: "VecoliSimulationFunc",
+    sim_func: "TimeseriesGeneratorVecoli",
     X: np.ndarray,
     batch_dir: str | os.PathLike,
     base_config_path: str | None = None,
@@ -527,8 +843,6 @@ def collect_batch_results(
     Returns:
         PrecomputedCache with X, Y assembled from the batch outputs.
     """
-    import polars as pl
-
     from uq.sampling import PrecomputedCache
 
     batch_dir = Path(batch_dir)
@@ -540,12 +854,7 @@ def collect_batch_results(
     bounds = meta["bounds"]
 
     if observable_columns is None:
-        observable_columns = [
-            "listeners__mass__dry_mass",
-            "listeners__mass__cell_mass",
-            "listeners__mass__volume",
-            "listeners__mass__growth",
-        ]
+        observable_columns = list(_DEFAULT_PARQUET_COLUMNS)
 
     X_list = []
     Y_list = []
@@ -566,8 +875,12 @@ def collect_batch_results(
             )
 
         # Read hive-partitioned parquet
+        pq_files = list(history_dir.rglob("*.pq"))
+        if not pq_files:
+            pq_files = list(history_dir.rglob("*.parquet"))
+
         df = pl.read_parquet(
-            str(history_dir / "**/*.parquet"),
+            [str(p) for p in pq_files],
             hive_partitioning=True,
         )
 
@@ -670,8 +983,8 @@ def example_simulation_func(
 ) -> dict[str, Any]:
     """End-to-end example: load sim_data, build f(x)->y, run one sample.
 
-    Demonstrates the full mutation -> simulate -> extract chain and
-    returns everything the downstream pipeline needs.
+    Demonstrates the full mutation -> simulate -> extract chain using
+    subprocess-based execution (no in-process EcoliSim).
 
     Args:
         sim_data_path: Path to a simData.cPickle file.
@@ -681,7 +994,7 @@ def example_simulation_func(
 
     Returns:
         Dict with keys:
-            sim_func: VecoliSimulationFunc instance (pass to pipeline)
+            sim_func: TimeseriesGeneratorVecoli instance (pass to pipeline)
             param_space: XSpaceVecoli
             x_sample: the parameter vector used
             uq_params: UQInputParametersVecoli from sample_to_params
@@ -689,7 +1002,6 @@ def example_simulation_func(
             timeseries: (n_timesteps, n_obs) raw output from __call__
             aggregated: (n_obs,) time-mean output from evaluate_batch
             obs_names: list of observable column names
-            times: 1-D array of simulation time values
 
     Example::
 
@@ -730,8 +1042,8 @@ def example_simulation_func(
             "new gene entries (violacein)."
         )
 
-    # --- 2. Instantiate VecoliSimulationFunc ---
-    sim_func = VecoliSimulationFunc(
+    # --- 2. Instantiate TimeseriesGeneratorVecoli ---
+    sim_func = TimeseriesGeneratorVecoli(
         baseline_sim_data=ds.sim_data,
         param_space=param_space,
         max_duration=max_duration,
@@ -748,7 +1060,7 @@ def example_simulation_func(
     print(f"Variant config: {sim_config.get('variants', {})}")
 
     # --- 5. Run single-cell simulation via __call__ (Phase 2 interface) ---
-    print(f"Running EcoliSim (max_duration={max_duration}s)...")
+    print(f"Running vEcoli subprocess (max_duration={max_duration}s)...")
     timeseries = sim_func(x_sample)  # (n_timesteps, n_obs)
     print(f"Timeseries shape: {timeseries.shape}")
     print(f"Observable names: {sim_func.obs_names}")
@@ -759,10 +1071,6 @@ def example_simulation_func(
     print(f"Aggregated output shape: {Y_aggregated.shape}")
     print(f"Aggregated values: {dict(zip(sim_func.obs_names, Y_aggregated[0]))}")
 
-    # --- 7. Also extract with full timeseries metadata ---
-    raw_data = sim_func._run_single(x_sample)
-    _, obs_names, times = _extract_timeseries(raw_data)
-
     return {
         "sim_func": sim_func,
         "param_space": param_space,
@@ -772,5 +1080,4 @@ def example_simulation_func(
         "timeseries": timeseries,
         "aggregated": Y_aggregated[0],
         "obs_names": sim_func.obs_names,
-        "times": times,
     }
