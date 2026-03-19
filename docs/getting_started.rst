@@ -195,6 +195,26 @@ You can also use precomputed data programmatically:
        export_path="./results",
    )
 
+Interactive Dashboard
+--------------------
+
+After running the pipeline with ``--export-path``, explore results interactively:
+
+.. code-block:: bash
+
+   # Tkinter DAW (default) — draggable markers on response curves
+   uv run uq dashboard --results-path ./results/uq_results.json
+
+   # Marimo notebook — slider-reactive, with inline documentation
+   uv run uq dashboard --run-mode mo
+
+The dashboard loads the exported PCE surrogate coefficients and Sobol indices, then
+provides real-time parameter exploration: adjust parameter values and see response
+curves, per-stage observable waveforms, and sensitivity spectrograms update instantly.
+All computations use pipeline outputs only — no simulation re-evaluation.
+
+See ``app/README.md`` for panel descriptions and the modulation math.
+
 Next Steps
 ----------
 
