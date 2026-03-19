@@ -94,14 +94,14 @@ vecoli = { path = "../vEcoli", editable = true }
 [tool.mypy]
 files = ["uq"]
 strict = true
-exclude = ['^tutorials/*', '^examples/*']
+exclude = ['^tutorials/*', '^examples/*', '^app/*']
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov-report=html"
 
 [tool.deptry]
-exclude = [".venv/*", "tutorials/*", "examples/*"]
+exclude = [".venv/*", "tutorials/*", "examples/*", "app/*"]
 ignore = ["DEP002", "DEP003", "DEP004", "DEP001"]
 
 [tool.ruff]
@@ -180,9 +180,11 @@ ignore = [
     "B018",
     "C408",
     "E731",
-    "RUF003"
+    "RUF003",
+    "S108",
+    "B017"
 ]
-exclude = [".venv/*", "docs/*", "tutorials/*", "examples/*"]
+exclude = [".venv/*", "docs/*", "tutorials/*", "examples/*", "app/*"]
 
 [tool.ruff.format]
 preview = true
