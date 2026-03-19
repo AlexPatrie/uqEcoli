@@ -1,7 +1,12 @@
 import marimo
 
 __generated_with = "0.21.0"
-app = marimo.App(width="full", app_title="UQ Results // DAW", css_file="")
+app = marimo.App(
+    width="full",
+    app_title="UQ Results // DAW",
+    layout_file="layouts/dashboard.grid.json",
+    css_file="",
+)
 
 with app.setup:
     import json
