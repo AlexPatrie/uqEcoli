@@ -129,6 +129,20 @@ wheels = [
 ]
 
 [[package]]
+name = "anywidget"
+version = "0.9.21"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ipywidgets" },
+    { name = "psygnal" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/5e/cbea445bf062b81e4d366ca29dae4f0aedc7a64f384afc24670e07bec560/anywidget-0.9.21.tar.gz", hash = "sha256:b8d0172029ac426573053c416c6a587838661612208bb390fa0607862e594b27", size = 390517, upload-time = "2025-11-12T17:06:03.035Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/03/c17464bbf682ea87e7e3de2ddc63395e359a78ae9c01f55fc78759ecbd79/anywidget-0.9.21-py3-none-any.whl", hash = "sha256:78c268e0fbdb1dfd15da37fb578f9cf0a0df58a430e68d9156942b7a9391a761", size = 231797, upload-time = "2025-11-12T17:06:01.564Z" },
+]
+
+[[package]]
 name = "appnope"
 version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -727,6 +741,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ae/b6/03bb70946330e88ffec97aefd3ea75ba575cb2e762061e0e62a213befee8/docutils-0.22.4.tar.gz", hash = "sha256:4db53b1fde9abecbb74d91230d32ab626d94f6badfc575d6db9194a49df29968", size = 2291750, upload-time = "2025-12-18T19:00:26.443Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/10/5da547df7a391dcde17f59520a231527b8571e6f46fc8efb02ccb370ab12/docutils-0.22.4-py3-none-any.whl", hash = "sha256:d0013f540772d1420576855455d050a2180186c91c15779301ac2ccb3eeb68de", size = 633196, upload-time = "2025-12-18T19:00:18.077Z" },
+]
+
+[[package]]
+name = "drawdata"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anywidget" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/d7/944b7a8e30e78882f2aeb606212e03599aa2152a75a921c8d4617a42dcb5/drawdata-0.5.0.tar.gz", hash = "sha256:5adba01509660fede7af34ae27016a5e0f555edbf7a4ef2af25a2276a076d2b7", size = 236031, upload-time = "2026-01-27T13:24:26.147Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/dd/8ec35d3f6186d3786eb4f36e6cf7800ffa0a0673feb7758828f2aac938b4/drawdata-0.5.0-py3-none-any.whl", hash = "sha256:893031322cb254143efaa74d63a06b4dd447b6650d8c7917956a6d002ce7ce1c", size = 237572, upload-time = "2026-01-27T13:24:38.829Z" },
 ]
 
 [[package]]
@@ -3070,6 +3096,20 @@ wheels = [
 ]
 
 [[package]]
+name = "psygnal"
+version = "0.15.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/79/20c3e23e75272e9ddf018097cf872ab088bccba978888472656629efa4a3/psygnal-0.15.1.tar.gz", hash = "sha256:f64f62dee2306fc1c22050a59b6c6cdad126e04b0cf50e393ff858a1da719096", size = 123147, upload-time = "2026-01-04T16:38:41.959Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/65/b7bbca96bc477aa9ac2264e5907b2f4ccfcd1319f776dd1f35eec06cc2f4/psygnal-0.15.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:8d56f0f35eaf4a21f660de76885222faf9e8c7112454528d3394d464f3d4d1a3", size = 598340, upload-time = "2026-01-04T16:38:19.752Z" },
+    { url = "https://files.pythonhosted.org/packages/40/f2/56577465a1b42a5e6780bb5fab53fb68f8bfd72f0131ed397576529af724/psygnal-0.15.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0febcf757a1323d9b8bd75735ee3569213d8110012a7bf0f478e85c5ab459fc6", size = 575311, upload-time = "2026-01-04T16:38:21.137Z" },
+    { url = "https://files.pythonhosted.org/packages/79/81/f642ac08104049383076f83480ed412c9626e068769a1c34873c595bec0e/psygnal-0.15.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b5e4837dfbfa4974dabe0795e32be9aadcd87603adf734738ce1114f72238a05", size = 889770, upload-time = "2026-01-04T16:38:22.629Z" },
+    { url = "https://files.pythonhosted.org/packages/de/43/e571fa40b72780abed080ef829e5ad98017b6fe48d28c15a2404e006b676/psygnal-0.15.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:07b4c4e03bbf4e8cad7e25f4fbc1ba9575fb9c3d14991bc7edfeb8b09c8d6d54", size = 881105, upload-time = "2026-01-04T16:38:23.896Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/26/ef3ab825eb08eaecbbceeeb56383694fe64ce399dbfd1d0767bb85688785/psygnal-0.15.1-cp312-cp312-win_amd64.whl", hash = "sha256:4f0ce91b9c18e92281bf2c3fc4bb4e808d90f0b023d0a37b302d354188520338", size = 418969, upload-time = "2026-01-04T16:38:25.731Z" },
+    { url = "https://files.pythonhosted.org/packages/46/49/7742544684bee728ec123515d2694cee859aa2a705951a461230b00f18cc/psygnal-0.15.1-py3-none-any.whl", hash = "sha256:4221140e633e45b076953c64bcb9b41a744833527f9a037c1ca98bc270798cbf", size = 90638, upload-time = "2026-01-04T16:38:40.841Z" },
+]
+
+[[package]]
 name = "ptyprocess"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3291,6 +3331,22 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ff/87/8f0be89a37dba05b38d619a9710b2294dc6773d982d08fb7373328b4cfd0/pymunk-7.2.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:4b24986e5539d1d63c5f8394e599c88117b16b7c673a76c2a3e503bce6fa70b3", size = 1016314, upload-time = "2025-11-02T18:46:59.218Z" },
     { url = "https://files.pythonhosted.org/packages/3d/e1/2ff42c5bdb137a74b3996848ac3e93edb7aa44eb41b8a84b404361ab9ac8/pymunk-7.2.0-cp312-cp312-win32.whl", hash = "sha256:4a073698e5d483ba94b0393ad242f6716b4eff6859790df9f3c0ca3262255b1f", size = 317855, upload-time = "2025-11-02T18:47:26.639Z" },
     { url = "https://files.pythonhosted.org/packages/d3/b7/122edb075504ff709414f2ec8cbfdcbdcb9c7e2d4a188ae389b83f536a37/pymunk-7.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:006a5c0731cd6e47b0da7f6c1f85cbb7049af90ffbaedf87b6856502e5c8b47b", size = 368376, upload-time = "2025-11-02T18:47:28.085Z" },
+]
+
+[[package]]
+name = "pynndescent"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "joblib" },
+    { name = "llvmlite" },
+    { name = "numba" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4a/fb/7f58c397fb31666756457ee2ac4c0289ef2daad57f4ae4be8dec12f80b03/pynndescent-0.6.0.tar.gz", hash = "sha256:7ffde0fb5b400741e055a9f7d377e3702e02250616834231f6c209e39aac24f5", size = 2992987, upload-time = "2026-01-08T21:29:58.943Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/e6/94145d714402fd5ade00b5661f2d0ab981219e07f7db9bfa16786cdb9c04/pynndescent-0.6.0-py3-none-any.whl", hash = "sha256:dc8c74844e4c7f5cbd1e0cd6909da86fdc789e6ff4997336e344779c3d5538ef", size = 73511, upload-time = "2026-01-08T21:29:57.306Z" },
 ]
 
 [[package]]
@@ -4550,6 +4606,23 @@ wheels = [
 ]
 
 [[package]]
+name = "umap-learn"
+version = "0.5.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numba" },
+    { name = "numpy" },
+    { name = "pynndescent" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/9a/a1e4a257a9aa979dac4f6d5781dac929cbb0949959e2003ed82657d10b0f/umap_learn-0.5.11.tar.gz", hash = "sha256:31566ffd495fbf05d7ab3efcba703861c0f5e6fc6998a838d0e2becdd00e54f5", size = 96409, upload-time = "2026-01-12T20:44:47.553Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/d2/fcf7192dd1cd8c090b6cfd53fa223c4fb2887a17c47e06bc356d44f40dfb/umap_learn-0.5.11-py3-none-any.whl", hash = "sha256:cb17adbde9d544ba79481b3ab4d81ac222e940f3d9219307bea6044f869af3cc", size = 90890, upload-time = "2026-01-12T20:44:46.511Z" },
+]
+
+[[package]]
 name = "unum"
 version = "4.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4578,6 +4651,7 @@ dependencies = [
     { name = "uqpy" },
     { name = "vecoli" },
     { name = "vl-convert-python" },
+    { name = "wigglystuff" },
 ]
 
 [package.dev-dependencies]
@@ -4627,6 +4701,7 @@ requires-dist = [
     { name = "uqpy", specifier = ">=4.1.6" },
     { name = "vecoli", editable = "../vEcoli" },
     { name = "vl-convert-python", specifier = ">=1.9.0.post1" },
+    { name = "wigglystuff", specifier = ">=0.2.39" },
 ]
 
 [package.metadata.requires-dev]
@@ -5001,6 +5076,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bd/f4/c67440c7fb409a71b7404b7aefcd7569a9c0d6bd071299bf4198ae7a5d95/widgetsnbextension-4.0.15.tar.gz", hash = "sha256:de8610639996f1567952d763a5a41af8af37f2575a41f9852a38f947eb82a3b9", size = 1097402, upload-time = "2025-11-01T21:15:55.178Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/0e/fa3b193432cfc60c93b42f3be03365f5f909d2b3ea410295cf36df739e31/widgetsnbextension-4.0.15-py3-none-any.whl", hash = "sha256:8156704e4346a571d9ce73b84bee86a29906c9abfd7223b7228a28899ccf3366", size = 2196503, upload-time = "2025-11-01T21:15:53.565Z" },
+]
+
+[[package]]
+name = "wigglystuff"
+version = "0.2.39"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anywidget" },
+    { name = "drawdata" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "python-dotenv" },
+    { name = "umap-learn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b9/da/895eec3165490b0575f91e01188ed3350409306a2e385ed5decd7561aaac/wigglystuff-0.2.39.tar.gz", hash = "sha256:4348f8645b156dd409bb3bdaf5f3e9d67c55f620574c2670e7ea23552bdcca73", size = 2983575, upload-time = "2026-03-17T18:16:03.71Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/1a/3ded60d9b5c8753df41313a57a16d9fa4f0a84ed2cebaf80f6ac131b946d/wigglystuff-0.2.39-py3-none-any.whl", hash = "sha256:f1aff65bc70ec8c47690d4deb4986e5e55142a2b905b60c15da0674f82f55c69", size = 3052254, upload-time = "2026-03-17T18:16:01.528Z" },
 ]
 
 [[package]]

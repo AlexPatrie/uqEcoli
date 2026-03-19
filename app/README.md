@@ -92,6 +92,25 @@ For each parameter `p_i`, the dashboard sweeps `p_i` across its full range while
 
 The polynomial evaluation is pure arithmetic — no simulation, no I/O. Each slider change triggers ~180 multiply-add operations (60 sweep points x 3 parameters). This is the design intent of the PCE surrogate approach: pay the simulation cost once during `uq generate-samples`, then explore the fitted response surface interactively.
 
+### Per-stage prediction curve
+
+Below the sensitivity spectrogram (heatmap), a green line chart shows the predicted output at each cell cycle stage, recomputed live as you drag sliders or dots. This is the bridge between the population-level prediction (one number) and the per-stage Sobol indices (static variance fractions).
+
+The per-stage prediction combines three pipeline outputs — no synthetic data:
+
+```
+Y_hat_k = Y_hat_pop + sum_i [ |dY/dx_i| * (x_i - midpoint) * S_Ti^(k) ]
+```
+
+| Term | Source | Meaning |
+|------|--------|---------|
+| `Y_hat_pop` | PCE surrogate `predict(x)` | Bulk prediction at current slider values |
+| `\|dY/dx_i\|` | Finite difference on PCE | Local sensitivity at current operating point |
+| `(x_i - midpoint)` | Slider position in germ space | How far the parameter deviates from center |
+| `S_Ti^(k)` | Pipeline Sobol indices | How much parameter i matters at stage k |
+
+This distributes the population prediction across stages, weighted by each parameter's per-stage importance. When you increase mecillinam (high S_Ti at stages 7-9), the late-cycle stages respond more than the early ones. The peak stage is highlighted with a labeled dot.
+
 ### Relationship to other panels
 
 | Panel | Shows | Derived from |
@@ -99,8 +118,48 @@ The polynomial evaluation is pure arithmetic — no simulation, no I/O. Each sli
 | Parametric EQ | *Which* parameters matter at each stage | Sobol indices (from PCE coefficients) |
 | Sidechain | *How much* parameters interact | S_Ti - S_i (from PCE coefficients) |
 | **PCE Prediction EQ** | *What happens* when you set specific values | Direct PCE evaluation (using the same coefficients) |
+| **Stage Prediction** | *Where in the cell cycle* the effect concentrates | PCE + Sobol (population prediction weighted by per-stage S_Ti) |
 
-The Sobol panels answer "what fraction of variance does this parameter explain?" The PCE Prediction EQ answers "if I set this parameter to 3.5, what output do I get?" They use the same underlying polynomial — one analytically decomposes its variance, the other evaluates it at a point.
+The Sobol panels answer "what fraction of variance does this parameter explain?" The PCE Prediction EQ answers "if I set this parameter to 3.5, what output do I get?" The stage prediction answers "at this configuration, which cell cycle stage is most affected?" All three use the same pipeline outputs — they decompose the same information from different angles.
+
+### What the heatmap x-axis is
+
+The cell cycle stages (θ-bins) were computed during the pipeline by:
+
+1. Running simulations at LHS sample points → getting timeseries Y(t)
+2. Running Koopman DMD on those timeseries → extracting `θ(t) ∈ [0,1]` per timepoint
+3. Binning timepoints by `θ` into 10 stages (`n_bins`)
+4. Fitting PCE and computing Sobol indices within each bin separately
+
+#### So `S_Ti^(k)` for parameter `X_i` at stage `k` answers:
+
+>> "Of the variance in `Y` observed among timepoints that fall in `θ`-bin `k`, what fraction is attributable to `X_i?`"
+
+### What the spectrogram shows when you change `X_i`
+
+The heatmap colors (`S_Ti` values) don't change — they're fixed pipeline outputs. _**What changes is**_:
+
+1. The white cursor dot on `X_i`'s row slides to reflect your new slider position
+2. The green prediction curve below reshapes _**because the per-stage prediction formula weights the population prediction by `S_Ti^(k)`**_:
+
+```
+Y_hat_k = Y_hat_pop + sum_i [ |dY/dx_i| * (x_i - midpoint) * S_Ti^(k) ]
+```
+
+> So if mecillinam has `S_Ti = 0.05` at stage `0` but `S_Ti = 0.55` at stage `9`, and you crank mecillinam from `2` to `8`, the green curve shifts _much more_ at stage `9` than at stage `0`.
+> The green curve is answering:
+>> "given that I changed X_i, which stages feel it most?" — and the answer comes directly from the
+per-stage Sobol indices that the pipeline already computed."
+
+### To state it plainly
+
+- The spectrogram tells you: "Parameter `X_i` explains `S_Ti^(k)` fraction of output variance at cell cycle stage `k`."
+
+- The green prediction curve tells you: "If I set `X_i` to this specific value, stage `k`'s predicted output shifts by an amount proportional to `S_Ti^(k)`."
+
+- The first is a global variance attribution (pipeline output). The second applies that attribution to  your specific parameter choice (dashboard computation using pipeline outputs only). The curve doesn't  recompute `θ` or re-run Koopman — it uses the already-computed per-stage Sobol weights to distribute the effect of your slider change across stages.
+
+- Dragging `X_i` shows you which cell cycle stages are most affected by the value of `X_i`, exactly because the per-stage Sobol indices encode that stage-specific sensitivity.
 
 ## Generating Pipeline Artifacts
 

@@ -74,16 +74,38 @@ def normalize_to_germ(x, bounds):
 
 
 class ResponseCurveCanvas(tk.Canvas):
-    """DAW-style response curve display with interactive parameter markers."""
+    """DAW-style response curve display with draggable parameter markers.
 
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+    Markers can be clicked and dragged horizontally along their curve.
+    Dragging a marker updates the corresponding slider value in lock-step.
+    """
+
+    PAD_L, PAD_R, PAD_T, PAD_B = 50, 20, 30, 40
+    MARKER_HIT_RADIUS = 14  # px — how close a click must be to grab a marker
+
+    def __init__(self, parent, on_marker_drag=None, **kwargs):
+        """
+        Args:
+            on_marker_drag: callback(param_name, x_normalized) called during drag.
+                x_normalized is in [0, 1] (0 = param min, 1 = param max).
+        """
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, cursor="crosshair", **kwargs)
         self.bind("<Configure>", self._on_resize)
+        self.bind("<Button-1>", self._on_press)
+        self.bind("<B1-Motion>", self._on_drag)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self.bind("<Motion>", self._on_hover)
+
+        self._on_marker_drag = on_marker_drag
         self._curves = {}
-        self._markers = {}
+        self._markers = {}  # param_name -> (x_norm, y_val)
+        self._marker_px = {}  # param_name -> (px, py) — cached pixel positions
         self._selected = None
         self._y_min = 0
         self._y_max = 1
+        self._dragging = None  # param_name currently being dragged
+        self._hovering = None  # param_name under cursor
+        self._param_order = []  # ordered param names for consistent indexing
 
     def _on_resize(self, event):
         self.redraw()
@@ -99,7 +121,68 @@ class ResponseCurveCanvas(tk.Canvas):
         self._markers = markers
         self._selected = selected
         self._y_min, self._y_max = y_range
+        self._param_order = list(curves.keys())
         self.redraw()
+
+    def _plot_geometry(self):
+        """Return (pad_l, pad_r, pad_t, pad_b, plot_w, plot_h, y_span)."""
+        w = self.winfo_width()
+        h = self.winfo_height()
+        pl, pr, pt, pb = self.PAD_L, self.PAD_R, self.PAD_T, self.PAD_B
+        pw = w - pl - pr
+        ph = h - pt - pb
+        ys = self._y_max - self._y_min
+        if ys == 0:
+            ys = 1
+        return pl, pr, pt, pb, pw, ph, ys
+
+    def _to_px(self, xn, yv):
+        pl, _, pt, _, pw, ph, ys = self._plot_geometry()
+        px = pl + int(xn * pw)
+        py = pt + int((1 - (yv - self._y_min) / ys) * ph)
+        return px, py
+
+    def _from_px(self, px):
+        """Convert pixel x to normalized parameter value [0, 1], clamped."""
+        pl, _, _, _, pw, _, _ = self._plot_geometry()
+        if pw <= 0:
+            return 0.0
+        return max(0.0, min(1.0, (px - pl) / pw))
+
+    def _find_nearest_marker(self, mx, my):
+        """Find the marker closest to pixel (mx, my) within hit radius."""
+        best = None
+        best_dist = self.MARKER_HIT_RADIUS + 1
+        for pname, (px, py) in self._marker_px.items():
+            dist = ((mx - px) ** 2 + (my - py) ** 2) ** 0.5
+            if dist < best_dist:
+                best_dist = dist
+                best = pname
+        return best
+
+    def _on_press(self, event):
+        hit = self._find_nearest_marker(event.x, event.y)
+        if hit:
+            self._dragging = hit
+            self.config(cursor="hand2")
+
+    def _on_drag(self, event):
+        if self._dragging is None:
+            return
+        x_norm = self._from_px(event.x)
+        if self._on_marker_drag:
+            self._on_marker_drag(self._dragging, x_norm)
+
+    def _on_release(self, event):
+        if self._dragging is not None:
+            self._dragging = None
+            self.config(cursor="crosshair")
+
+    def _on_hover(self, event):
+        hit = self._find_nearest_marker(event.x, event.y)
+        if hit != self._hovering:
+            self._hovering = hit
+            self.config(cursor="hand2" if hit else "crosshair")
 
     def redraw(self):
         self.delete("all")
@@ -108,90 +191,116 @@ class ResponseCurveCanvas(tk.Canvas):
         if w < 10 or h < 10:
             return
 
-        pad_l, pad_r, pad_t, pad_b = 50, 20, 30, 40
-        plot_w = w - pad_l - pad_r
-        plot_h = h - pad_t - pad_b
+        pl, pr, pt, pb, plot_w, plot_h, y_span = self._plot_geometry()
 
         # Grid
         for i in range(5):
-            y = pad_t + int(plot_h * i / 4)
-            self.create_line(pad_l, y, w - pad_r, y, fill=C["grid"], width=1)
+            y = pt + int(plot_h * i / 4)
+            self.create_line(pl, y, w - pr, y, fill=C["grid"], width=1)
         for i in range(11):
-            x = pad_l + int(plot_w * i / 10)
-            self.create_line(x, pad_t, x, pad_t + plot_h, fill=C["grid"], width=1)
+            x = pl + int(plot_w * i / 10)
+            self.create_line(x, pt, x, pt + plot_h, fill=C["grid"], width=1)
 
         # Axes labels
-        self.create_text(w // 2, h - 8, text="Normalized parameter value [0=min, 1=max]",
-                         fill=C["text_dim"], font=("Menlo", 9))
+        self.create_text(
+            w // 2, h - 8, text="Normalized parameter value [0=min, 1=max]", fill=C["text_dim"], font=("Menlo", 9)
+        )
         self.create_text(12, h // 2, text="Y\u0302", fill=C["text_dim"], font=("Menlo", 10), angle=90)
 
         # Y-axis ticks
-        y_span = self._y_max - self._y_min
-        if y_span == 0:
-            y_span = 1
         for i in range(5):
             frac = i / 4
-            y = pad_t + int(plot_h * (1 - frac))
+            y = pt + int(plot_h * (1 - frac))
             val = self._y_min + y_span * frac
-            self.create_text(pad_l - 5, y, text=f"{val:.2f}", fill=C["text_dim"],
-                             font=("Menlo", 8), anchor="e")
-
-        def to_px(xn, yv):
-            px = pad_l + int(xn * plot_w)
-            py = pad_t + int((1 - (yv - self._y_min) / y_span) * plot_h)
-            return px, py
+            self.create_text(pl - 5, y, text=f"{val:.2f}", fill=C["text_dim"], font=("Menlo", 8), anchor="e")
 
         # Draw curves
         for pname, (xn, yv) in self._curves.items():
             is_sel = pname == self._selected
+            is_drag = pname == self._dragging
             color = PARAM_COLORS.get(pname, C["text_dim"])
-            width = 3 if is_sel else 1
+            width = 3 if (is_sel or is_drag) else 1
 
-            # Build point list
             points = []
             for i in range(len(xn)):
-                px, py = to_px(xn[i], yv[i])
+                px, py = self._to_px(xn[i], yv[i])
                 points.extend([px, py])
 
             if len(points) >= 4:
-                stipple = "" if is_sel else "gray50"
+                stipple = "" if (is_sel or is_drag) else "gray50"
                 self.create_line(points, fill=color, width=width, smooth=True, stipple=stipple)
 
-                # Fill under selected curve
                 if is_sel:
-                    fill_points = [pad_l, pad_t + plot_h] + points + [pad_l + plot_w, pad_t + plot_h]
+                    fill_points = [pl, pt + plot_h] + points + [pl + plot_w, pt + plot_h]
                     self.create_polygon(fill_points, fill=color, stipple="gray12", outline="")
 
-        # Draw markers
+        # Draw markers (and cache pixel positions for hit-testing)
+        self._marker_px.clear()
         for pname, (mx, my) in self._markers.items():
             is_sel = pname == self._selected
+            is_drag = pname == self._dragging
+            is_hover = pname == self._hovering
             color = PARAM_COLORS.get(pname, C["text_dim"])
-            px, py = to_px(mx, my)
-            size = 8 if is_sel else 4
-            outline = "#ffffff" if is_sel else ""
-            self.create_oval(px - size, py - size, px + size, py + size,
-                             fill=color, outline=outline, width=2 if is_sel else 0)
-            if is_sel:
-                self.create_text(px, py - 14, text=f"Y\u0302={my:.3f}",
-                                 fill=color, font=("Menlo", 9, "bold"))
+            px, py = self._to_px(mx, my)
+            self._marker_px[pname] = (px, py)
+
+            # Marker size based on state
+            if is_drag:
+                size = 10
+            elif is_sel or is_hover:
+                size = 8
+            else:
+                size = 5
+
+            outline_color = "#ffffff" if (is_sel or is_drag or is_hover) else ""
+            outline_width = 2 if (is_sel or is_drag) else (1 if is_hover else 0)
+            self.create_oval(
+                px - size, py - size, px + size, py + size, fill=color, outline=outline_color, width=outline_width
+            )
+
+            # Value label for selected or dragged marker
+            if is_sel or is_drag:
+                self.create_text(px, py - size - 8, text=f"Y\u0302={my:.3f}", fill=color, font=("Menlo", 9, "bold"))
+
+            # Show param name near hovered marker
+            if is_hover and not is_sel:
+                short = (
+                    pname.replace("mecillinam_concentration", "mec")
+                    .replace("vio_expression", "vio")
+                    .replace("vio_trl_eff", "trl")
+                )
+                self.create_text(px, py - size - 8, text=short, fill=color, font=("Menlo", 8))
 
         # Title
-        self.create_text(w // 2, 14, text="PCE RESPONSE CURVES // All Parameters",
-                         fill=C["text"], font=("Menlo", 11, "bold"))
+        drag_hint = "  [drag dots to set values]" if self._markers else ""
+        self.create_text(
+            w // 2,
+            14,
+            text=f"PCE RESPONSE CURVES // All Parameters{drag_hint}",
+            fill=C["text"],
+            font=("Menlo", 11, "bold"),
+        )
 
 
 class SobolEQCanvas(tk.Canvas):
-    """Parametric EQ view: Sobol S_Ti across cell cycle stages."""
+    """Sobol sensitivity view: S_Ti across cell cycle stages with local sensitivity overlay."""
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
         self.bind("<Configure>", lambda e: self.redraw())
         self._data = None
         self._selected = None
+        self._local_sens = None  # dict param_name -> slope at current position
 
-    def set_data(self, stages, params, selected):
+    def set_data(self, stages, params, selected, local_sensitivity=None):
+        """
+        local_sensitivity: dict param_name -> float (|dY/dx_i| at current slider pos).
+            If provided, bars are drawn at the bottom showing instantaneous sensitivity
+            scaled relative to S_Ti — linking the static Sobol view to the live sliders.
+        """
         self._data = (stages, params)
         self._selected = selected
+        self._local_sens = local_sensitivity
         self.redraw()
 
     def redraw(self):
@@ -204,7 +313,7 @@ class SobolEQCanvas(tk.Canvas):
             return
 
         stages, params = self._data
-        pad_l, pad_r, pad_t, pad_b = 50, 20, 30, 40
+        pad_l, pad_r, pad_t, pad_b = 50, 20, 30, 55
         plot_w = w - pad_l - pad_r
         plot_h = h - pad_t - pad_b
         n = len(stages)
@@ -214,12 +323,12 @@ class SobolEQCanvas(tk.Canvas):
             y = pad_t + int(plot_h * i / 4)
             self.create_line(pad_l, y, w - pad_r, y, fill=C["grid"], width=1)
 
-        # X ticks (stage centers)
+        # X ticks
         for j in range(n):
             x = pad_l + int(plot_w * (j + 0.5) / n)
-            self.create_text(x, h - 12, text=f"\u03b8{j}", fill=C["text_dim"], font=("Menlo", 8))
+            self.create_text(x, pad_t + plot_h + 12, text=f"\u03b8{j}", fill=C["text_dim"], font=("Menlo", 8))
 
-        # Draw curves per param
+        # Draw Sobol curves per param
         for pname in params:
             is_sel = pname == self._selected
             color = PARAM_COLORS.get(pname, C["text_dim"])
@@ -233,32 +342,71 @@ class SobolEQCanvas(tk.Canvas):
 
             if len(points) >= 4:
                 stipple = "" if is_sel else "gray50"
-                self.create_line(points, fill=color, width=3 if is_sel else 1,
-                                 smooth=True, stipple=stipple)
+                self.create_line(points, fill=color, width=3 if is_sel else 1, smooth=True, stipple=stipple)
 
-        # Y-axis
+        # Y-axis ticks
         for i in range(5):
             frac = i / 4
             y = pad_t + int(plot_h * (1 - frac))
-            self.create_text(pad_l - 5, y, text=f"{0.7 * frac:.2f}", fill=C["text_dim"],
-                             font=("Menlo", 8), anchor="e")
+            self.create_text(pad_l - 5, y, text=f"{0.7 * frac:.2f}", fill=C["text_dim"], font=("Menlo", 8), anchor="e")
 
-        self.create_text(w // 2, 14, text=f"PARAMETRIC EQ // S_Ti \u2014 solo: {self._selected}",
-                         fill=C["text"], font=("Menlo", 11, "bold"))
-        self.create_text(w // 2, h - 25, text="\u03b8 (cell cycle position)",
-                         fill=C["text_dim"], font=("Menlo", 9))
+        # Local sensitivity bars at bottom (live from sliders)
+        if self._local_sens:
+            bar_y = h - 18
+            bar_h = 10
+            max_sens = max(abs(v) for v in self._local_sens.values()) or 1
+            total_bar_w = plot_w * 0.8
+            bar_x_start = pad_l + plot_w * 0.1
+            n_params = len(self._local_sens)
+            bar_w = total_bar_w / n_params - 4
+
+            self.create_text(
+                pad_l, bar_y, text="LOCAL |dY\u0302/dx|:", fill=C["text_dim"], font=("Menlo", 7), anchor="w"
+            )
+
+            for pi, (pname, sens_val) in enumerate(self._local_sens.items()):
+                is_sel = pname == self._selected
+                color = PARAM_COLORS.get(pname, C["text_dim"])
+                bx = bar_x_start + pi * (bar_w + 4)
+                fill_w = max(2, int(bar_w * abs(sens_val) / max_sens))
+                self.create_rectangle(
+                    bx,
+                    bar_y - bar_h // 2,
+                    bx + fill_w,
+                    bar_y + bar_h // 2,
+                    fill=color,
+                    outline="" if not is_sel else "#fff",
+                )
+                self.create_text(
+                    bx + fill_w + 3, bar_y, text=f"{abs(sens_val):.3f}", fill=color, font=("Menlo", 7), anchor="w"
+                )
+
+        self.create_text(
+            w // 2, 14, text=f"SOBOL S_Ti // {self._selected} soloed", fill=C["text"], font=("Menlo", 11, "bold")
+        )
 
 
 class HeatmapCanvas(tk.Canvas):
-    """Sensitivity spectrogram: params x stages heatmap."""
+    """Sensitivity spectrogram: params x stages heatmap with per-stage prediction overlay."""
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
         self.bind("<Configure>", lambda e: self.redraw())
         self._data = None
+        self._param_positions = {}  # param_name -> normalized position [0,1]
+        self._stage_predictions = None  # array of n_stages Y-hat values
 
-    def set_data(self, stages, params, selected):
+    def set_data(self, stages, params, selected, param_positions=None, stage_predictions=None):
+        """
+        param_positions: dict param_name -> float in [0,1] (current slider
+            position normalized). Draws a colored dot on each param's row.
+        stage_predictions: array-like of n_stages floats — per-stage Y-hat
+            from the cell cycle surrogate at current slider values. Drawn
+            as a reactive line chart below the heatmap.
+        """
         self._data = (stages, params, selected)
+        self._param_positions = param_positions or {}
+        self._stage_predictions = stage_predictions
         self.redraw()
 
     def _val_to_color(self, v):
@@ -272,7 +420,7 @@ class HeatmapCanvas(tk.Canvas):
             r, g, b = int(42 + t * (255 - 42)), int(180 + t * (170 - 180)), int(222 - t * 222)
         else:
             t = (v - 0.66) / 0.34
-            r, g, b = int(255), int(170 - t * 119), int(t * 102)
+            r, g, b = 255, int(170 - t * 119), int(t * 102)
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def redraw(self):
@@ -285,21 +433,37 @@ class HeatmapCanvas(tk.Canvas):
         if w < 10 or h < 10:
             return
 
-        pad_l, pad_r, pad_t, pad_b = 90, 20, 30, 30
+        has_preds = self._stage_predictions is not None and len(self._stage_predictions) > 0
+
+        # Reserve bottom space for the prediction curve
+        pred_h = 60 if has_preds else 0
+        pad_l, pad_r, pad_t, pad_b = 90, 20, 30, 20 + pred_h
         plot_w = w - pad_l - pad_r
         plot_h = h - pad_t - pad_b
         n_stages = len(stages)
         n_params = len(params)
+        if n_stages == 0 or n_params == 0:
+            return
         cell_w = plot_w / n_stages
         cell_h = plot_h / n_params
 
+        # Draw heatmap cells
         for pi, pname in enumerate(params):
-            short = pname.replace("mecillinam_concentration", "mecillinam").replace("vio_expression", "vio_exp").replace("vio_trl_eff", "vio_trl")
+            short = (
+                pname.replace("mecillinam_concentration", "mecillinam")
+                .replace("vio_expression", "vio_exp")
+                .replace("vio_trl_eff", "vio_trl")
+            )
             is_sel = pname == selected
             color = PARAM_COLORS.get(pname, C["text_dim"]) if is_sel else C["text_dim"]
-            self.create_text(pad_l - 5, pad_t + int(cell_h * (pi + 0.5)),
-                             text=short, fill=color, font=("Menlo", 9, "bold" if is_sel else ""),
-                             anchor="e")
+            self.create_text(
+                pad_l - 5,
+                pad_t + int(cell_h * (pi + 0.5)),
+                text=short,
+                fill=color,
+                font=("Menlo", 9, "bold" if is_sel else ""),
+                anchor="e",
+            )
 
             for si, stage in enumerate(stages):
                 v = stage["total_order"].get(pname, 0)
@@ -309,12 +473,104 @@ class HeatmapCanvas(tk.Canvas):
                 y1 = y0 + int(cell_h)
                 self.create_rectangle(x0, y0, x1, y1, fill=self._val_to_color(v), outline=C["border"])
 
+        # Stage labels between heatmap and prediction curve
+        heatmap_bottom = pad_t + plot_h
         for si in range(n_stages):
             x = pad_l + int(cell_w * (si + 0.5))
-            self.create_text(x, h - 10, text=f"{si}", fill=C["text_dim"], font=("Menlo", 8))
+            self.create_text(x, heatmap_bottom + 10, text=f"\u03b8{si}", fill=C["text_dim"], font=("Menlo", 7))
 
-        self.create_text(w // 2, 14, text="SENSITIVITY SPECTROGRAM (S_Ti)",
-                         fill=C["text"], font=("Menlo", 11, "bold"))
+        # Draw slider position cursors on each param row
+        for pname, pos in self._param_positions.items():
+            if pname not in params:
+                continue
+            pi = params.index(pname)
+            is_sel = pname == selected
+            color = PARAM_COLORS.get(pname, C["text_dim"])
+            stage_x = pad_l + int(pos * plot_w)
+            cy = pad_t + int(cell_h * (pi + 0.5))
+            r = 5 if is_sel else 3
+            self.create_oval(stage_x - r, cy - r, stage_x + r, cy + r, fill="#ffffff", outline=color, width=2)
+
+        # -- Per-stage prediction curve (cell cycle surrogate output) --
+        if has_preds:
+            preds = np.asarray(self._stage_predictions)
+            pred_top = heatmap_bottom + 20
+            pred_bottom = h - 5
+            pred_plot_h = pred_bottom - pred_top
+            if pred_plot_h < 10:
+                pred_plot_h = 10
+
+            p_min = float(preds.min())
+            p_max = float(preds.max())
+            p_span = p_max - p_min
+            if p_span == 0:
+                p_span = 1.0
+
+            # Background for prediction area
+            self.create_rectangle(
+                pad_l,
+                pred_top - 2,
+                pad_l + plot_w,
+                pred_bottom + 2,
+                fill=C["panel_light"] if "panel_light" in C else "#252545",
+                outline=C["border"],
+            )
+
+            # Grid lines
+            for i in range(3):
+                gy = pred_top + int(pred_plot_h * i / 2)
+                self.create_line(pad_l, gy, pad_l + plot_w, gy, fill=C["grid"], width=1, dash=(2, 4))
+
+            # Y-axis ticks for prediction
+            for i in range(3):
+                frac = i / 2
+                gy = pred_top + int(pred_plot_h * (1 - frac))
+                val = p_min + p_span * frac
+                self.create_text(pad_l - 5, gy, text=f"{val:.2f}", fill=C["accent3"], font=("Menlo", 7), anchor="e")
+
+            # Draw prediction line
+            points = []
+            for si in range(n_stages):
+                px = pad_l + int(cell_w * (si + 0.5))
+                py = pred_top + int((1 - (preds[si] - p_min) / p_span) * pred_plot_h)
+                points.extend([px, py])
+
+            if len(points) >= 4:
+                self.create_line(points, fill=C["accent3"], width=2, smooth=True)
+
+            # Draw dots at each stage
+            for si in range(n_stages):
+                px = pad_l + int(cell_w * (si + 0.5))
+                py = pred_top + int((1 - (preds[si] - p_min) / p_span) * pred_plot_h)
+                self.create_oval(px - 3, py - 3, px + 3, py + 3, fill=C["accent3"], outline="")
+
+            # Find peak stage
+            peak_stage = int(np.argmax(preds))
+            peak_px = pad_l + int(cell_w * (peak_stage + 0.5))
+            peak_py = pred_top + int((1 - (preds[peak_stage] - p_min) / p_span) * pred_plot_h)
+            self.create_oval(
+                peak_px - 5, peak_py - 5, peak_px + 5, peak_py + 5, fill=C["accent3"], outline="#ffffff", width=2
+            )
+            self.create_text(
+                peak_px,
+                peak_py - 10,
+                text=f"\u03b8{peak_stage}={preds[peak_stage]:.3f}",
+                fill=C["accent3"],
+                font=("Menlo", 8, "bold"),
+            )
+
+            self.create_text(
+                pad_l + 3,
+                pred_top - 8,
+                text="Y\u0302 per stage (cell cycle surrogate)",
+                fill=C["accent3"],
+                font=("Menlo", 7, "bold"),
+                anchor="w",
+            )
+
+        self.create_text(
+            w // 2, 14, text="SENSITIVITY SPECTROGRAM + STAGE PREDICTION", fill=C["text"], font=("Menlo", 10, "bold")
+        )
 
 
 class VarianceDecompCanvas(tk.Canvas):
@@ -354,23 +610,20 @@ class VarianceDecompCanvas(tk.Canvas):
         start = 90
         for label, frac, color in slices:
             extent = -frac * 360
-            self.create_arc(cx - r, cy - r, cx + r, cy + r,
-                            start=start, extent=extent, fill=color, outline=C["border"])
+            self.create_arc(cx - r, cy - r, cx + r, cy + r, start=start, extent=extent, fill=color, outline=C["border"])
             # Label
             mid_angle = np.radians(start + extent / 2)
             lx = cx + int((r * 0.7) * np.cos(mid_angle))
             ly = cy - int((r * 0.7) * np.sin(mid_angle))
             if frac > 0.01:
-                self.create_text(lx, ly, text=f"{label}\n{frac * 100:.1f}%",
-                                 fill="#000", font=("Menlo", 8, "bold"))
+                self.create_text(lx, ly, text=f"{label}\n{frac * 100:.1f}%", fill="#000", font=("Menlo", 8, "bold"))
             start += extent
 
         # Donut hole
         ir = r // 2
         self.create_oval(cx - ir, cy - ir, cx + ir, cy + ir, fill=C["panel"], outline=C["panel"])
 
-        self.create_text(w // 2, 12, text="VARIANCE DECOMP",
-                         fill=C["text"], font=("Menlo", 10, "bold"))
+        self.create_text(w // 2, 12, text="VARIANCE DECOMP", fill=C["text"], font=("Menlo", 10, "bold"))
 
 
 # -- Main Application ---------------------------------------------------------
@@ -401,24 +654,29 @@ class UQDawApp:
         top.pack(fill="x", padx=4, pady=(4, 0))
         top.pack_propagate(False)
 
-        tk.Label(top, text="UQ DAW // RFC006", bg=C["panel"], fg=C["accent1"],
-                 font=("Menlo", 13, "bold")).pack(side="left", padx=10)
+        tk.Label(top, text="UQ DAW // RFC006", bg=C["panel"], fg=C["accent1"], font=("Menlo", 13, "bold")).pack(
+            side="left", padx=10
+        )
 
-        tk.Button(top, text="Load JSON", command=self._open_file,
-                  bg=C["panel_light"], fg=C["text"], font=("Menlo", 10),
-                  relief="flat", cursor="hand2").pack(side="right", padx=10)
+        tk.Button(
+            top,
+            text="Load JSON",
+            command=self._open_file,
+            bg=C["panel_light"],
+            fg=C["text"],
+            font=("Menlo", 10),
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="right", padx=10)
 
-        self.status_label = tk.Label(top, text="No data loaded", bg=C["panel"],
-                                     fg=C["text_dim"], font=("Menlo", 9))
+        self.status_label = tk.Label(top, text="No data loaded", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9))
         self.status_label.pack(side="right", padx=10)
 
-        self.header_label = tk.Label(top, text="", bg=C["panel"],
-                                     fg=C["text_dim"], font=("Menlo", 9))
+        self.header_label = tk.Label(top, text="", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9))
         self.header_label.pack(side="right", padx=10)
 
         # -- Main area (left controls + right visualizations) --
-        main = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"],
-                               sashwidth=4, sashrelief="flat")
+        main = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"], sashwidth=4, sashrelief="flat")
         main.pack(fill="both", expand=True, padx=4, pady=4)
 
         # Left panel: parameter selector + sliders
@@ -430,20 +688,31 @@ class UQDawApp:
         main.add(self.right_frame, minsize=600)
 
         # -- Left: Solo selector --
-        solo_frame = tk.LabelFrame(self.left_frame, text="SOLO PARAMETER",
-                                    bg=C["panel"], fg=C["accent1"],
-                                    font=("Menlo", 10, "bold"), labelanchor="n")
+        solo_frame = tk.LabelFrame(
+            self.left_frame,
+            text="SOLO PARAMETER",
+            bg=C["panel"],
+            fg=C["accent1"],
+            font=("Menlo", 10, "bold"),
+            labelanchor="n",
+        )
         solo_frame.pack(fill="x", padx=4, pady=4)
 
-        self.param_menu = ttk.Combobox(solo_frame, textvariable=self.selected_param,
-                                        state="readonly", font=("Menlo", 10))
+        self.param_menu = ttk.Combobox(
+            solo_frame, textvariable=self.selected_param, state="readonly", font=("Menlo", 10)
+        )
         self.param_menu.pack(fill="x", padx=8, pady=8)
         self.selected_param.trace_add("write", lambda *_: self._on_param_change())
 
         # -- Left: PCE sliders --
-        slider_frame = tk.LabelFrame(self.left_frame, text="PCE SURROGATE KNOBS",
-                                      bg=C["panel"], fg=C["accent3"],
-                                      font=("Menlo", 10, "bold"), labelanchor="n")
+        slider_frame = tk.LabelFrame(
+            self.left_frame,
+            text="PCE SURROGATE KNOBS",
+            bg=C["panel"],
+            fg=C["accent3"],
+            font=("Menlo", 10, "bold"),
+            labelanchor="n",
+        )
         slider_frame.pack(fill="both", expand=True, padx=4, pady=4)
 
         self.slider_container = tk.Frame(slider_frame, bg=C["panel"])
@@ -453,32 +722,35 @@ class UQDawApp:
         self.slider_labels = {}
 
         # -- Left: Prediction readout --
-        self.readout_label = tk.Label(self.left_frame, text="Y\u0302 = ---",
-                                      bg=C["panel"], fg=C["accent3"],
-                                      font=("Menlo", 16, "bold"))
+        self.readout_label = tk.Label(
+            self.left_frame, text="Y\u0302 = ---", bg=C["panel"], fg=C["accent3"], font=("Menlo", 16, "bold")
+        )
         self.readout_label.pack(fill="x", padx=4, pady=4)
 
         # -- Right: visualization grid --
         self._build_viz_panels()
 
     def _build_viz_panels(self):
-        # Top row: EQ + Heatmap
-        top_row = tk.Frame(self.right_frame, bg=C["bg"])
-        top_row.pack(fill="both", expand=True, padx=2, pady=2)
+        # Main: Response curves (the EQ — dominant panel)
+        self.response_canvas = ResponseCurveCanvas(
+            self.right_frame,
+            height=320,
+            on_marker_drag=self._on_curve_drag,
+        )
+        self.response_canvas.pack(fill="both", expand=True, padx=2, pady=(2, 1))
 
-        self.eq_canvas = SobolEQCanvas(top_row, height=200)
-        self.eq_canvas.pack(side="left", fill="both", expand=True, padx=(0, 2))
+        # Bottom row: Sobol + Heatmap + Variance (linked contextual views)
+        bottom_row = tk.Frame(self.right_frame, bg=C["bg"])
+        bottom_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
 
-        self.heatmap_canvas = HeatmapCanvas(top_row, height=200)
-        self.heatmap_canvas.pack(side="right", fill="both", expand=True, padx=(2, 0))
+        self.eq_canvas = SobolEQCanvas(bottom_row, height=180)
+        self.eq_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
 
-        # Middle row: Response curves
-        self.response_canvas = ResponseCurveCanvas(self.right_frame, height=280)
-        self.response_canvas.pack(fill="both", expand=True, padx=2, pady=2)
+        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=180)
+        self.heatmap_canvas.pack(side="left", fill="both", expand=True, padx=1)
 
-        # Bottom row: Variance decomp (small)
-        self.decomp_canvas = VarianceDecompCanvas(self.right_frame, height=150)
-        self.decomp_canvas.pack(fill="x", padx=2, pady=2)
+        self.decomp_canvas = VarianceDecompCanvas(bottom_row, height=180)
+        self.decomp_canvas.pack(side="right", fill="both", expand=False, padx=(1, 0))
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -555,21 +827,36 @@ class UQDawApp:
             frame = tk.Frame(self.slider_container, bg=C["panel"])
             frame.pack(fill="x", pady=3)
 
-            short = pname.replace("mecillinam_concentration", "mecillinam").replace("vio_expression", "vio_exp").replace("vio_trl_eff", "vio_trl")
-            tk.Label(frame, text=short, bg=C["panel"], fg=color,
-                     font=("Menlo", 9, "bold"), width=10, anchor="w").pack(side="left", padx=4)
+            short = (
+                pname.replace("mecillinam_concentration", "mecillinam")
+                .replace("vio_expression", "vio_exp")
+                .replace("vio_trl_eff", "vio_trl")
+            )
+            tk.Label(frame, text=short, bg=C["panel"], fg=color, font=("Menlo", 9, "bold"), width=10, anchor="w").pack(
+                side="left", padx=4
+            )
 
-            slider = tk.Scale(frame, from_=lo, to=hi, orient="horizontal",
-                              resolution=(hi - lo) / 200, length=140,
-                              bg=C["panel"], fg=color, troughcolor=C["panel_light"],
-                              highlightthickness=0, font=("Menlo", 8),
-                              showvalue=False,
-                              command=lambda v, p=pname: self._on_slider_change(p, v))
+            slider = tk.Scale(
+                frame,
+                from_=lo,
+                to=hi,
+                orient="horizontal",
+                resolution=(hi - lo) / 200,
+                length=140,
+                bg=C["panel"],
+                fg=color,
+                troughcolor=C["panel_light"],
+                highlightthickness=0,
+                font=("Menlo", 8),
+                showvalue=False,
+                command=lambda v, p=pname: self._on_slider_change(p, v),
+            )
             slider.set(mid)
             slider.pack(side="left", padx=2)
 
-            val_label = tk.Label(frame, text=f"{mid:.2f}", bg=C["panel"], fg=color,
-                                  font=("Menlo", 9), width=7, anchor="e")
+            val_label = tk.Label(
+                frame, text=f"{mid:.2f}", bg=C["panel"], fg=color, font=("Menlo", 9), width=7, anchor="e"
+            )
             val_label.pack(side="left", padx=4)
 
             self.sliders[pname] = slider
@@ -580,6 +867,32 @@ class UQDawApp:
         if pname in self.slider_labels:
             self.slider_labels[pname].config(text=f"{value:.2f}")
         self._update_response_curves()
+
+    def _on_curve_drag(self, pname, x_normalized):
+        """Called when a marker dot is dragged on the response curve canvas.
+
+        Converts normalized [0,1] position back to physical parameter value
+        and sets the corresponding slider — which triggers _on_slider_change
+        and redraws everything in lock-step.
+        """
+        if self.surr_data is None:
+            return
+        bounds = self.surr_data.get("bounds")
+        if bounds is None:
+            return
+
+        params = self.data["parameter_names"]
+        if pname not in params:
+            return
+        pi = params.index(pname)
+
+        lo, hi = float(bounds[pi, 0]), float(bounds[pi, 1])
+        physical_val = lo + x_normalized * (hi - lo)
+        physical_val = max(lo, min(hi, physical_val))
+
+        # Set the slider — this triggers _on_slider_change automatically
+        if pname in self.sliders:
+            self.sliders[pname].set(physical_val)
 
     def _on_param_change(self):
         self._update_all_viz()
@@ -592,9 +905,7 @@ class UQDawApp:
         cc_r2 = surr.get("cell_cycle", {}).get("r_squared", "?")
         n_p = self.data.get("n_parameters", "?")
         n_s = self.data.get("n_cell_cycle_stages", "?")
-        self.header_label.config(
-            text=f"PARAMS:{n_p}  STAGES:{n_s}  POP R\u00b2:{pop_r2}  CC R\u00b2:{cc_r2}"
-        )
+        self.header_label.config(text=f"PARAMS:{n_p}  STAGES:{n_s}  POP R\u00b2:{pop_r2}  CC R\u00b2:{cc_r2}")
 
     def _update_all_viz(self):
         if self.data is None:
@@ -638,15 +949,18 @@ class UQDawApp:
         pop_y = legendre_eval(x_norm, self.surr_data["pop_coeffs"], self.surr_data["pop_mi"])
         self.readout_label.config(text=f"Y\u0302 = {pop_y:.4f}")
 
-        # Sweep each parameter
+        # Sweep each parameter and compute local sensitivity (slope at current pos)
         n_sweep = 80
         curves = {}
         markers = {}
         all_y = []
+        local_sensitivity = {}
+        param_positions = {}
 
         for pi, pname in enumerate(params):
-            sv = np.linspace(float(bounds[pi, 0]), float(bounds[pi, 1]), n_sweep)
-            sv_norm = (sv - bounds[pi, 0]) / (bounds[pi, 1] - bounds[pi, 0] + 1e-12)
+            lo, hi = float(bounds[pi, 0]), float(bounds[pi, 1])
+            sv = np.linspace(lo, hi, n_sweep)
+            sv_norm = (sv - lo) / (hi - lo + 1e-12)
             sy = []
             for v in sv:
                 x_sw = x.copy()
@@ -658,8 +972,23 @@ class UQDawApp:
             all_y.extend(sy.tolist())
 
             # Marker at current slider position
-            cur_norm = (x[pi] - bounds[pi, 0]) / (bounds[pi, 1] - bounds[pi, 0] + 1e-12)
+            cur_norm = (x[pi] - lo) / (hi - lo + 1e-12)
             markers[pname] = (cur_norm, pop_y)
+            param_positions[pname] = cur_norm
+
+            # Local sensitivity: |dY/dx_i| at current position via finite difference
+            delta = (hi - lo) * 0.005
+            x_plus = x.copy()
+            x_plus[pi] = min(x[pi] + delta, hi)
+            x_minus = x.copy()
+            x_minus[pi] = max(x[pi] - delta, lo)
+            y_plus = legendre_eval(
+                normalize_to_germ(x_plus, bounds), self.surr_data["pop_coeffs"], self.surr_data["pop_mi"]
+            )
+            y_minus = legendre_eval(
+                normalize_to_germ(x_minus, bounds), self.surr_data["pop_coeffs"], self.surr_data["pop_mi"]
+            )
+            local_sensitivity[pname] = abs(y_plus - y_minus) / (2 * delta + 1e-12)
 
         if all_y:
             y_min = min(all_y) - 0.1 * abs(min(all_y))
@@ -670,7 +999,47 @@ class UQDawApp:
         else:
             y_min, y_max = -1, 1
 
+        # Update all linked panels
         self.response_canvas.set_curves(curves, markers, selected, (y_min, y_max))
+
+        # Per-stage predicted output using pipeline data:
+        # Combine the population surrogate prediction with per-stage Sobol
+        # indices to estimate how each parameter's contribution distributes
+        # across the cell cycle. For each stage k:
+        #   Y_hat_k = baseline + sum_i (x_i_effect * S_Ti^(k))
+        # where x_i_effect = local sensitivity * (x_i - midpoint).
+        # This uses only pipeline outputs (S_Ti per stage + PCE prediction).
+        stage_predictions = None
+        stage_data = self.data.get("phase2_cell_cycle_sobol_per_stage", [])
+        if stage_data and local_sensitivity:
+            n_stages = len(stage_data)
+            stage_predictions = np.zeros(n_stages)
+
+            # Per-param effect at current slider position (deviation from midpoint)
+            param_effects = {}
+            for pi, pname in enumerate(params):
+                lo, hi = float(bounds[pi, 0]), float(bounds[pi, 1])
+                mid_norm = 0.0  # midpoint in germ space
+                deviation = x_norm[pi] - mid_norm
+                param_effects[pname] = local_sensitivity[pname] * deviation
+
+            # Distribute across stages weighted by per-stage S_Ti
+            baseline = pop_y
+            for si in range(n_stages):
+                stage_contrib = 0.0
+                for pname in params:
+                    s_ti = stage_data[si]["total_order"].get(pname, 0)
+                    stage_contrib += param_effects[pname] * s_ti
+                stage_predictions[si] = baseline + stage_contrib
+
+        # Push local sensitivity to Sobol panel (live link)
+        stages = self.data.get("phase2_cell_cycle_sobol_per_stage", [])
+        self.eq_canvas.set_data(stages, params, selected, local_sensitivity=local_sensitivity)
+
+        # Push slider positions + stage predictions to Heatmap
+        self.heatmap_canvas.set_data(
+            stages, params, selected, param_positions=param_positions, stage_predictions=stage_predictions
+        )
 
 
 # -- Entry point --------------------------------------------------------------
