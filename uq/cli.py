@@ -330,8 +330,23 @@ def quantify(
 
 
 @app.command()
-def dashboard() -> None:
-    _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
+def dashboard(
+    run_mode: str = "tk",
+    results_path: str | None = None,
+) -> None:
+    """Launch the UQ results dashboard.
+
+    Args:
+        run_mode: 'tk' for Tkinter DAW (default) or 'mo' for Marimo notebook.
+        results_path: Path to uq_results.json (tk mode only). If omitted,
+            opens a file picker dialog.
+    """
+    if run_mode == "mo":
+        _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
+    else:
+        from app.uq_daw import run_tk_dashboard
+
+        run_tk_dashboard(data_path=results_path)
 
 
 # @app.command()

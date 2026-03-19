@@ -1,12 +1,13 @@
 # eq.py
-import numpy as np
-import soundfile as sf
-import sounddevice as sd
-from scipy import signal
-import tkinter as tk
-from tkinter import ttk, filedialog
-from pathlib import Path
 import time
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, ttk
+
+import numpy as np
+import sounddevice as sd
+import soundfile as sf
+from scipy import signal
 
 
 class MultiBandEQ:
@@ -14,13 +15,13 @@ class MultiBandEQ:
         self.sample_rate = sample_rate
         # 5-band EQ: bass, low-mid, mid, high-mid, treble
         self.bands = {
-            'Bass': (20, 250),
-            'Low-Mid': (250, 500),
-            'Mid': (500, 2000),
-            'High-Mid': (2000, 4000),
-            'Treble': (4000, 20000)
+            "Bass": (20, 250),
+            "Low-Mid": (250, 500),
+            "Mid": (500, 2000),
+            "High-Mid": (2000, 4000),
+            "Treble": (4000, 20000),
         }
-        self.gains = {band: 0.0 for band in self.bands}  # dB
+        self.gains = dict.fromkeys(self.bands, 0.0)  # dB
 
     def set_gain(self, band, gain_db):
         """Set gain for a specific band in dB (-12 to +12)"""
@@ -59,7 +60,7 @@ class MultiBandEQ:
                 continue
 
             # Butterworth bandpass filter
-            sos = signal.butter(4, [low, high], btype='band', output='sos')
+            sos = signal.butter(4, [low, high], btype="band", output="sos")
             filtered = signal.sosfilt(sos, channel)
 
             # Apply gain
@@ -73,29 +74,28 @@ class MultiBandEQ:
 class ColoredButton(tk.Frame):
     """Custom colored button that works on macOS"""
 
-    def __init__(self, parent, text, command, bg_color, fg_color='white', width=100):
-        super().__init__(parent, bg=bg_color, relief='raised', borderwidth=2)
+    def __init__(self, parent, text, command, bg_color, fg_color="white", width=100):
+        super().__init__(parent, bg=bg_color, relief="raised", borderwidth=2)
 
         self.command = command
         self.bg_color = bg_color
         self.darker_color = self._darken_color(bg_color)
 
-        self.label = tk.Label(self, text=text, bg=bg_color, fg=fg_color,
-                              font=('Arial', 10, 'bold'), cursor='hand2')
+        self.label = tk.Label(self, text=text, bg=bg_color, fg=fg_color, font=("Arial", 10, "bold"), cursor="hand2")
         self.label.pack(padx=15, pady=8)
 
         # Bind click events
-        self.label.bind('<Button-1>', self._on_click)
-        self.label.bind('<Enter>', self._on_enter)
-        self.label.bind('<Leave>', self._on_leave)
-        self.bind('<Button-1>', self._on_click)
+        self.label.bind("<Button-1>", self._on_click)
+        self.label.bind("<Enter>", self._on_enter)
+        self.label.bind("<Leave>", self._on_leave)
+        self.bind("<Button-1>", self._on_click)
 
     def _darken_color(self, hex_color):
         """Darken a hex color by 20%"""
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+        hex_color = hex_color.lstrip("#")
+        r, g, b = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
         r, g, b = int(r * 0.8), int(g * 0.8), int(b * 0.8)
-        return f'#{r:02x}{g:02x}{b:02x}'
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _on_click(self, event):
         self.command()
@@ -113,10 +113,10 @@ class WaveformCanvas(tk.Canvas):
     """Custom canvas for drawing waveforms DAW-style"""
 
     def __init__(self, parent, position_callback=None, **kwargs):
-        super().__init__(parent, bg='#1a1a1a', highlightthickness=0, **kwargs)
-        self.bind('<Configure>', self._on_resize)
-        self.bind('<Button-1>', self._on_click)
-        self.bind('<B1-Motion>', self._on_drag)
+        super().__init__(parent, bg="#1a1a1a", highlightthickness=0, **kwargs)
+        self.bind("<Configure>", self._on_resize)
+        self.bind("<Button-1>", self._on_click)
+        self.bind("<B1-Motion>", self._on_drag)
 
         self.audio = None
         self.sample_rate = None
@@ -154,7 +154,7 @@ class WaveformCanvas(tk.Canvas):
 
     def draw_waveform(self, audio, sample_rate, title="Waveform"):
         """Draw waveform on canvas"""
-        self.delete('all')
+        self.delete("all")
         self.cursor_line = None
         self.audio = audio
         self.sample_rate = sample_rate
@@ -176,15 +176,15 @@ class WaveformCanvas(tk.Canvas):
         # Check if stereo or mono
         if len(audio.shape) == 1:
             # Mono - use full height
-            self._draw_channel(audio_display, 0, height, width, '#00ff88', 'MONO')
+            self._draw_channel(audio_display, 0, height, width, "#00ff88", "MONO")
         else:
             # Stereo - split height
             channel_height = height // 2
-            self._draw_channel(audio_display[:, 0], 0, channel_height, width, '#00ff88', 'LEFT')
-            self._draw_channel(audio_display[:, 1], channel_height, channel_height, width, '#00aaff', 'RIGHT')
+            self._draw_channel(audio_display[:, 0], 0, channel_height, width, "#00ff88", "LEFT")
+            self._draw_channel(audio_display[:, 1], channel_height, channel_height, width, "#00aaff", "RIGHT")
 
         # Draw title
-        self.create_text(width // 2, 20, text=title, fill='white', font=('Arial', 12, 'bold'))
+        self.create_text(width // 2, 20, text=title, fill="white", font=("Arial", 12, "bold"))
 
     def _draw_channel(self, channel_data, y_offset, channel_height, width, color, label):
         """Draw a single audio channel"""
@@ -203,7 +203,7 @@ class WaveformCanvas(tk.Canvas):
         scale = (channel_height // 2) * 0.9  # 90% of available height
 
         # Draw centerline
-        self.create_line(0, center_y, width, center_y, fill='#444444', width=1)
+        self.create_line(0, center_y, width, center_y, fill="#444444", width=1)
 
         # Draw waveform
         points = []
@@ -218,20 +218,19 @@ class WaveformCanvas(tk.Canvas):
             # Create filled area
             polygon_points = [(0, center_y)] + points + [(width, center_y)]
             flat_points = [coord for point in polygon_points for coord in point]
-            self.create_polygon(flat_points, fill=color, outline=color, stipple='gray50')
+            self.create_polygon(flat_points, fill=color, outline=color, stipple="gray50")
 
             # Draw outline
             flat_line = [coord for point in points for coord in point]
             self.create_line(flat_line, fill=color, width=1, smooth=True)
 
         # Draw label
-        self.create_text(10, y_offset + 20, text=label, fill='white',
-                         font=('Arial', 9, 'bold'), anchor='w')
+        self.create_text(10, y_offset + 20, text=label, fill="white", font=("Arial", 9, "bold"), anchor="w")
 
         # Draw grid lines
         for i in range(5):
             y = y_offset + (channel_height * i // 4)
-            self.create_line(0, y, width, y, fill='#2a2a2a', width=1)
+            self.create_line(0, y, width, y, fill="#2a2a2a", width=1)
 
     def update_cursor(self, position):
         """Update playback cursor position (0.0 to 1.0)"""
@@ -245,7 +244,7 @@ class WaveformCanvas(tk.Canvas):
 
         # Draw new cursor
         x = int(position * width)
-        self.cursor_line = self.create_line(x, 0, x, height, fill='#ff0000', width=2, tags='cursor')
+        self.cursor_line = self.create_line(x, 0, x, height, fill="#ff0000", width=2, tags="cursor")
 
     def clear_cursor(self):
         """Remove playback cursor"""
@@ -277,35 +276,35 @@ class EQApp:
     def _create_widgets(self):
         # Main container with two columns
         main_container = ttk.Frame(self.root)
-        main_container.pack(fill='both', expand=True, padx=10, pady=10)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Left column - Controls
         left_column = ttk.Frame(main_container)
-        left_column.pack(side='left', fill='both', expand=False, padx=(0, 10))
+        left_column.pack(side="left", fill="both", expand=False, padx=(0, 10))
 
         # Right column - Waveform
         right_column = ttk.Frame(main_container)
-        right_column.pack(side='right', fill='both', expand=True)
+        right_column.pack(side="right", fill="both", expand=True)
 
         # File controls
         file_frame = ttk.Frame(left_column, padding=10)
-        file_frame.pack(fill='x')
+        file_frame.pack(fill="x")
 
-        ttk.Button(file_frame, text="Load Audio File", command=self.load_file).pack(side='left', padx=5)
-        ttk.Button(file_frame, text="Save EQ'd", command=self.save_file).pack(side='left', padx=5)
+        ttk.Button(file_frame, text="Load Audio File", command=self.load_file).pack(side="left", padx=5)
+        ttk.Button(file_frame, text="Save EQ'd", command=self.save_file).pack(side="left", padx=5)
 
         # Playback controls
         playback_frame = ttk.LabelFrame(left_column, text="Playback", padding=10)
-        playback_frame.pack(fill='x', padx=10, pady=5)
+        playback_frame.pack(fill="x", padx=10, pady=5)
 
-        ColoredButton(playback_frame, "▶ Play", self.play, '#4CAF50').pack(side='left', padx=5)
-        ColoredButton(playback_frame, "⏹ Stop", self.stop, '#f44336').pack(side='left', padx=5)
+        ColoredButton(playback_frame, "▶ Play", self.play, "#4CAF50").pack(side="left", padx=5)
+        ColoredButton(playback_frame, "⏹ Stop", self.stop, "#f44336").pack(side="left", padx=5)
 
         # EQ sliders
         eq_frame = ttk.Frame(left_column, padding=10)
-        eq_frame.pack(fill='both', expand=True)
+        eq_frame.pack(fill="both", expand=True)
 
-        ttk.Label(eq_frame, text="EQ Controls (-12 to +12 dB)", font=('Arial', 12, 'bold')).pack(pady=10)
+        ttk.Label(eq_frame, text="EQ Controls (-12 to +12 dB)", font=("Arial", 12, "bold")).pack(pady=10)
 
         self.sliders = {}
         for band_name in self.eq.bands.keys():
@@ -316,34 +315,38 @@ class EQApp:
 
         # Waveform visualization
         waveform_frame = ttk.LabelFrame(right_column, text="Waveform", padding=10)
-        waveform_frame.pack(fill='both', expand=True)
+        waveform_frame.pack(fill="both", expand=True)
 
         self.waveform_canvas = WaveformCanvas(
-            waveform_frame,
-            position_callback=self.on_position_change,
-            width=500,
-            height=600
+            waveform_frame, position_callback=self.on_position_change, width=500, height=600
         )
-        self.waveform_canvas.pack(fill='both', expand=True)
+        self.waveform_canvas.pack(fill="both", expand=True)
 
         # Status
-        self.status_label = ttk.Label(self.root, text="Load an audio file to start", relief='sunken')
-        self.status_label.pack(fill='x', side='bottom')
+        self.status_label = ttk.Label(self.root, text="Load an audio file to start", relief="sunken")
+        self.status_label.pack(fill="x", side="bottom")
 
     def _create_band_slider(self, parent, band_name):
         frame = ttk.Frame(parent)
-        frame.pack(fill='x', pady=5)
+        frame.pack(fill="x", pady=5)
 
         label = ttk.Label(frame, text=f"{band_name}:", width=12)
-        label.pack(side='left')
+        label.pack(side="left")
 
-        slider = tk.Scale(frame, from_=-12, to=12, orient='horizontal',
-                          resolution=0.5, length=200, command=lambda v, b=band_name: self.on_slider_change(b, v))
+        slider = tk.Scale(
+            frame,
+            from_=-12,
+            to=12,
+            orient="horizontal",
+            resolution=0.5,
+            length=200,
+            command=lambda v, b=band_name: self.on_slider_change(b, v),
+        )
         slider.set(0)
-        slider.pack(side='left', padx=5)
+        slider.pack(side="left", padx=5)
 
         value_label = ttk.Label(frame, text="0.0 dB", width=8)
-        value_label.pack(side='left')
+        value_label.pack(side="left")
 
         self.sliders[band_name] = (slider, value_label)
 
@@ -357,7 +360,8 @@ class EQApp:
             self.waveform_canvas.draw_waveform(self.processed_audio, self.sample_rate, "EQ'd Waveform")
             # Restore cursor position after redraw
             self.waveform_canvas.update_cursor(
-                self.playback_position / self.audio_duration if self.audio_duration > 0 else 0)
+                self.playback_position / self.audio_duration if self.audio_duration > 0 else 0
+            )
 
     def on_position_change(self, position):
         """Callback when user clicks/drags the waveform"""
@@ -367,8 +371,7 @@ class EQApp:
 
     def load_file(self):
         filepath = filedialog.askopenfilename(
-            title="Select Audio File",
-            filetypes=[("Audio Files", "*.wav *.mp3 *.flac *.ogg"), ("All Files", "*.*")]
+            title="Select Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.flac *.ogg"), ("All Files", "*.*")]
         )
 
         if filepath:
@@ -382,7 +385,8 @@ class EQApp:
                 self.waveform_canvas.draw_waveform(self.processed_audio, self.sample_rate, Path(filepath).name)
                 self.waveform_canvas.update_cursor(0.0)
                 self.status_label.config(
-                    text=f"Loaded: {Path(filepath).name} ({self.sample_rate} Hz, {self.audio_duration:.2f}s)")
+                    text=f"Loaded: {Path(filepath).name} ({self.sample_rate} Hz, {self.audio_duration:.2f}s)"
+                )
             except Exception as e:
                 self.status_label.config(text=f"Error loading file: {e}")
 
@@ -457,7 +461,7 @@ class EQApp:
             filepath = filedialog.asksaveasfilename(
                 title="Save EQ'd Audio",
                 defaultextension=".wav",
-                filetypes=[("WAV File", "*.wav"), ("FLAC File", "*.flac")]
+                filetypes=[("WAV File", "*.wav"), ("FLAC File", "*.flac")],
             )
             if filepath:
                 sf.write(filepath, self.processed_audio, self.sample_rate)
@@ -476,7 +480,8 @@ class EQApp:
             self.waveform_canvas.draw_waveform(self.processed_audio, self.sample_rate, "Waveform (No EQ)")
             # Restore cursor position after redraw
             self.waveform_canvas.update_cursor(
-                self.playback_position / self.audio_duration if self.audio_duration > 0 else 0)
+                self.playback_position / self.audio_duration if self.audio_duration > 0 else 0
+            )
 
 
 if __name__ == "__main__":
