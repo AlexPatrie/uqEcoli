@@ -161,6 +161,33 @@ per-stage Sobol indices that the pipeline already computed."
 
 - Dragging `X_i` shows you which cell cycle stages are most affected by the value of `X_i`, exactly because the per-stage Sobol indices encode that stage-specific sensitivity.
 
+### Observable-domain heatmap (Tkinter mode)
+
+The Tkinter dashboard (`--run-mode tk`) adds a second heatmap that shows the same cell cycle stages on the x-axis, but with **output observables** on the y-axis and **physical-unit values** as cell colors — not variance fractions. This heatmap updates in lock-step with the parameter sliders.
+
+The link between the two heatmaps is valid because they share the same decomposition chain:
+
+1. The pipeline computed `cell_cycle_profile` by binning real simulation timeseries into θ-stages (Step 6c). This gives **baseline per-stage means** for each observable — e.g., `dry_mass_mean[7] = 1.653` at stage 7. These are measured in the original physical units of the simulation output.
+
+2. The pipeline also computed `S_Ti^(k)` — the fraction of variance in those same θ-binned outputs attributable to each input parameter (Step 7b). The sensitivity spectrogram visualizes these fractions.
+
+3. The observable heatmap modulates the baselines from (1) using the Sobol weights from (2):
+
+```
+Y_obs_k(x) = baseline_obs_k * (1 + sum_i [ |dY/dx_i| * (x_i - mid) * S_Ti^(k) ] / |baseline_obs_k|)
+```
+
+This is valid because `S_Ti^(k)` quantifies exactly how much parameter `X_i` influences the output at stage `k`. If `S_Ti^(7) = 0.55` for mecillinam at stage 7, then 55% of the variance in stage-7 output comes from mecillinam — so changing mecillinam's value should shift stage-7's predicted output proportionally to that 55% attribution. The Sobol index IS the weight.
+
+The two heatmaps are therefore dual views of the same pipeline decomposition:
+
+| Heatmap | Y-axis | Cell value | Units | Changes with sliders? |
+|---------|--------|-----------|-------|----------------------|
+| Sensitivity spectrogram | Parameters | `S_Ti^(k)` | Variance fraction [0,1] | No (pipeline constant) |
+| Observable domain | Observables | `Y_obs_k(x)` | Physical (fg, 1/s, etc.) | Yes (modulated by slider position) |
+
+The sensitivity spectrogram answers "which parameter drives variance at which stage." The observable heatmap answers "what does the output actually look like at each stage for my chosen parameter values." They share the same x-axis (θ-bins), the same underlying data (θ-binned simulation outputs), and the same attribution weights (per-stage Sobol indices). One is the explanation; the other is the consequence.
+
 ## Generating Pipeline Artifacts
 
 ### Quick start (synthetic data for demo)
