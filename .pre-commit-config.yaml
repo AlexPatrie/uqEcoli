@@ -12,9 +12,9 @@ repos:
         exclude: (^\.devcontainer/|^examples/)
         args: [ --autofix, --no-sort-keys ]
       - id: end-of-file-fixer
-        exclude: ^examples/
+        exclude: (^examples/|^app/)
       - id: trailing-whitespace
-        exclude: ^examples/
+        exclude: (^examples/|^app/)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.5"
@@ -22,3 +22,4 @@ repos:
       - id: ruff
         args: [--exit-non-zero-on-fix]
       - id: ruff-format
+        exclude: (^examples/|^app/)

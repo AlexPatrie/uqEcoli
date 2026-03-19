@@ -746,6 +746,161 @@ class ObservableStageCanvas(tk.Canvas):
         )
 
 
+class ObservableWaveformCanvas(tk.Canvas):
+    """Waveform view: per-stage observable values as line traces in physical units.
+
+    Shows the same data as ObservableStageCanvas but as continuous curves,
+    making shape changes (plateau, dip, inflection) instantly visible.
+    """
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._obs_names = []
+        self._n_stages = 0
+        self._values = None  # (n_obs, n_stages)
+        self._baselines = None  # (n_obs, n_stages)
+
+    def set_data(self, obs_names, n_stages, values, baselines=None):
+        self._obs_names = obs_names
+        self._n_stages = n_stages
+        self._values = np.asarray(values) if values is not None else None
+        self._baselines = np.asarray(baselines) if baselines is not None else None
+        self.redraw()
+
+    def redraw(self):
+        self.delete("all")
+        if self._values is None or len(self._obs_names) == 0:
+            return
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+
+        n_obs = len(self._obs_names)
+        n_stages = self._n_stages
+        if n_stages == 0:
+            return
+
+        # Each observable gets its own horizontal lane
+        pad_l, pad_r, pad_t, pad_b = 80, 30, 28, 15
+        plot_w = w - pad_l - pad_r
+        plot_h = h - pad_t - pad_b
+        lane_h = plot_h / n_obs
+
+        # Observable colors (cycle through accents)
+        _obs_colors = [C["accent3"], C["accent4"], C["accent1"], C["accent2"], C["accent5"]]
+
+        for oi in range(n_obs):
+            color = _obs_colors[oi % len(_obs_colors)]
+            lane_top = pad_t + int(oi * lane_h)
+            lane_bot = pad_t + int((oi + 1) * lane_h)
+            lane_mid = (lane_top + lane_bot) // 2
+            lane_plot_h = lane_h * 0.8
+
+            # Lane separator
+            if oi > 0:
+                self.create_line(pad_l, lane_top, w - pad_r, lane_top, fill=C["border"], width=1, dash=(2, 4))
+
+            # Label
+            short = self._obs_names[oi].split("__")[-1] if "__" in self._obs_names[oi] else self._obs_names[oi]
+            self.create_text(pad_l - 5, lane_mid, text=short, fill=color, font=("Menlo", 9, "bold"), anchor="e")
+
+            # Value range for this observable
+            vals = self._values[oi]
+            v_min, v_max = float(vals.min()), float(vals.max())
+            v_span = v_max - v_min
+            if v_span == 0:
+                v_span = 1.0
+
+            # Y-axis ticks (min/max)
+            self.create_text(
+                pad_l - 5,
+                lane_top + int(lane_h * 0.15),
+                text=f"{v_max:.3f}",
+                fill=C["text_dim"],
+                font=("Menlo", 6),
+                anchor="e",
+            )
+            self.create_text(
+                pad_l - 5,
+                lane_bot - int(lane_h * 0.1),
+                text=f"{v_min:.3f}",
+                fill=C["text_dim"],
+                font=("Menlo", 6),
+                anchor="e",
+            )
+
+            def _y_px(_v, _lt=lane_top, _lh=lane_plot_h, _vm=v_min, _vs=v_span):
+                return _lt + int(lane_h * 0.1) + int((1 - (_v - _vm) / _vs) * _lh)
+
+            # Draw baseline as thin dashed line (if available)
+            if self._baselines is not None:
+                _base_pts = []
+                for si in range(n_stages):
+                    px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+                    py = _y_px(self._baselines[oi, si])
+                    _base_pts.extend([px, py])
+                if len(_base_pts) >= 4:
+                    self.create_line(_base_pts, fill=C["text_dim"], width=1, dash=(3, 3), smooth=True)
+
+            # Draw modulated waveform (thick)
+            _mod_pts = []
+            for si in range(n_stages):
+                px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+                py = _y_px(vals[si])
+                _mod_pts.extend([px, py])
+
+            if len(_mod_pts) >= 4:
+                # Fill between baseline and modulated
+                if self._baselines is not None:
+                    _fill_pts = []
+                    for si in range(n_stages):
+                        px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+                        _fill_pts.append((px, _y_px(vals[si])))
+                    for si in range(n_stages - 1, -1, -1):
+                        px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+                        _fill_pts.append((px, _y_px(self._baselines[oi, si])))
+                    _flat = [c for pt in _fill_pts for c in pt]
+                    if len(_flat) >= 6:
+                        self.create_polygon(_flat, fill=color, stipple="gray12", outline="")
+
+                self.create_line(_mod_pts, fill=color, width=2, smooth=True)
+
+            # Dots at each stage
+            for si in range(n_stages):
+                px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+                py = _y_px(vals[si])
+                self.create_oval(px - 3, py - 3, px + 3, py + 3, fill=color, outline="")
+
+                # Delta label at peaks/troughs
+                if self._baselines is not None:
+                    delta = vals[si] - self._baselines[oi, si]
+                    if abs(delta) > 1e-6 and (
+                        si == 0
+                        or si == n_stages - 1
+                        or abs(delta) == max(abs(vals[j] - self._baselines[oi, j]) for j in range(n_stages))
+                    ):
+                        sign = "+" if delta > 0 else ""
+                        d_color = C["accent3"] if delta > 0 else C["accent2"]
+                        self.create_text(
+                            px, py - 10, text=f"{sign}{delta:.3f}", fill=d_color, font=("Menlo", 7, "bold")
+                        )
+
+        # X-axis: stage labels
+        for si in range(n_stages):
+            px = pad_l + int(plot_w * (si + 0.5) / n_stages)
+            self.create_text(px, h - 5, text=f"\u03b8{si}", fill=C["text_dim"], font=("Menlo", 7))
+
+        self.create_text(
+            w // 2,
+            12,
+            text="OBSERVABLE WAVEFORM // Y(θ) per stage — physical units",
+            fill=C["text"],
+            font=("Menlo", 10, "bold"),
+        )
+
+
 class VarianceDecompCanvas(tk.Canvas):
     """Donut chart for variance decomposition."""
 
@@ -849,8 +1004,7 @@ class UQDawApp:
         self.header_label.pack(side="right", padx=10)
 
         # -- Top section: left controls + right response curves (side by side) --
-        _top_pane = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"],
-                                    sashwidth=4, sashrelief="flat")
+        _top_pane = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"], sashwidth=4, sashrelief="flat")
         _top_pane.pack(fill="both", expand=True, padx=4, pady=(4, 1))
 
         # Left panel: parameter selector + sliders + readout + variance decomp
@@ -921,9 +1075,36 @@ class UQDawApp:
         )
         self.response_canvas.pack(fill="both", expand=True, padx=2, pady=2)
 
-        # Bottom (full width): Observable domain heatmap
-        self.obs_canvas = ObservableStageCanvas(self.bottom_frame, height=160)
-        self.obs_canvas.pack(fill="x", padx=2, pady=(2, 1))
+        # Bottom (full width): Observable waveform (primary) + toggleable heatmap minimap
+        _obs_frame = tk.Frame(self.bottom_frame, bg=C["bg"])
+        _obs_frame.pack(fill="x", padx=2, pady=(2, 1))
+
+        # Toggle button for heatmap minimap
+        self._heatmap_visible = tk.BooleanVar(value=False)
+        _toggle_bar = tk.Frame(_obs_frame, bg=C["panel"])
+        _toggle_bar.pack(fill="x")
+        tk.Checkbutton(
+            _toggle_bar,
+            text="\u25bc Heatmap Minimap",
+            variable=self._heatmap_visible,
+            command=self._toggle_heatmap,
+            bg=C["panel"],
+            fg=C["accent4"],
+            selectcolor=C["panel_light"],
+            activebackground=C["panel"],
+            activeforeground=C["accent4"],
+            font=("Menlo", 9),
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="left", padx=4)
+
+        # Observable waveform (always visible)
+        self.waveform_canvas = ObservableWaveformCanvas(_obs_frame, height=150)
+        self.waveform_canvas.pack(fill="x", padx=0, pady=0)
+
+        # Observable heatmap (hidden by default, shown via toggle)
+        self.obs_canvas = ObservableStageCanvas(_obs_frame, height=120)
+        # Don't pack yet — toggled on demand
 
         # Bottom (full width): Sobol + Sensitivity Spectrogram side by side
         _bottom_row = tk.Frame(self.bottom_frame, bg=C["bg"])
@@ -934,6 +1115,13 @@ class UQDawApp:
 
         self.heatmap_canvas = HeatmapCanvas(_bottom_row, height=180)
         self.heatmap_canvas.pack(side="right", fill="both", expand=True, padx=(1, 0))
+
+    def _toggle_heatmap(self):
+        """Show/hide the observable heatmap minimap."""
+        if self._heatmap_visible.get():
+            self.obs_canvas.pack(fill="x", padx=0, pady=(1, 0))
+        else:
+            self.obs_canvas.pack_forget()
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -1261,6 +1449,7 @@ class UQDawApp:
                         modulated[oi, si] = baselines[oi, si] * (1 + modulation / base_mag)
 
                 self.obs_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
+                self.waveform_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
 
 
 # -- Entry point --------------------------------------------------------------
