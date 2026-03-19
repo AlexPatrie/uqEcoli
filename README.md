@@ -343,11 +343,30 @@ When `--export-path` is provided, the following artifacts are written:
 
 | Artifact | Description |
 |----------|-------------|
+| `uq_results.json` | Comprehensive summary (Phase 1 + Phase 2 Sobol, cell cycle profile, Morris, surrogate metadata) |
+| `population_surrogate/` | PCE coefficients + multi-indices (.npy) — used by dashboard for interactive prediction |
+| `cell_cycle_surrogate/` | Phase 2 PCE surrogate |
 | `population_sobol/` | Serialized Phase 1 Sobol indices |
-| `cell_cycle_surrogate/` | Serialized Phase 2 PCE surrogate |
+| `cell_cycle_sobol_stage_N/` | Per-stage Sobol indices (one directory per θ-bin) |
+| `cell_cycle_profile.json` | Per-stage observable means in physical units |
 | `koopman_spectrum.pdf` | 4-panel Koopman spectral decomposition |
+| `koopman_spectrum.html` | Interactive Plotly version |
 | `variance_decomposition.json` | Variance decomposition results |
 | `morris_indices/` | Morris screening results (if applicable) |
+| `metadata.json` | Pipeline metadata (n_stages, param names, stratification) |
+
+## Interactive Dashboard
+
+```bash
+# Tkinter DAW (default) — draggable parameter markers on response curves
+uv run uq dashboard
+uv run uq dashboard --results-path ./uq_results/uq_results.json
+
+# Marimo notebook — slider-reactive, with collapsible info panels
+uv run uq dashboard --run-mode mo
+```
+
+The dashboard loads export artifacts and provides interactive PCE surrogate exploration: drag parameter values on response curves (tk) or use sliders (marimo) to see predicted outputs, per-stage waveforms, and sensitivity spectrograms update in real time. All computations use pipeline outputs only (PCE coefficients + Sobol indices). See [`app/README.md`](app/README.md) for details.
 
 ## Input Parameters
 
@@ -371,6 +390,7 @@ When `--export-path` is provided, the following artifacts are written:
 |----------|----------|
 | Full RFC specification | [`readmes/RFC006.md`](readmes/RFC006.md) |
 | Extended technical context | [`readmes/CONTEXT.md`](readmes/CONTEXT.md) |
+| Dashboard guide | [`app/README.md`](app/README.md) |
 | Sphinx docs | [`docs/`](docs/) |
 | End-to-end example | [`examples/uq_pipeline.py`](examples/uq_pipeline.py) |
 | Tutorials (Marimo) | [`tutorials/`](tutorials/) |

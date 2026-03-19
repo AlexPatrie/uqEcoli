@@ -7,14 +7,14 @@ repos:
       - id: check-toml
       - id: check-yaml
       - id: check-json
-        exclude: (^\.devcontainer/|^examples/)
+        exclude: (^\.devcontainer/|^examples/|^docs/)
       - id: pretty-format-json
-        exclude: (^\.devcontainer/|^examples/)
+        exclude: (^\.devcontainer/|^examples/|^docs/)
         args: [ --autofix, --no-sort-keys ]
       - id: end-of-file-fixer
-        exclude: (^examples/|^app/)
+        exclude: (^examples/|^app/|^docs/)
       - id: trailing-whitespace
-        exclude: (^examples/|^app/)
+        exclude: (^examples/|^app/|^docs/)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.5"
@@ -22,4 +22,4 @@ repos:
       - id: ruff
         args: [--exit-non-zero-on-fix]
       - id: ruff-format
-        exclude: (^examples/|^app/)
+        exclude: (^examples/|^app/|^docs/)
