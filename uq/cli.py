@@ -66,6 +66,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from pprint import pp
+from typing import Literal
 
 import dotenv
 import numpy as np
@@ -331,7 +332,7 @@ def quantify(
 
 @app.command()
 def dashboard(
-    run_mode: str = "tk",
+    run_mode: Literal["tk", "mo"] = "tk",
     results_path: str | None = None,
 ) -> None:
     """Launch the UQ results dashboard.
@@ -347,42 +348,6 @@ def dashboard(
         from app.uq_daw import run_tk_dashboard
 
         run_tk_dashboard(data_path=results_path)
-
-
-# @app.command()
-# def demo(
-#     export_path: str | None = None,
-#     precomputed_path: str | None = None,
-# ) -> None:
-#     """Run the pipeline on the 3 default experiments with real vEcoli data."""
-#     experiment_ids = [
-#         "api_simulation_default",
-#         "mecillinam",
-#         "test_violacein_with_metabolism",
-#     ]
-#     base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
-#     observable_columns = [
-#         "listeners__mass__dry_mass",
-#         "listeners__mass__cell_mass",
-#         "listeners__mass__volume",
-#         "listeners__mass__growth",
-#     ]
-#     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=10, n_top=5)
-#     result: PipelineResult = execute_pipeline(
-#         experiment_ids=experiment_ids,
-#         sim_base_path=str(base_path),
-#         observable_columns=observable_columns,
-#         prescreen_config=param_prescreen_config,
-#         n_bins=5,
-#         n_samples=20,
-#         polynomial_order=2,
-#         export_path=Path(export_path) if export_path else None,
-#         precomputed_path=Path(precomputed_path) if precomputed_path else None,
-#     )
-#     if export_path:
-#         console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
-#     else:
-#         console.print("[bold green]Pipeline complete.[/bold green]")
 
 
 @app.command()
