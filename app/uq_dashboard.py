@@ -48,22 +48,12 @@ with app.setup:
 
 
 @app.cell
-def file_selector(set_file_input):
-    file_area = mo.ui.file(kind="area", on_change=lambda v: set_file_input(v[0].name))
-    return (file_area,)
-
-
-@app.cell
-def _():
+def file_selector():
     from uq.common.utils import get_repo_root
 
+    file_area = mo.ui.file(kind="area", on_change=lambda v: set_file_input(v[0].name))
     _default = str(get_repo_root() / "examples" / "uq_artifacts" / "test_export_output" / "uq_results.json")
     get_file_input, set_file_input = mo.state(_default)
-    return get_file_input, set_file_input
-
-
-@app.cell
-def _(file_area, get_file_input, header, set_file_input):
     val = get_file_input()
     if val is None:
         set_file_input(_default)
@@ -74,26 +64,31 @@ def _(file_area, get_file_input, header, set_file_input):
         label="",
         full_width=True,
     )
-    _header = header("""
-    ### 0. File Loader:
+    return file_area, file_input
 
-    Upload the `uq_results.json` file generated from a given `uq` pipeline workflow.
-    """)
 
-    mo.output.replace(
-        mo.vstack([
-            # _header,
-            mo.md(f"""
-    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-        <div> {_header} </div>
-        <div style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:2px;padding-top:22px;padding-bottom:5px;">Load UQ Results</div>
-        <div>{file_input}</div>
-        <div>{file_area}</div>
-    </div>
-    """)
-        ])
-    )
-    return (file_input,)
+@app.cell
+def render_file_selector(file_area, file_input, header):
+    def render_file_selector():
+        _header = header("""
+        ### 0. File Loader:
+    
+        Upload the `uq_results.json` file generated from a given `uq` pipeline workflow.
+        """)
+    
+        return mo.vstack([
+                # _header,
+                mo.md(f"""
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+            <div> {_header} </div>
+            <div style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:2px;padding-top:22px;padding-bottom:5px;">Load UQ Results</div>
+            <div>{file_input}</div>
+            <div>{file_area}</div>
+        </div>
+        """)
+            ])
+
+    return
 
 
 @app.cell
@@ -1392,12 +1387,11 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
 
     _fig1.update_layout(
         **DAW_LAYOUT,
-        height=280,
-        title=dict(text=f"PCE RESPONSE CURVES // Y\u0302 = {_pop_y:.4f}", font=dict(size=12)),
-        xaxis_title="Normalized param [0=min, 1=max]",
-        yaxis_title="Y\u0302",
-        legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=9)),
-        margin=dict(l=45, r=15, t=35, b=45),
+        height=300,
+        title=dict(text=f"PCE RESPONSE CURVES // Y\u0302 = {_pop_y:.4f}", font=dict(size=13)),
+        xaxis_title="Normalized parameter value [0=min, 1=max]",
+        yaxis_title="Y\u0302 (predicted output)",
+        legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
     )
 
     # ========== FIGURE 2: Sensitivity Spectrogram + Per-Stage Prediction ==========
@@ -1486,8 +1480,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             col=1,
         )
 
-    _fig2.update_layout(**DAW_LAYOUT, height=300, showlegend=False,
-        margin=dict(l=45, r=15, t=35, b=30))
+    _fig2.update_layout(**DAW_LAYOUT, height=380, showlegend=False)
     _fig2.update_yaxes(title_text="Y\u0302", row=2, col=1, title_font=dict(color=C["accent3"]))
     for _ann in _fig2.layout.annotations:
         _ann.font = dict(color=C["text_dim"], size=11)
@@ -1574,9 +1567,8 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
 
             _fig3.update_layout(
                 **DAW_LAYOUT,
-                height=130 * _n_obs + 30,
-                title=dict(text="OBSERVABLE WAVEFORM // Y(\u03b8) \u2014 physical units", font=dict(size=12)),
-                margin=dict(l=45, r=15, t=35, b=25),
+                height=160 * _n_obs + 40,
+                title=dict(text="OBSERVABLE WAVEFORM // Y(\u03b8) per stage \u2014 physical units", font=dict(size=13)),
                 showlegend=False,
             )
             for _ann in _fig3.layout.annotations:
@@ -1600,9 +1592,8 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 customdata=np.array(_delta_text),
                 hovertemplate="Observable: %{y}<br>\u03b8: %{x}<br>Value: %{z:.4f}<br>\u0394: %{customdata}<extra></extra>",
             ))
-            _fig3_heatmap.update_layout(**DAW_LAYOUT, height=160,
-                title=dict(text="OBSERVABLE DOMAIN // Heatmap Minimap", font=dict(size=11)),
-                margin=dict(l=45, r=15, t=30, b=25))
+            _fig3_heatmap.update_layout(**DAW_LAYOUT, height=180,
+                title=dict(text="OBSERVABLE DOMAIN // Heatmap Minimap", font=dict(size=11)))
 
     # ========== Local sensitivity readout ==========
     _sens_max = max(_local_sens.values()) if _local_sens else 1
@@ -1632,37 +1623,37 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     ```
     """)
 
-    # ========== Grid layout ==========
-    # Row 1: [Knobs + readout + local sens] | [Response curves]
-    _control_panel = mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-            <div style="color:{C["accent3"]};font-family:monospace;font-size:16px;font-weight:bold;">Y\u0302 = {_pop_y:.4f}</div>
-            <div style="flex:1;border-top:1px solid #2a2a4a;"></div>
-        </div>
-        <div style="margin-bottom:6px;">{_sens_bars_html}</div>
-        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:4px;padding:8px;">
-            <div style="color:{C["accent3"]};font-size:10px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">PCE Surrogate Knobs</div>
-            {mo.vstack([param_sliders[_i] for _i in range(len(param_sliders))])}
-        </div>
-    </div>""")
+    _panels = [
+        mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;">
+            <div>{_header_text}</div>
+            <div style="display:flex;align-items:center;gap:16px;margin:8px 0;">
+                <div style="color:{C["accent3"]};font-family:monospace;font-size:18px;font-weight:bold;">Y\u0302 = {_pop_y:.4f}</div>
+                <div style="flex:1;border-top:1px solid;"></div>
+                <div style="color:{C["text_dim"]};font-size:10px;">LOCAL |dY\u0302/dx|</div>
+            </div>
+            <div style="margin-bottom:8px;">{_sens_bars_html}</div>
+            <div style="background:#1a1a2e;border:1px solid;border-radius:6px;padding:10px;margin-bottom:8px;">
+                <div style="color:{C["accent3"]};font-size:11px;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">PCE Surrogate Knobs</div>
+                {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
+            </div>
+        </div>"""),
+        mo.ui.plotly(_fig1),
+    ]
 
-    _row1 = mo.hstack([_control_panel, mo.ui.plotly(_fig1)], widths=[1, 3], align="stretch")
+    # Observable waveform
+    if _fig3 is not None:
+        _panels.append(mo.ui.plotly(_fig3))
 
-    # Row 2: [Observable waveform] | [Sensitivity spectrogram + stage prediction]
-    _left2 = mo.ui.plotly(_fig3) if _fig3 is not None else mo.md("")
-    _right2 = mo.ui.plotly(_fig2)
-    _row2 = mo.hstack([_left2, _right2], widths=[1, 1], align="stretch")
-
-    # Heatmap minimap (toggleable)
-    _minimap = None
+    # Heatmap minimap in a toggleable accordion
     if _fig3_heatmap is not None:
-        _minimap = mo.accordion({"\u25bc Heatmap Minimap": mo.ui.plotly(_fig3_heatmap)})
+        _panels.append(mo.accordion({
+            "\u25bc Heatmap Minimap": mo.ui.plotly(_fig3_heatmap),
+        }))
 
-    _grid = [_header_text, _row1, _row2]
-    if _minimap is not None:
-        _grid.append(_minimap)
+    # Sensitivity spectrogram + stage prediction
+    _panels.append(mo.ui.plotly(_fig2))
 
-    mo.output.replace(mo.vstack(_grid, gap=0.5))
+    mo.output.replace(mo.vstack(_panels))
     return
 
 
