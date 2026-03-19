@@ -437,7 +437,7 @@ class HeatmapCanvas(tk.Canvas):
 
         # Reserve bottom space for the prediction curve
         pred_h = 60 if has_preds else 0
-        pad_l, pad_r, pad_t, pad_b = 90, 20, 30, 20 + pred_h
+        pad_l, pad_r, pad_t, pad_b = 90, 45, 30, 20 + pred_h
         plot_w = w - pad_l - pad_r
         plot_h = h - pad_t - pad_b
         n_stages = len(stages)
@@ -568,6 +568,23 @@ class HeatmapCanvas(tk.Canvas):
                 anchor="w",
             )
 
+        # Colorbar for sensitivity spectrogram (S_Ti: 0 → 0.7)
+        cb_x = w - pad_r + 8
+        cb_w = 10
+        cb_top = pad_t
+        cb_h = plot_h
+        n_cb = 40
+        for ci in range(n_cb):
+            frac = ci / n_cb
+            s_val = 0.7 * (1 - frac)  # top = 0.7, bottom = 0
+            clr = self._val_to_color(s_val)
+            cy0 = cb_top + int(frac * cb_h)
+            cy1 = cb_top + int((frac + 1.0 / n_cb) * cb_h)
+            self.create_rectangle(cb_x, cy0, cb_x + cb_w, cy1, fill=clr, outline="")
+        self.create_text(cb_x + cb_w + 3, cb_top, text="0.7", fill=C["text_dim"], font=("Menlo", 7), anchor="nw")
+        self.create_text(cb_x + cb_w + 3, cb_top + cb_h, text="0.0", fill=C["text_dim"], font=("Menlo", 7), anchor="sw")
+        self.create_text(cb_x + cb_w // 2, cb_top - 8, text="S_Ti", fill=C["text_dim"], font=("Menlo", 7))
+
         self.create_text(
             w // 2, 14, text="SENSITIVITY SPECTROGRAM + STAGE PREDICTION", fill=C["text"], font=("Menlo", 10, "bold")
         )
@@ -659,8 +676,14 @@ class ObservableStageCanvas(tk.Canvas):
         # Draw cells
         for oi in range(n_obs):
             short = self._obs_names[oi].split("__")[-1] if "__" in self._obs_names[oi] else self._obs_names[oi]
-            self.create_text(pad_l - 5, pad_t + int(cell_h * (oi + 0.5)),
-                             text=short, fill=C["text"], font=("Menlo", 9, "bold"), anchor="e")
+            self.create_text(
+                pad_l - 5,
+                pad_t + int(cell_h * (oi + 0.5)),
+                text=short,
+                fill=C["text"],
+                font=("Menlo", 9, "bold"),
+                anchor="e",
+            )
 
             for si in range(n_stages):
                 v = self._values[oi, si]
@@ -674,8 +697,9 @@ class ObservableStageCanvas(tk.Canvas):
                 # Show value in cell if cells are large enough
                 if cell_w > 35 and cell_h > 16:
                     text_color = "#000000" if v > (v_min + v_max) / 2 else C["text"]
-                    self.create_text((x0 + x1) // 2, (y0 + y1) // 2,
-                                     text=f"{v:.3f}", fill=text_color, font=("Menlo", 7))
+                    self.create_text(
+                        (x0 + x1) // 2, (y0 + y1) // 2, text=f"{v:.3f}", fill=text_color, font=("Menlo", 7)
+                    )
 
                 # Show delta from baseline as a small indicator
                 if self._baselines is not None:
@@ -683,8 +707,9 @@ class ObservableStageCanvas(tk.Canvas):
                     if abs(delta) > 1e-6:
                         sign = "+" if delta > 0 else ""
                         delta_color = C["accent3"] if delta > 0 else C["accent2"]
-                        self.create_text(x1 - 3, y0 + 3, text=f"{sign}{delta:.2f}",
-                                         fill=delta_color, font=("Menlo", 6), anchor="ne")
+                        self.create_text(
+                            x1 - 3, y0 + 3, text=f"{sign}{delta:.2f}", fill=delta_color, font=("Menlo", 6), anchor="ne"
+                        )
 
         # Stage labels
         for si in range(n_stages):
@@ -705,13 +730,20 @@ class ObservableStageCanvas(tk.Canvas):
             cy1 = cb_top + int((frac + 1.0 / n_cb) * cb_h)
             self.create_rectangle(cb_x, cy0, cb_x + cb_w, cy1, fill=color, outline="")
 
-        self.create_text(cb_x + cb_w + 3, cb_top, text=f"{v_max:.2f}",
-                         fill=C["text_dim"], font=("Menlo", 7), anchor="nw")
-        self.create_text(cb_x + cb_w + 3, cb_top + cb_h, text=f"{v_min:.2f}",
-                         fill=C["text_dim"], font=("Menlo", 7), anchor="sw")
+        self.create_text(
+            cb_x + cb_w + 3, cb_top, text=f"{v_max:.2f}", fill=C["text_dim"], font=("Menlo", 7), anchor="nw"
+        )
+        self.create_text(
+            cb_x + cb_w + 3, cb_top + cb_h, text=f"{v_min:.2f}", fill=C["text_dim"], font=("Menlo", 7), anchor="sw"
+        )
 
-        self.create_text(w // 2, 14, text="OBSERVABLE DOMAIN // Y per stage (physical units)",
-                         fill=C["text"], font=("Menlo", 10, "bold"))
+        self.create_text(
+            w // 2,
+            14,
+            text="OBSERVABLE DOMAIN // Y per stage (physical units)",
+            fill=C["text"],
+            font=("Menlo", 10, "bold"),
+        )
 
 
 class VarianceDecompCanvas(tk.Canvas):
@@ -854,10 +886,10 @@ class UQDawApp:
             font=("Menlo", 10, "bold"),
             labelanchor="n",
         )
-        slider_frame.pack(fill="both", expand=True, padx=4, pady=4)
+        slider_frame.pack(fill="x", padx=4, pady=4)
 
         self.slider_container = tk.Frame(slider_frame, bg=C["panel"])
-        self.slider_container.pack(fill="both", expand=True, padx=4, pady=4)
+        self.slider_container.pack(fill="x", padx=4, pady=4)
 
         self.sliders = {}
         self.slider_labels = {}
@@ -866,7 +898,11 @@ class UQDawApp:
         self.readout_label = tk.Label(
             self.left_frame, text="Y\u0302 = ---", bg=C["panel"], fg=C["accent3"], font=("Menlo", 16, "bold")
         )
-        self.readout_label.pack(fill="x", padx=4, pady=4)
+        self.readout_label.pack(fill="x", padx=4, pady=(4, 2))
+
+        # -- Left: Variance decomposition (compact, static) --
+        self.decomp_canvas = VarianceDecompCanvas(self.left_frame, height=140)
+        self.decomp_canvas.pack(fill="x", padx=4, pady=(2, 4))
 
         # -- Right: visualization grid --
         self._build_viz_panels()
@@ -884,18 +920,15 @@ class UQDawApp:
         self.obs_canvas = ObservableStageCanvas(self.right_frame, height=160)
         self.obs_canvas.pack(fill="both", expand=False, padx=2, pady=1)
 
-        # Bottom row: Sobol + Sensitivity Spectrogram + Variance (linked contextual views)
+        # Bottom row: Sobol + Sensitivity Spectrogram (linked contextual views)
         bottom_row = tk.Frame(self.right_frame, bg=C["bg"])
         bottom_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
 
-        self.eq_canvas = SobolEQCanvas(bottom_row, height=170)
+        self.eq_canvas = SobolEQCanvas(bottom_row, height=180)
         self.eq_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
 
-        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=170)
-        self.heatmap_canvas.pack(side="left", fill="both", expand=True, padx=1)
-
-        self.decomp_canvas = VarianceDecompCanvas(bottom_row, height=170)
-        self.decomp_canvas.pack(side="right", fill="both", expand=False, padx=(1, 0))
+        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=180)
+        self.heatmap_canvas.pack(side="right", fill="both", expand=True, padx=(1, 0))
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -1040,6 +1073,8 @@ class UQDawApp:
             self.sliders[pname].set(physical_val)
 
     def _on_param_change(self):
+        if not self.sliders:
+            return
         self._update_all_viz()
 
     def _update_header(self):
@@ -1082,6 +1117,10 @@ class UQDawApp:
         params = self.data["parameter_names"]
         bounds = self.surr_data.get("bounds")
         if bounds is None:
+            return
+
+        # Guard: sliders may not exist yet during init or teardown
+        if not self.sliders or any(p not in self.sliders for p in params):
             return
 
         selected = self.selected_param.get()

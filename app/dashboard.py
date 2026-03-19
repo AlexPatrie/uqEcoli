@@ -1262,7 +1262,7 @@ def pce_eq_sliders(data, surr_data):
 
 @app.cell
 def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
-    """PCE prediction EQ: evaluate surrogate at slider values, plot per-stage output."""
+    """PCE prediction EQ with dual heatmaps — matches tk dashboard functionality."""
     if data is None or not surr_data.get("available"):
         mo.stop(True)
 
@@ -1270,14 +1270,14 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     _selected = param_dropdown.value
     _params = data["parameter_names"]
     _bounds = surr_data["bounds"]
+    _stage_data = data.get("phase2_cell_cycle_sobol_per_stage", [])
+    _profile = data.get("cell_cycle_profile")
 
-    # Current parameter values from the SAME sliders rendered in pce_eq_sliders
+    # Current parameter values from sliders
     _x = np.array([float(param_sliders[_i].value) for _i in range(len(_params))])
-
-    # Normalize to [-1, 1]
     _x_norm = 2.0 * (_x - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0
 
-    # Direct Legendre evaluation (no PyTUQ dependency)
+    # Direct Legendre evaluation
     def _legendre_eval(_x_n, _coeffs, _mi):
         _max_ord = int(_mi.max())
         _n_p = _mi.shape[1]
@@ -1295,14 +1295,17 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             _result += _term
         return _result
 
-    # Evaluate population surrogate at current slider position
+    # Population surrogate prediction
     _pop_y = _legendre_eval(_x_norm, surr_data["pop_coeffs"], surr_data["pop_mi"])
 
-    # Sweep EVERY parameter across its range (others held at slider values)
+    # Sweep all parameters + compute local sensitivity
     _n_sweep = 60
-    _sweeps = {}  # param_name -> (sweep_vals, sweep_y)
+    _sweeps = {}
+    _local_sens = {}
+    _param_effects = {}
     for _pi, _p in enumerate(_params):
-        _sv = np.linspace(float(_bounds[_pi, 0]), float(_bounds[_pi, 1]), _n_sweep)
+        _lo, _hi = float(_bounds[_pi, 0]), float(_bounds[_pi, 1])
+        _sv = np.linspace(_lo, _hi, _n_sweep)
         _sy = []
         for _v in _sv:
             _x_sw = _x.copy()
@@ -1311,50 +1314,49 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             _sy.append(_legendre_eval(_x_sw_n, surr_data["pop_coeffs"], surr_data["pop_mi"]))
         _sweeps[_p] = (_sv, np.array(_sy))
 
+        # Local sensitivity via finite difference
+        _delta = (_hi - _lo) * 0.005
+        _x_plus = _x.copy()
+        _x_plus[_pi] = min(_x[_pi] + _delta, _hi)
+        _x_minus = _x.copy()
+        _x_minus[_pi] = max(_x[_pi] - _delta, _lo)
+        _y_plus = _legendre_eval(
+            2.0 * (_x_plus - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0,
+            surr_data["pop_coeffs"],
+            surr_data["pop_mi"],
+        )
+        _y_minus = _legendre_eval(
+            2.0 * (_x_minus - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0,
+            surr_data["pop_coeffs"],
+            surr_data["pop_mi"],
+        )
+        _local_sens[_p] = abs(_y_plus - _y_minus) / (2 * _delta + 1e-12)
+        _param_effects[_p] = _local_sens[_p] * _x_norm[_pi]
+
     _sel_idx = _params.index(_selected) if _selected in _params else 0
+    _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
 
-    _fig = make_subplots(
-        rows=1,
-        cols=2,
-        subplot_titles=(
-            "Response Curves (all params, solo highlighted)",
-            "Current Prediction",
-        ),
-        column_widths=[0.6, 0.4],
-        horizontal_spacing=0.08,
-    )
-
-    # -- Left: all response curves, soloed param highlighted --
+    # ========== FIGURE 1: Response Curves ==========
+    _fig1 = go.Figure()
     for _pi, _p in enumerate(_params):
         _sv, _sy = _sweeps[_p]
         _pc = PARAM_COLORS.get(_p, "#666")
         _is_sel = _p == _selected
-
-        # Normalize x-axis to [0,1] so all params share the same axis
         _sv_norm = (_sv - _bounds[_pi, 0]) / (_bounds[_pi, 1] - _bounds[_pi, 0] + 1e-12)
-
-        _fig.add_trace(
+        _fig1.add_trace(
             go.Scatter(
                 x=_sv_norm,
                 y=_sy,
                 mode="lines",
                 name=_p,
-                line=dict(
-                    color=_pc,
-                    width=4 if _is_sel else 1.5,
-                    shape="spline",
-                ),
+                line=dict(color=_pc, width=4 if _is_sel else 1.5, shape="spline"),
                 opacity=1.0 if _is_sel else 0.25,
                 customdata=np.column_stack([_sv, _sy]),
                 hovertemplate=f"<b>{_p}</b><br>{_p}=%{{customdata[0]:.2f}}<br>Y\u0302=%{{customdata[1]:.4f}}<extra></extra>",
-            ),
-            row=1,
-            col=1,
+            )
         )
-
-        # Current slider position marker for each param
         _cur_norm = (_x[_pi] - _bounds[_pi, 0]) / (_bounds[_pi, 1] - _bounds[_pi, 0] + 1e-12)
-        _fig.add_trace(
+        _fig1.add_trace(
             go.Scatter(
                 x=[_cur_norm],
                 y=[_pop_y],
@@ -1369,17 +1371,14 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     line=dict(width=2 if _is_sel else 0, color="#fff"),
                 ),
                 hovertemplate=f"<b>{_p}</b>={_x[_pi]:.2f}<br>Y\u0302={_pop_y:.4f}<extra></extra>",
-            ),
-            row=1,
-            col=1,
+            )
         )
 
-    # Fill under soloed param curve
+    # Fill under soloed curve
     _sel_sv_norm = (_sweeps[_selected][0] - _bounds[_sel_idx, 0]) / (
         _bounds[_sel_idx, 1] - _bounds[_sel_idx, 0] + 1e-12
     )
-    _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
-    _fig.add_trace(
+    _fig1.add_trace(
         go.Scatter(
             x=_sel_sv_norm,
             y=_sweeps[_selected][1],
@@ -1388,107 +1387,211 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             fillcolor=f"rgba({int(_sel_color[1:3], 16)},{int(_sel_color[3:5], 16)},{int(_sel_color[5:7], 16)},0.1)",
             showlegend=False,
             hoverinfo="skip",
-        ),
-        row=1,
-        col=1,
+        )
     )
 
-    _fig.update_xaxes(title_text="Normalized parameter value [0 = min, 1 = max]", row=1, col=1)
-    _fig.update_yaxes(title_text="Y\u0302 (predicted output)", row=1, col=1)
-
-    # -- Right: current param values as horizontal bars with predicted output --
-    _bar_colors = [PARAM_COLORS.get(_p, "#666") for _p in _params]
-    _bar_opacities = [1.0 if _p == _selected else 0.5 for _p in _params]
-    _normalized_vals = [
-        (_x[_i] - _bounds[_i, 0]) / (_bounds[_i, 1] - _bounds[_i, 0] + 1e-12) for _i in range(len(_params))
-    ]
-
-    _fig.add_trace(
-        go.Bar(
-            y=_params,
-            x=_normalized_vals,
-            orientation="h",
-            marker=dict(color=_bar_colors, opacity=_bar_opacities),
-            text=[f"{_x[_i]:.2f}" for _i in range(len(_params))],
-            textposition="outside",
-            textfont=dict(color=C["text"], size=11),
-            showlegend=False,
-            hovertemplate="%{y}: %{text}<extra></extra>",
-        ),
-        row=1,
-        col=2,
-    )
-
-    _fig.update_xaxes(title_text="Normalized [0,1]", range=[0, 1.3], row=1, col=2)
-
-    # Prediction readout
-    _fig.add_annotation(
-        x=0.65,
-        y=1.15,
-        text=f"Y\u0302 = {_pop_y:.4f}",
-        showarrow=False,
-        font=dict(color=C["accent3"], size=16, family="monospace"),
-        xref="x2 domain",
-        yref="y2 domain",
-    )
-
-    _fig.update_layout(
+    _fig1.update_layout(
         **DAW_LAYOUT,
-        height=360,
-        showlegend=True,
-        legend=dict(orientation="h", y=-0.18, x=0, font=dict(size=10)),
+        height=300,
+        title=dict(text=f"PCE RESPONSE CURVES // Y\u0302 = {_pop_y:.4f}", font=dict(size=13)),
+        xaxis_title="Normalized parameter value [0=min, 1=max]",
+        yaxis_title="Y\u0302 (predicted output)",
+        legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
     )
-    for _ann in _fig.layout.annotations:
-        if hasattr(_ann, "font") and _ann.font is not None:
-            pass
-        else:
-            _ann.font = dict(color=C["text_dim"], size=11)
 
-    _header = header(""" \
+    # ========== FIGURE 2: Sensitivity Spectrogram + Per-Stage Prediction ==========
+    _theta_labels = [f"\u03b8{s['stage']}" for s in _stage_data] if _stage_data else []
+
+    _fig2 = make_subplots(
+        rows=2,
+        cols=1,
+        row_heights=[0.55, 0.45],
+        subplot_titles=(
+            "Sensitivity Spectrogram (S_Ti) — variance fractions",
+            "Per-Stage Prediction (Y\u0302) — physical units",
+        ),
+        vertical_spacing=0.15,
+        shared_xaxes=True,
+    )
+
+    if _stage_data:
+        # Heatmap: params x stages (S_Ti)
+        _z_sens = [[s["total_order"].get(_p, 0) for s in _stage_data] for _p in _params]
+        _short_params = [
+            _p.replace("mecillinam_concentration", "mecillinam")
+            .replace("vio_expression", "vio_exp")
+            .replace("vio_trl_eff", "vio_trl")
+            for _p in _params
+        ]
+        _fig2.add_trace(
+            go.Heatmap(
+                z=_z_sens,
+                x=_theta_labels,
+                y=_short_params,
+                colorscale=[
+                    [0, "#0d0d0d"],
+                    [0.15, "#1a1a4e"],
+                    [0.3, "#2a2a8e"],
+                    [0.5, "#00b4d8"],
+                    [0.7, "#00f0ff"],
+                    [0.85, "#ffaa00"],
+                    [1.0, "#ff3366"],
+                ],
+                colorbar=dict(title="S_Ti", len=0.4, y=0.82, thickness=10, x=1.02),
+                zmin=0,
+                zmax=0.7,
+                hovertemplate="Param: %{y}<br>\u03b8: %{x}<br>S_Ti: %{z:.3f}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+
+        # Per-stage prediction using Sobol weights
+        _n_s = len(_stage_data)
+        _stage_preds = np.zeros(_n_s)
+        for _si in range(_n_s):
+            _contrib = sum(_param_effects.get(_p, 0) * _stage_data[_si]["total_order"].get(_p, 0) for _p in _params)
+            _stage_preds[_si] = _pop_y + _contrib
+
+        _fig2.add_trace(
+            go.Scatter(
+                x=_theta_labels,
+                y=_stage_preds,
+                mode="lines+markers",
+                name="Y\u0302 per stage",
+                line=dict(color=C["accent3"], width=3, shape="spline"),
+                marker=dict(size=7, color=C["accent3"]),
+                hovertemplate="\u03b8%{x}<br>Y\u0302=%{y:.4f}<extra></extra>",
+            ),
+            row=2,
+            col=1,
+        )
+
+        # Highlight peak stage
+        _peak = int(np.argmax(_stage_preds))
+        _fig2.add_trace(
+            go.Scatter(
+                x=[_theta_labels[_peak]],
+                y=[_stage_preds[_peak]],
+                mode="markers+text",
+                text=[f"{_stage_preds[_peak]:.3f}"],
+                textposition="top center",
+                textfont=dict(color=C["accent3"], size=10),
+                marker=dict(size=12, color=C["accent3"], line=dict(width=2, color="#fff")),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=2,
+            col=1,
+        )
+
+    _fig2.update_layout(**DAW_LAYOUT, height=380, showlegend=False)
+    _fig2.update_yaxes(title_text="Y\u0302", row=2, col=1, title_font=dict(color=C["accent3"]))
+    for _ann in _fig2.layout.annotations:
+        _ann.font = dict(color=C["text_dim"], size=11)
+
+    # ========== FIGURE 3: Observable-Domain Heatmap ==========
+    _fig3 = None
+    if _profile and _stage_data:
+        _obs_names = [_k for _k in _profile if _k != "stages"]
+        _n_obs = len(_obs_names)
+        _n_s = len(_profile.get("stages", []))
+
+        if _n_obs > 0 and _n_s > 0:
+            _baselines = np.array([_profile[_k][:_n_s] for _k in _obs_names], dtype=float)
+            _modulated = _baselines.copy()
+
+            for _si in range(min(_n_s, len(_stage_data))):
+                _mod = sum(_param_effects.get(_p, 0) * _stage_data[_si]["total_order"].get(_p, 0) for _p in _params)
+                for _oi in range(_n_obs):
+                    _base_mag = abs(_baselines[_oi, _si]) + 1e-12
+                    _modulated[_oi, _si] = _baselines[_oi, _si] * (1 + _mod / _base_mag)
+
+            _obs_short = [_k.split("__")[-1] if "__" in _k else _k for _k in _obs_names]
+            _stage_labels = [f"\u03b8{_si}" for _si in range(_n_s)]
+
+            # Delta annotation text
+            _delta_text = [["" for _ in range(_n_s)] for _ in range(_n_obs)]
+            for _oi in range(_n_obs):
+                for _si in range(_n_s):
+                    _d = _modulated[_oi, _si] - _baselines[_oi, _si]
+                    if abs(_d) > 1e-6:
+                        _delta_text[_oi][_si] = f"{'+' if _d > 0 else ''}{_d:.3f}"
+
+            _fig3 = go.Figure()
+            _fig3.add_trace(
+                go.Heatmap(
+                    z=_modulated.tolist(),
+                    x=_stage_labels,
+                    y=_obs_short,
+                    colorscale=[
+                        [0, "#0d0d2e"],
+                        [0.25, "#006490"],
+                        [0.5, "#00b48c"],
+                        [0.75, "#b4dc32"],
+                        [1.0, "#ffff64"],
+                    ],
+                    colorbar=dict(title="Value", thickness=10, x=1.02),
+                    customdata=np.array(_delta_text),
+                    hovertemplate="Observable: %{y}<br>\u03b8: %{x}<br>Value: %{z:.4f}<br>\u0394: %{customdata}<extra></extra>",
+                )
+            )
+            _fig3.update_layout(
+                **DAW_LAYOUT,
+                height=220,
+                title=dict(text="OBSERVABLE DOMAIN // Y per stage (physical units)", font=dict(size=13)),
+            )
+
+    # ========== Local sensitivity readout ==========
+    _sens_max = max(_local_sens.values()) if _local_sens else 1
+    _sens_bars_html = (
+        "".join(
+            f'<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">'
+            f'<span style="color:{PARAM_COLORS.get(_p, "#666")};font-family:monospace;font-size:10px;width:80px;">{_p.split("_")[-1]}</span>'
+            f'<div style="background:{PARAM_COLORS.get(_p, "#666")};height:8px;width:{max(2, int(120 * _local_sens[_p] / _sens_max))}px;border-radius:2px;"></div>'
+            f'<span style="color:{C["text_dim"]};font-family:monospace;font-size:9px;">{_local_sens[_p]:.4f}</span>'
+            f"</div>"
+            for _p in _params
+        )
+        if _local_sens
+        else ""
+    )
+
+    # ========== Assemble output ==========
+    _header_text = header("""\
     ### 9. PCE Prediction EQ (Surrogate Knobs)
 
-    #### What it shows:
-
-    >> Parameter sliders that directly control PCE surrogate evaluation. Drag a slider and the predicted
-    per-stage output curve updates instantly — no simulation needed. This IS the multiband EQ: parameter
-    values are the knobs, cell cycle stages are the frequency bands, and the predicted output is the
-    audio signal.
-
-    #### Why it's useful:
-
-    >> The Sobol panels (EQ, Spectrogram, Mixer) tell you WHICH parameters matter and WHERE in the cell
-    cycle. This panel lets you TURN THE KNOBS and see the effect. "What happens to stage-7 mass if I
-    increase mecillinam from 2.0 to 8.0?" — drag the slider and watch the curve reshape.
-
-    #### Governing equation: PCE surrogate evaluation:
+    >> Sliders control PCE surrogate evaluation. All response curves, the sensitivity spectrogram,
+    the observable-domain heatmap, and local sensitivity bars update in lock-step.
+    The observable heatmap shows per-stage values in physical units, modulated by slider-driven
+    parameter effects weighted by per-stage Sobol indices — no synthetic data.
 
     ```
-      Y_hat(x) = sum_alpha c_alpha * prod_i P_{alpha_i}(x_i)
+    Y_obs_k(x) = baseline_obs_k * (1 + sum_i [|dY/dx_i| * (x_i - mid) * S_Ti^(k)] / |baseline|)
     ```
-
-    ...where P_n are Legendre polynomials evaluated at the normalized parameter values x_i in [-1,1].
-    Each slider controls one x_i. The curve shows Y_hat across cell cycle stages.
-
-    #### RFC006 call to action (§4, Activity 3):
-
-    >> "Implement input->output wrapper functions that can be called from numerical libraries" — the PCE
-    surrogate IS that wrapper, distilled to a polynomial that evaluates in microseconds.
     """)
-    mo.output.replace(
-        mo.vstack([
-            mo.md(f"""
-    <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-        <div>{_header}</div>
-        <div>{mo.ui.plotly(_fig)}</div>
-        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-            <div style="color:{C["accent3"]};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">PCE Surrogate Knobs</div>
 
-          {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
-        </div>
-    </div>
-    """)
-        ])
-    )
+    _panels = [
+        mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:12px;">
+            <div>{_header_text}</div>
+            <div style="display:flex;align-items:center;gap:16px;margin:8px 0;">
+                <div style="color:{C["accent3"]};font-family:monospace;font-size:18px;font-weight:bold;">Y\u0302 = {_pop_y:.4f}</div>
+                <div style="flex:1;border-top:1px solid {C["border"]};"></div>
+                <div style="color:{C["text_dim"]};font-size:10px;">LOCAL |dY\u0302/dx|</div>
+            </div>
+            <div style="margin-bottom:8px;">{_sens_bars_html}</div>
+            <div style="background:#1a1a2e;border:1px solid {C["border"]};border-radius:6px;padding:10px;margin-bottom:8px;">
+                <div style="color:{C["accent3"]};font-size:11px;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">PCE Surrogate Knobs</div>
+                {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
+            </div>
+        </div>"""),
+        mo.ui.plotly(_fig1),
+        mo.ui.plotly(_fig2),
+    ]
+    if _fig3 is not None:
+        _panels.append(mo.ui.plotly(_fig3))
+
+    mo.output.replace(mo.vstack(_panels))
     return
 
 
