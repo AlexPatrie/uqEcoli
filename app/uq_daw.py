@@ -848,17 +848,22 @@ class UQDawApp:
         self.header_label = tk.Label(top, text="", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9))
         self.header_label.pack(side="right", padx=10)
 
-        # -- Main area (left controls + right visualizations) --
-        main = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"], sashwidth=4, sashrelief="flat")
-        main.pack(fill="both", expand=True, padx=4, pady=4)
+        # -- Top section: left controls + right response curves (side by side) --
+        _top_pane = tk.PanedWindow(self.root, orient="horizontal", bg=C["bg"],
+                                    sashwidth=4, sashrelief="flat")
+        _top_pane.pack(fill="both", expand=True, padx=4, pady=(4, 1))
 
-        # Left panel: parameter selector + sliders
-        self.left_frame = tk.Frame(main, bg=C["bg"], width=280)
-        main.add(self.left_frame, minsize=250)
+        # Left panel: parameter selector + sliders + readout + variance decomp
+        self.left_frame = tk.Frame(_top_pane, bg=C["bg"], width=260)
+        _top_pane.add(self.left_frame, minsize=230)
 
-        # Right panel: visualizations
-        self.right_frame = tk.Frame(main, bg=C["bg"])
-        main.add(self.right_frame, minsize=600)
+        # Right panel: response curves only
+        self.right_top_frame = tk.Frame(_top_pane, bg=C["bg"])
+        _top_pane.add(self.right_top_frame, minsize=500)
+
+        # -- Bottom section: full-width panels (observable heatmap, sobol, spectrogram) --
+        self.bottom_frame = tk.Frame(self.root, bg=C["bg"])
+        self.bottom_frame.pack(fill="both", expand=True, padx=4, pady=(1, 4))
 
         # -- Left: Solo selector --
         solo_frame = tk.LabelFrame(
@@ -901,33 +906,33 @@ class UQDawApp:
         self.readout_label.pack(fill="x", padx=4, pady=(4, 2))
 
         # -- Left: Variance decomposition (compact, static) --
-        self.decomp_canvas = VarianceDecompCanvas(self.left_frame, height=140)
+        self.decomp_canvas = VarianceDecompCanvas(self.left_frame, height=130)
         self.decomp_canvas.pack(fill="x", padx=4, pady=(2, 4))
 
-        # -- Right: visualization grid --
+        # -- Build visualization panels --
         self._build_viz_panels()
 
     def _build_viz_panels(self):
-        # Top: Response curves (the EQ — dominant panel)
+        # Top-right: Response curves (the EQ — dominant panel)
         self.response_canvas = ResponseCurveCanvas(
-            self.right_frame,
-            height=260,
+            self.right_top_frame,
+            height=280,
             on_marker_drag=self._on_curve_drag,
         )
-        self.response_canvas.pack(fill="both", expand=True, padx=2, pady=(2, 1))
+        self.response_canvas.pack(fill="both", expand=True, padx=2, pady=2)
 
-        # Middle row: Observable domain heatmap (physical units, reactive)
-        self.obs_canvas = ObservableStageCanvas(self.right_frame, height=160)
-        self.obs_canvas.pack(fill="both", expand=False, padx=2, pady=1)
+        # Bottom (full width): Observable domain heatmap
+        self.obs_canvas = ObservableStageCanvas(self.bottom_frame, height=160)
+        self.obs_canvas.pack(fill="x", padx=2, pady=(2, 1))
 
-        # Bottom row: Sobol + Sensitivity Spectrogram (linked contextual views)
-        bottom_row = tk.Frame(self.right_frame, bg=C["bg"])
-        bottom_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
+        # Bottom (full width): Sobol + Sensitivity Spectrogram side by side
+        _bottom_row = tk.Frame(self.bottom_frame, bg=C["bg"])
+        _bottom_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
 
-        self.eq_canvas = SobolEQCanvas(bottom_row, height=180)
+        self.eq_canvas = SobolEQCanvas(_bottom_row, height=180)
         self.eq_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
 
-        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=180)
+        self.heatmap_canvas = HeatmapCanvas(_bottom_row, height=180)
         self.heatmap_canvas.pack(side="right", fill="both", expand=True, padx=(1, 0))
 
     def _open_file(self):
