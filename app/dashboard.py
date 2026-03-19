@@ -1490,8 +1490,9 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     for _ann in _fig2.layout.annotations:
         _ann.font = dict(color=C["text_dim"], size=11)
 
-    # ========== FIGURE 3: Observable-Domain Heatmap ==========
+    # ========== FIGURE 3: Observable Waveform (matches tk ObservableWaveformCanvas) ==========
     _fig3 = None
+    _fig3_heatmap = None
     if _profile and _stage_data:
         _obs_names = [_k for _k in _profile if _k != "stages"]
         _n_obs = len(_obs_names)
@@ -1509,8 +1510,77 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
 
             _obs_short = [_k.split("__")[-1] if "__" in _k else _k for _k in _obs_names]
             _stage_labels = [f"\u03b8{_si}" for _si in range(_n_s)]
+            _obs_colors_list = [C["accent3"], C["accent4"], C["accent1"], C["accent2"], C["accent5"]]
 
-            # Delta annotation text
+            # Waveform figure: one trace per observable (baseline dashed + modulated solid + fill)
+            _fig3 = make_subplots(
+                rows=_n_obs, cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.08,
+                subplot_titles=[f"{_obs_short[_oi]}" for _oi in range(_n_obs)],
+            )
+
+            for _oi in range(_n_obs):
+                _oc = _obs_colors_list[_oi % len(_obs_colors_list)]
+                _row = _oi + 1
+
+                # Baseline (dashed)
+                _fig3.add_trace(go.Scatter(
+                    x=_stage_labels, y=_baselines[_oi].tolist(),
+                    mode="lines", name="baseline" if _oi == 0 else "",
+                    showlegend=(_oi == 0),
+                    line=dict(color=C["text_dim"], width=1, dash="dash"),
+                    hovertemplate="Baseline: %{y:.4f}<extra></extra>",
+                ), row=_row, col=1)
+
+                # Modulated (solid + markers)
+                _fig3.add_trace(go.Scatter(
+                    x=_stage_labels, y=_modulated[_oi].tolist(),
+                    mode="lines+markers", name=_obs_short[_oi] if _oi == 0 else "",
+                    showlegend=False,
+                    line=dict(color=_oc, width=3, shape="spline"),
+                    marker=dict(size=6, color=_oc),
+                    hovertemplate=f"<b>{_obs_short[_oi]}</b><br>\u03b8: %{{x}}<br>Value: %{{y:.4f}}<extra></extra>",
+                ), row=_row, col=1)
+
+                # Fill between baseline and modulated
+                _fig3.add_trace(go.Scatter(
+                    x=_stage_labels + _stage_labels[::-1],
+                    y=_modulated[_oi].tolist() + _baselines[_oi][::-1].tolist(),
+                    fill="toself", mode="none",
+                    fillcolor=f"rgba({int(_oc[1:3], 16)},{int(_oc[3:5], 16)},{int(_oc[5:7], 16)},0.12)",
+                    showlegend=False, hoverinfo="skip",
+                ), row=_row, col=1)
+
+                # Delta annotations at first, last, and max-delta stage
+                _deltas = _modulated[_oi] - _baselines[_oi]
+                _max_delta_idx = int(np.argmax(np.abs(_deltas)))
+                for _si_ann in [0, _n_s - 1, _max_delta_idx]:
+                    _d = _deltas[_si_ann]
+                    if abs(_d) > 1e-6:
+                        _fig3.add_annotation(
+                            x=_stage_labels[_si_ann], y=_modulated[_oi, _si_ann],
+                            text=f"{'+'if _d > 0 else ''}{_d:.3f}",
+                            showarrow=True, arrowhead=0, arrowcolor=_oc,
+                            font=dict(color=_oc, size=9),
+                            ax=0, ay=-20,
+                            xref=f"x{_row if _row > 1 else ''}", yref=f"y{_row if _row > 1 else ''}",
+                        )
+
+                _fig3.update_yaxes(title_text=_obs_short[_oi], row=_row, col=1,
+                                    title_font=dict(color=_oc, size=10))
+
+            _fig3.update_layout(
+                **DAW_LAYOUT,
+                height=160 * _n_obs + 40,
+                title=dict(text="OBSERVABLE WAVEFORM // Y(\u03b8) per stage \u2014 physical units", font=dict(size=13)),
+                showlegend=False,
+            )
+            for _ann in _fig3.layout.annotations:
+                if not hasattr(_ann, "arrowhead"):
+                    _ann.font = dict(color=C["text_dim"], size=10)
+
+            # Heatmap minimap (for accordion toggle)
             _delta_text = [["" for _ in range(_n_s)] for _ in range(_n_obs)]
             for _oi in range(_n_obs):
                 for _si in range(_n_s):
@@ -1518,29 +1588,17 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     if abs(_d) > 1e-6:
                         _delta_text[_oi][_si] = f"{'+' if _d > 0 else ''}{_d:.3f}"
 
-            _fig3 = go.Figure()
-            _fig3.add_trace(
-                go.Heatmap(
-                    z=_modulated.tolist(),
-                    x=_stage_labels,
-                    y=_obs_short,
-                    colorscale=[
-                        [0, "#0d0d2e"],
-                        [0.25, "#006490"],
-                        [0.5, "#00b48c"],
-                        [0.75, "#b4dc32"],
-                        [1.0, "#ffff64"],
-                    ],
-                    colorbar=dict(title="Value", thickness=10, x=1.02),
-                    customdata=np.array(_delta_text),
-                    hovertemplate="Observable: %{y}<br>\u03b8: %{x}<br>Value: %{z:.4f}<br>\u0394: %{customdata}<extra></extra>",
-                )
-            )
-            _fig3.update_layout(
-                **DAW_LAYOUT,
-                height=220,
-                title=dict(text="OBSERVABLE DOMAIN // Y per stage (physical units)", font=dict(size=13)),
-            )
+            _fig3_heatmap = go.Figure()
+            _fig3_heatmap.add_trace(go.Heatmap(
+                z=_modulated.tolist(), x=_stage_labels, y=_obs_short,
+                colorscale=[[0, "#0d0d2e"], [0.25, "#006490"], [0.5, "#00b48c"],
+                            [0.75, "#b4dc32"], [1.0, "#ffff64"]],
+                colorbar=dict(title="Value", thickness=10, x=1.02),
+                customdata=np.array(_delta_text),
+                hovertemplate="Observable: %{y}<br>\u03b8: %{x}<br>Value: %{z:.4f}<br>\u0394: %{customdata}<extra></extra>",
+            ))
+            _fig3_heatmap.update_layout(**DAW_LAYOUT, height=180,
+                title=dict(text="OBSERVABLE DOMAIN // Heatmap Minimap", font=dict(size=11)))
 
     # ========== Local sensitivity readout ==========
     _sens_max = max(_local_sens.values()) if _local_sens else 1
@@ -1562,9 +1620,8 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     ### 9. PCE Prediction EQ (Surrogate Knobs)
 
     >> Sliders control PCE surrogate evaluation. All response curves, the sensitivity spectrogram,
-    the observable-domain heatmap, and local sensitivity bars update in lock-step.
-    The observable heatmap shows per-stage values in physical units, modulated by slider-driven
-    parameter effects weighted by per-stage Sobol indices — no synthetic data.
+    the observable waveform, and local sensitivity bars update in lock-step.
+    The waveform shows per-stage observable values in physical units with baseline comparison.
 
     ```
     Y_obs_k(x) = baseline_obs_k * (1 + sum_i [|dY/dx_i| * (x_i - mid) * S_Ti^(k)] / |baseline|)
@@ -1576,20 +1633,30 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             <div>{_header_text}</div>
             <div style="display:flex;align-items:center;gap:16px;margin:8px 0;">
                 <div style="color:{C["accent3"]};font-family:monospace;font-size:18px;font-weight:bold;">Y\u0302 = {_pop_y:.4f}</div>
-                <div style="flex:1;border-top:1px solid {C["border"]};"></div>
+                <div style="flex:1;border-top:1px solid;"></div>
                 <div style="color:{C["text_dim"]};font-size:10px;">LOCAL |dY\u0302/dx|</div>
             </div>
             <div style="margin-bottom:8px;">{_sens_bars_html}</div>
-            <div style="background:#1a1a2e;border:1px solid {C["border"]};border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="background:#1a1a2e;border:1px solid;border-radius:6px;padding:10px;margin-bottom:8px;">
                 <div style="color:{C["accent3"]};font-size:11px;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">PCE Surrogate Knobs</div>
                 {mo.hstack([param_sliders[_i] for _i in range(len(param_sliders))], justify="start")}
             </div>
         </div>"""),
         mo.ui.plotly(_fig1),
-        mo.ui.plotly(_fig2),
     ]
+
+    # Observable waveform
     if _fig3 is not None:
         _panels.append(mo.ui.plotly(_fig3))
+
+    # Heatmap minimap in a toggleable accordion
+    if _fig3_heatmap is not None:
+        _panels.append(mo.accordion({
+            "\u25bc Heatmap Minimap": mo.ui.plotly(_fig3_heatmap),
+        }))
+
+    # Sensitivity spectrogram + stage prediction
+    _panels.append(mo.ui.plotly(_fig2))
 
     mo.output.replace(mo.vstack(_panels))
     return

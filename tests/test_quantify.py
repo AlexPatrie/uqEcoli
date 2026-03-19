@@ -17,6 +17,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uq import SobolIndices
+from uq.pipe import Pipeline
 from uq.pipeline.models import PipelineResult, StratificationLens
 from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
 
@@ -87,7 +88,7 @@ def precomputed_cache_dir(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def quantify_pipeline(precomputed_cache_dir) -> "Pipeline":
+def quantify_pipeline(precomputed_cache_dir) -> Pipeline:
     """Run the full pipeline via handlers.pipeline() once per module."""
     from uq import handlers
     from uq.pce.models import PCEParameterSelectionConfig
