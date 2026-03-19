@@ -573,6 +573,147 @@ class HeatmapCanvas(tk.Canvas):
         )
 
 
+class ObservableStageCanvas(tk.Canvas):
+    """Observable-domain heatmap: observables x cell cycle stages in physical units.
+
+    Shows per-stage observable values modulated by current slider positions.
+    All data comes from pipeline outputs:
+    - Baselines from cell_cycle_profile (Step 6c θ-binned aggregation)
+    - Modulation weights from per-stage S_Ti (Step 7b Sobol)
+    - Modulation magnitude from local |dY/dx_i| (PCE finite difference)
+    """
+
+    # Colorscale: dark → blue → green → yellow (physical values, not variance fractions)
+    _CMAP = [
+        (0.0, (13, 13, 46)),
+        (0.25, (0, 100, 180)),
+        (0.5, (0, 180, 140)),
+        (0.75, (180, 220, 50)),
+        (1.0, (255, 255, 100)),
+    ]
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._obs_names = []
+        self._n_stages = 0
+        self._values = None  # (n_obs, n_stages) array in physical units
+        self._baselines = None  # (n_obs, n_stages) array — unmodulated baselines
+
+    def set_data(self, obs_names, n_stages, values, baselines=None):
+        """
+        obs_names: list of observable names
+        n_stages: number of cell cycle bins
+        values: (n_obs, n_stages) array — current predicted values in physical units
+        baselines: (n_obs, n_stages) array — unmodulated baseline values (for delta display)
+        """
+        self._obs_names = obs_names
+        self._n_stages = n_stages
+        self._values = np.asarray(values) if values is not None else None
+        self._baselines = np.asarray(baselines) if baselines is not None else None
+        self.redraw()
+
+    def _val_to_color(self, v, v_min, v_max):
+        """Map a physical value to a color via the colorscale."""
+        if v_max == v_min:
+            t = 0.5
+        else:
+            t = max(0.0, min(1.0, (v - v_min) / (v_max - v_min)))
+
+        # Interpolate in colorscale
+        for i in range(len(self._CMAP) - 1):
+            t0, c0 = self._CMAP[i]
+            t1, c1 = self._CMAP[i + 1]
+            if t0 <= t <= t1:
+                f = (t - t0) / (t1 - t0) if t1 > t0 else 0
+                r = int(c0[0] + f * (c1[0] - c0[0]))
+                g = int(c0[1] + f * (c1[1] - c0[1]))
+                b = int(c0[2] + f * (c1[2] - c0[2]))
+                return f"#{r:02x}{g:02x}{b:02x}"
+        return C["text_dim"]
+
+    def redraw(self):
+        self.delete("all")
+        if self._values is None or len(self._obs_names) == 0:
+            return
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+
+        n_obs = len(self._obs_names)
+        n_stages = self._n_stages
+        if n_stages == 0:
+            return
+
+        pad_l, pad_r, pad_t, pad_b = 80, 40, 30, 25
+        plot_w = w - pad_l - pad_r
+        plot_h = h - pad_t - pad_b
+        cell_w = plot_w / n_stages
+        cell_h = plot_h / n_obs
+
+        # Global min/max for color mapping (across all obs and stages)
+        v_min = float(self._values.min())
+        v_max = float(self._values.max())
+
+        # Draw cells
+        for oi in range(n_obs):
+            short = self._obs_names[oi].split("__")[-1] if "__" in self._obs_names[oi] else self._obs_names[oi]
+            self.create_text(pad_l - 5, pad_t + int(cell_h * (oi + 0.5)),
+                             text=short, fill=C["text"], font=("Menlo", 9, "bold"), anchor="e")
+
+            for si in range(n_stages):
+                v = self._values[oi, si]
+                x0 = pad_l + int(si * cell_w)
+                y0 = pad_t + int(oi * cell_h)
+                x1 = x0 + int(cell_w)
+                y1 = y0 + int(cell_h)
+                color = self._val_to_color(v, v_min, v_max)
+                self.create_rectangle(x0, y0, x1, y1, fill=color, outline=C["border"])
+
+                # Show value in cell if cells are large enough
+                if cell_w > 35 and cell_h > 16:
+                    text_color = "#000000" if v > (v_min + v_max) / 2 else C["text"]
+                    self.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                                     text=f"{v:.3f}", fill=text_color, font=("Menlo", 7))
+
+                # Show delta from baseline as a small indicator
+                if self._baselines is not None:
+                    delta = v - self._baselines[oi, si]
+                    if abs(delta) > 1e-6:
+                        sign = "+" if delta > 0 else ""
+                        delta_color = C["accent3"] if delta > 0 else C["accent2"]
+                        self.create_text(x1 - 3, y0 + 3, text=f"{sign}{delta:.2f}",
+                                         fill=delta_color, font=("Menlo", 6), anchor="ne")
+
+        # Stage labels
+        for si in range(n_stages):
+            x = pad_l + int(cell_w * (si + 0.5))
+            self.create_text(x, h - 8, text=f"\u03b8{si}", fill=C["text_dim"], font=("Menlo", 7))
+
+        # Colorbar on right
+        cb_x = w - pad_r + 8
+        cb_w = 12
+        cb_top = pad_t
+        cb_h = plot_h
+        n_cb = 50
+        for i in range(n_cb):
+            frac = i / n_cb
+            val = v_max - frac * (v_max - v_min)
+            color = self._val_to_color(val, v_min, v_max)
+            cy0 = cb_top + int(frac * cb_h)
+            cy1 = cb_top + int((frac + 1.0 / n_cb) * cb_h)
+            self.create_rectangle(cb_x, cy0, cb_x + cb_w, cy1, fill=color, outline="")
+
+        self.create_text(cb_x + cb_w + 3, cb_top, text=f"{v_max:.2f}",
+                         fill=C["text_dim"], font=("Menlo", 7), anchor="nw")
+        self.create_text(cb_x + cb_w + 3, cb_top + cb_h, text=f"{v_min:.2f}",
+                         fill=C["text_dim"], font=("Menlo", 7), anchor="sw")
+
+        self.create_text(w // 2, 14, text="OBSERVABLE DOMAIN // Y per stage (physical units)",
+                         fill=C["text"], font=("Menlo", 10, "bold"))
+
+
 class VarianceDecompCanvas(tk.Canvas):
     """Donut chart for variance decomposition."""
 
@@ -731,25 +872,29 @@ class UQDawApp:
         self._build_viz_panels()
 
     def _build_viz_panels(self):
-        # Main: Response curves (the EQ — dominant panel)
+        # Top: Response curves (the EQ — dominant panel)
         self.response_canvas = ResponseCurveCanvas(
             self.right_frame,
-            height=320,
+            height=260,
             on_marker_drag=self._on_curve_drag,
         )
         self.response_canvas.pack(fill="both", expand=True, padx=2, pady=(2, 1))
 
-        # Bottom row: Sobol + Heatmap + Variance (linked contextual views)
+        # Middle row: Observable domain heatmap (physical units, reactive)
+        self.obs_canvas = ObservableStageCanvas(self.right_frame, height=160)
+        self.obs_canvas.pack(fill="both", expand=False, padx=2, pady=1)
+
+        # Bottom row: Sobol + Sensitivity Spectrogram + Variance (linked contextual views)
         bottom_row = tk.Frame(self.right_frame, bg=C["bg"])
         bottom_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
 
-        self.eq_canvas = SobolEQCanvas(bottom_row, height=180)
+        self.eq_canvas = SobolEQCanvas(bottom_row, height=170)
         self.eq_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
 
-        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=180)
+        self.heatmap_canvas = HeatmapCanvas(bottom_row, height=170)
         self.heatmap_canvas.pack(side="left", fill="both", expand=True, padx=1)
 
-        self.decomp_canvas = VarianceDecompCanvas(bottom_row, height=180)
+        self.decomp_canvas = VarianceDecompCanvas(bottom_row, height=170)
         self.decomp_canvas.pack(side="right", fill="both", expand=False, padx=(1, 0))
 
     def _open_file(self):
@@ -1010,6 +1155,7 @@ class UQDawApp:
         # where x_i_effect = local sensitivity * (x_i - midpoint).
         # This uses only pipeline outputs (S_Ti per stage + PCE prediction).
         stage_predictions = None
+        param_effects = {}
         stage_data = self.data.get("phase2_cell_cycle_sobol_per_stage", [])
         if stage_data and local_sensitivity:
             n_stages = len(stage_data)
@@ -1040,6 +1186,37 @@ class UQDawApp:
         self.heatmap_canvas.set_data(
             stages, params, selected, param_positions=param_positions, stage_predictions=stage_predictions
         )
+
+        # Observable-domain heatmap: per-stage values in physical units
+        profile = self.data.get("cell_cycle_profile")
+        if profile and stage_data and local_sensitivity and param_effects:
+            n_stages_p = len(profile.get("stages", []))
+            # Collect observable names and baselines from profile
+            obs_names = []
+            baselines_list = []
+            for key in profile:
+                if key == "stages":
+                    continue
+                obs_names.append(key)
+                vals = profile[key]
+                baselines_list.append(np.array(vals[:n_stages_p], dtype=float))
+
+            if obs_names and baselines_list:
+                baselines = np.array(baselines_list)  # (n_obs, n_stages)
+                # Modulate baselines by slider-driven parameter effects
+                # Y_obs_k(x) = baseline_obs_k * (1 + sum_i [sens_i * dev_i * S_Ti^(k)])
+                modulated = baselines.copy()
+                for si in range(min(n_stages_p, len(stage_data))):
+                    modulation = 0.0
+                    for pname in params:
+                        s_ti = stage_data[si]["total_order"].get(pname, 0)
+                        modulation += param_effects.get(pname, 0) * s_ti
+                    # Scale modulation relative to baseline magnitude
+                    for oi in range(len(obs_names)):
+                        base_mag = abs(baselines[oi, si]) + 1e-12
+                        modulated[oi, si] = baselines[oi, si] * (1 + modulation / base_mag)
+
+                self.obs_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
 
 
 # -- Entry point --------------------------------------------------------------
