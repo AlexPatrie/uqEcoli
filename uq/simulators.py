@@ -1,5 +1,2 @@
-from ecoli.experiments.ecoli_master_sim import EcoliSim
-
-
-def create_simulation():
-    sims = EcoliSim({"experiment_id": "hey"})
+# This module previously imported EcoliSim directly. Simulation execution
+# is now handled via subprocess in uq.generators.vecoli.

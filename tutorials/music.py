@@ -225,7 +225,7 @@ def _(Articulation, Clef, Dynamic, NoteValue, Tempo, dataclass, field, np):
             elif self.amplitude < 0.4:
                 return Dynamic.MF
             elif self.amplitude < 0.6:
-                return Dynamic.F
+                return Dynamic.TimeseriesGeneratorVecoli
             elif self.amplitude < 0.8:
                 return Dynamic.FF
             else:
