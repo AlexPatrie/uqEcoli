@@ -1218,7 +1218,7 @@ def _():
 def get_sliders(_params, _bounds):
     return mo.ui.array([
         mo.ui.slider(
-            orientation="vertical",
+            # orientation="vertical",
             start=float(_bounds[_i, 0]),
             stop=float(_bounds[_i, 1]),
             step=float((_bounds[_i, 1] - _bounds[_i, 0]) / 100),
@@ -1397,7 +1397,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
         xaxis_title="Normalized param [0=min, 1=max]",
         yaxis_title="Y\u0302",
         legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=9)),
-        margin=dict(l=45, r=15, t=35, b=45),
+        # margin=dict(l=45, r=15, t=35, b=45),
     )
 
     # ========== FIGURE 2: Sensitivity Spectrogram + Per-Stage Prediction ==========
@@ -1487,7 +1487,8 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
         )
 
     _fig2.update_layout(**DAW_LAYOUT, height=300, showlegend=False,
-        margin=dict(l=45, r=15, t=35, b=30))
+        # margin=dict(l=45, r=15, t=35, b=30)
+                       )
     _fig2.update_yaxes(title_text="Y\u0302", row=2, col=1, title_font=dict(color=C["accent3"]))
     for _ann in _fig2.layout.annotations:
         _ann.font = dict(color=C["text_dim"], size=11)
@@ -1576,7 +1577,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 **DAW_LAYOUT,
                 height=130 * _n_obs + 30,
                 title=dict(text="OBSERVABLE WAVEFORM // Y(\u03b8) \u2014 physical units", font=dict(size=12)),
-                margin=dict(l=45, r=15, t=35, b=25),
+                # margin=dict(l=45, r=15, t=35, b=25),
                 showlegend=False,
             )
             for _ann in _fig3.layout.annotations:
@@ -1602,7 +1603,8 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             ))
             _fig3_heatmap.update_layout(**DAW_LAYOUT, height=160,
                 title=dict(text="OBSERVABLE DOMAIN // Heatmap Minimap", font=dict(size=11)),
-                margin=dict(l=45, r=15, t=30, b=25))
+                # margin=dict(l=45, r=15, t=30, b=25)
+                                       )
 
     # ========== Local sensitivity readout ==========
     _sens_max = max(_local_sens.values()) if _local_sens else 1
@@ -1632,33 +1634,45 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
     ```
     """)
 
-    # ========== Grid layout ==========
-    # Row 1: [Knobs + readout + local sens] | [Response curves]
-    _control_panel = mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+    # ========== DAW Layout: controls left, signal stack right ==========
+    # Left column: readout + local sens + knobs (persistent, like a channel strip)
+    _control_panel = mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;height:100%;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
             <div style="color:{C["accent3"]};font-family:monospace;font-size:16px;font-weight:bold;">Y\u0302 = {_pop_y:.4f}</div>
-            <div style="flex:1;border-top:1px solid #2a2a4a;"></div>
         </div>
-        <div style="margin-bottom:6px;">{_sens_bars_html}</div>
-        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:4px;padding:8px;">
-            <div style="color:{C["accent3"]};font-size:10px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">PCE Surrogate Knobs</div>
+        <div style="color:{C["text_dim"]};font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Local |dY\u0302/dx|</div>
+        <div style="margin-bottom:10px;">{_sens_bars_html}</div>
+        <div style="border-top:1px solid #2a2a4a;padding-top:8px;">
+            <div style="color:{C["accent3"]};font-size:9px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">{mo.icon('streamline:ecology-science-dna-biology-experiment-lab-science', size=15)} Parameters</div>
             {mo.vstack([param_sliders[_i] for _i in range(len(param_sliders))])}
         </div>
     </div>""")
 
-    _row1 = mo.hstack([_control_panel, mo.ui.plotly(_fig1)], widths=[1, 3], align="stretch")
+    # Right column: signal stack (top=waveform, mid=response curves, bottom=spectrogram)
+    # Like a DAW: timeline/waveform on top, effect rack below
+    _signal_stack_items = []
 
-    # Row 2: [Observable waveform] | [Sensitivity spectrogram + stage prediction]
-    _left2 = mo.ui.plotly(_fig3) if _fig3 is not None else mo.md("")
-    _right2 = mo.ui.plotly(_fig2)
-    _row2 = mo.hstack([_left2, _right2], widths=[1, 1], align="stretch")
+    # Top: Observable waveform (the "signal" / timeline view)
+    if _fig3 is not None:
+        _signal_stack_items.append(mo.ui.plotly(_fig3))
 
-    # Heatmap minimap (toggleable)
+    # Middle: Response curves (the "EQ effect pedal")
+    _signal_stack_items.append(mo.ui.plotly(_fig1))
+
+    # Bottom: Sensitivity spectrogram + stage prediction (the "analyzer")
+    _signal_stack_items.append(mo.ui.plotly(_fig2))
+
+    _signal_stack = mo.vstack(_signal_stack_items, gap=0.25)
+
+    # Combine: controls left (narrow) | signal stack right (wide)
+    _main_row = mo.hstack([_control_panel, _signal_stack], widths=[1, 4], align="start")
+
+    # Heatmap minimap (toggleable, full width below)
     _minimap = None
     if _fig3_heatmap is not None:
         _minimap = mo.accordion({"\u25bc Heatmap Minimap": mo.ui.plotly(_fig3_heatmap)})
 
-    _grid = [_header_text, _row1, _row2]
+    _grid = [_header_text, _main_row]
     if _minimap is not None:
         _grid.append(_minimap)
 
