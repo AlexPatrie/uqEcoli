@@ -72,6 +72,8 @@ docs = [
 music = [
     "music21>=9.9.1",
     "partitura>=1.8.0",
+    "sounddevice>=0.5.5",
+    "soundfile>=0.13.1",
 ]
 
 [tool.uv]
