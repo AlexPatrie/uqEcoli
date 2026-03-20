@@ -261,18 +261,53 @@ def _read_parquet_timeseries(
 
 # -- Subprocess simulation runner -------------------------------------------
 
-DEFAULT_OUTPUT_PATHS = [
-    ["listeners", "rna_counts", "mRNA_cistron_counts"],
-    ["listeners", "monomer_counts"],
-    ["listeners", "fba_results", "base_reaction_fluxes"],
-    ["listeners", "mass", "cell_mass"],
-    ["listeners", "mass", "dry_mass"],
-    ["listeners", "mass", "volume"],
-    ["listeners", "mass", "dna_mass"],
-    ["listeners", "mass", "rna_mass"],
-    ["listeners", "mass", "protein_mass"],
-    ["listeners", "mass", "growth"],
-]
+
+def _build_emit_paths(
+    observable_columns: list[str] | None,
+) -> list[list[str]]:
+    """Build ``emit_paths`` for vEcoli config from observable column names.
+
+    The ParquetEmitter requires ``data["data"]["agents"]`` to exist,
+    so ``emit_paths`` must always include the full agent subtree
+    paths for the requested observables.  Paths are relative to the
+    vivarium state root, which has the structure::
+
+        root -> agents -> "0" -> listeners -> mass -> dry_mass
+                                           -> rna_counts -> ...
+                               -> bulk -> ...
+
+    ``set_emit_values`` traverses the store tree and enables emit for
+    all inner nodes along each path.  Since we don't know the agent ID
+    at config time, we use ``("agents",)`` to enable the entire agents
+    subtree when no specific observables are requested.
+
+    Args:
+        observable_columns: Parquet column names like
+            ``"listeners__mass__dry_mass"``.  If None, returns empty
+            list (= emit everything).
+
+    Returns:
+        List of path lists for the ``emit_paths`` config key.
+    """
+    if not observable_columns:
+        return []
+
+    # Build unique parent paths from observable columns.
+    # e.g. "listeners__mass__dry_mass" -> ["agents", "0", "listeners", "mass"]
+    # We go up to the parent (not the leaf) to emit the whole listener group,
+    # since individual scalar leaves can't be separately toggled.
+    parent_paths: set[tuple[str, ...]] = set()
+    for col in observable_columns:
+        parts = col.split("__")
+        if len(parts) >= 2:
+            # Emit the listener group: ("agents", "0", "listeners", "mass")
+            parent_paths.add(("agents", "0", *parts[:-1]))
+        else:
+            parent_paths.add(("agents", "0", *parts))
+
+    # Always include time
+    emit_paths: list[list[str]] = [list(p) for p in sorted(parent_paths)]
+    return emit_paths
 
 
 def _build_sim_config(
@@ -283,7 +318,7 @@ def _build_sim_config(
     variant_index: int = 0,
     seed: int = 0,
     generations: int = 1,
-    observable_hive_cols: list[str] | None = None,
+    observable_columns: list[str] | None = None,
     base_config_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a vEcoli simulation config dict for subprocess execution."""
@@ -291,8 +326,7 @@ def _build_sim_config(
     if base_config_path is not None:
         config = _json.loads(Path(base_config_path).read_text())
 
-    emit_paths = [col.split("__") for col in observable_hive_cols] \
-        if observable_hive_cols is not None else DEFAULT_OUTPUT_PATHS
+    emit_paths = _build_emit_paths(observable_columns)
 
     config.update({
         "sim_data_path": str(sim_data_path),
@@ -307,9 +341,11 @@ def _build_sim_config(
         "lineage_seed": 0,
         "divide": False,
         "variants": {},  # variants already baked into sim_data
-        "raw_output": True,
-        "emit_paths": emit_paths,
     })
+
+    if emit_paths:
+        config["emit_paths"] = emit_paths
+
     return config
 
 
@@ -578,6 +614,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 output_dir=str(output_dir),
                 max_duration=self.max_duration,
                 variant_index=variant_index,
+                observable_columns=parquet_cols,
                 base_config_path=self.sim_config_path,
             )
             config_path = work_dir / "config.json"
@@ -671,6 +708,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                     max_duration=self.max_duration,
                     variant_index=i,
                     seed=i,
+                    observable_columns=parquet_cols,
                     base_config_path=self.sim_config_path,
                 )
                 config_path = configs_dir / f"{i:04d}.json"
