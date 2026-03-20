@@ -518,10 +518,13 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         cleanup = batch_dir is None
         if batch_dir is None:
             batch_dir = Path(tempfile.mkdtemp(prefix="uq_batch_"))
+        batch_dir = batch_dir.resolve()
 
         n_samples = X.shape[0]
         parquet_cols = _resolve_parquet_columns(self.output_keys)
         experiment_id = "uq_batch"
+        if isinstance(batch_dir, str):
+            batch_dir = Path(batch_dir)
         output_dir = batch_dir / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
 
