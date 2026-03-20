@@ -529,8 +529,17 @@ def run_phase2(
         Y_stage4_list = []
         for ts in precomputed_timeseries:
             df = polars.DataFrame({col: ts[:, i] for i, col in enumerate(selected_obs)})
-            cc_var = koopman_cc.compute(df)
-            theta = cc_var.values
+            try:
+                cc_var = koopman_cc.compute(df)
+                theta = cc_var.values
+            except Exception:
+                # Koopman failed (no oscillatory modes, missing columns, etc.)
+                # Fall back to mass-based growth progress: θ = normalized log(dry_mass)
+                _mass = ts[:, 0]
+                _log_m = np.log(np.maximum(_mass, 1e-30))
+                _lo, _hi = _log_m.min(), _log_m.max()
+                _span = _hi - _lo if (_hi - _lo) > 1e-15 else 1.0
+                theta = np.clip((_log_m - _lo) / _span, 0.0, 1.0)
             bins = np.clip(np.digitize(theta, stage_edges) - 1, 0, n_bins - 1)
 
             n_obs = ts.shape[1]

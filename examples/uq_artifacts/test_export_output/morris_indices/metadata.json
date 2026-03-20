@@ -1,9 +1,0 @@
-{
-  "parameter_names": [
-    "vio_expression",
-    "vio_trl_eff",
-    "mecillinam_concentration"
-  ],
-  "n_trajectories": 10,
-  "n_levels": 4
-}
