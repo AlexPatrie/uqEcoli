@@ -242,7 +242,6 @@ def ui_parameter_selector(data, get_params, header, param_dropdown):
         </div>
         </div>
         <div style="margin-top:10px;">{_badges}</div>
-
         </div>
         """),
             ])
@@ -1614,7 +1613,10 @@ def pce_eq_plot(
                 <div style="color:{C["accent3"]};font-size:9px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;">{mo.icon('streamline:ecology-science-dna-biology-experiment-lab-science', size=15)} Parameters</div>
                 {mo.vstack([param_sliders[_i] for _i in range(len(param_sliders))])}
             </div>
-        </div>""")
+        
+        </div>
+        {ui_file_loader()}
+        """)
 
         # Right column: signal stack (top=waveform, mid=response curves, bottom=spectrogram)
         # Like a DAW: timeline/waveform on top, effect rack below
@@ -1646,7 +1648,7 @@ def pce_eq_plot(
 
         return mo.md(f""" \
         <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-            <div>{mo.vstack([_header_text, ui_file_loader(), ui_parameter_selector(), *_grid], gap=0.5)}</div>
+            <div>{mo.vstack([_header_text, ui_parameter_selector(), *_grid], gap=0.5)}</div>
         </div>
         """), _grid
 
