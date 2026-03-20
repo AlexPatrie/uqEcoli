@@ -32,7 +32,7 @@
       }
     ]
   },
-  "sim_data_path": "/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle",
+  "sim_data_path": "/Users/alexanderpatrie/sms/vEcoli/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle",
   "emitter": "parquet",
   "out_dir": "uq_outputs/53f0011034cdf18fda16a7d2f446f1e1",
   "experiment_id": "53f0011034cdf18fda16a7d2f446f1e1"

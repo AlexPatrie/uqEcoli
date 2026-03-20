@@ -709,56 +709,54 @@ class TestRequirement10_ScientificInputs:
     """
 
     @pytest.mark.milestone
-    def test_vio_pathway_params_exist(self, vio_params):
+    def test_sim_data_parameter_interface(self):
         """
-        REQUIREMENT 10.1: VioPathwayParams must exist.
+        REQUIREMENT 10.1: SimDataParameter must support arbitrary sim_data parameters.
 
-        Controls violacein pathway expression.
+        Replaces legacy VioPathwayParams — any parameter is now represented as
+        a SimDataParameter with name, attr_path, and bounds.
         """
-        assert vio_params is not None, "MILESTONE 08.4.2 FAILED: VioPathwayParams not found"
-        assert hasattr(vio_params, "expression"), (
-            "MILESTONE 08.4.2 FAILED: VioPathwayParams must have expression attribute"
+        from uq.pipeline.models import SimDataParameter
+
+        param = SimDataParameter(
+            name="vio_expression",
+            attr_path="process.transcription.new_gene_expression_baselines",
+            bounds=(0.0, 5.0),
         )
-        assert hasattr(vio_params, "translation_efficiency"), (
-            "MILESTONE 08.4.2 FAILED: VioPathwayParams must have translation_efficiency"
-        )
+        assert param.name == "vio_expression"
+        assert param.attr_path == "process.transcription.new_gene_expression_baselines"
+        assert param.bounds == (0.0, 5.0)
 
     @pytest.mark.milestone
-    def test_mecillinam_params_exist(self, mecillinam_params):
+    def test_generic_params_creation(self):
         """
-        REQUIREMENT 10.2: MecillinamParams must exist.
+        REQUIREMENT 10.2: SimDataParameter supports generic sim_data attributes.
 
-        Controls mecillinam antibiotic conditions.
+        Replaces legacy MecillinamParams — any scalar sim_data attribute can
+        be wrapped as a SimDataParameter for sensitivity analysis.
         """
-        assert mecillinam_params is not None, "MILESTONE 08.4.2 FAILED: MecillinamParams not found"
-        assert hasattr(mecillinam_params, "concentrations"), (
-            "MILESTONE 08.4.2 FAILED: MecillinamParams must have concentrations"
+        from uq.pipeline.models import SimDataParameter
+
+        param = SimDataParameter(
+            name="mecillinam_concentration",
+            attr_path="process.metabolism.secretion_penalty_coeff",
+            bounds=(0.0, 10.0),
         )
-
-    @pytest.mark.milestone
-    def test_knockout_params_exist(self, knockout_params):
-        """
-        REQUIREMENT 10.3: GeneKnockoutParams must exist.
-
-        Controls gene deletion experiments.
-        """
-        assert knockout_params is not None, "MILESTONE 08.4.2 FAILED: GeneKnockoutParams not found"
-        assert hasattr(knockout_params, "gene_deletions"), (
-            "MILESTONE 08.4.2 FAILED: GeneKnockoutParams must have gene_deletions"
-        )
+        assert param.name == "mecillinam_concentration"
+        assert param.bounds[0] < param.bounds[1]
 
     @pytest.mark.milestone
     def test_input_parameter_space_combines_all(self, input_parameter_space):
         """
         REQUIREMENT 10.4: InputParameterSpace must combine all parameter types.
 
-        Must support vio and mecillinam parameters for sensitivity analysis.
+        Must support multiple SimDataParameter specs for sensitivity analysis.
         """
         assert input_parameter_space.n_parameters >= 3, (
             "MILESTONE 08.4.2 FAILED: InputParameterSpace must include multiple parameters"
         )
         param_names = input_parameter_space.parameter_names
-        assert any("vio" in name for name in param_names), "MILESTONE 08.4.2 FAILED: Must include vio parameters"
+        assert len(param_names) >= 3, "MILESTONE 08.4.2 FAILED: Must include multiple parameters"
 
 
 # =============================================================================

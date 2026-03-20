@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from uq.inputs import XSpaceVecoli
+from uq.pipeline.models import SimDataParameter
 from uq.sampling import PrecomputedCache, generate_lhs_samples, run_and_cache
 
 
@@ -62,13 +63,11 @@ class ScalarWrapper:
 
 @pytest.fixture
 def param_space():
-    return XSpaceVecoli(
-        include_vio=True,
-        include_mecillinam=True,
-        vio_expression_bounds=(0.0, 5.0),
-        vio_trl_eff_bounds=(0.0, 2.0),
-        mecillinam_conc_bounds=(0.0, 10.0),
-    )
+    return XSpaceVecoli(parameters=[
+        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+    ])
 
 
 class TestRunAndCacheSingleEvaluation:

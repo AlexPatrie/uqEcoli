@@ -9,7 +9,7 @@ Test Modules
 test_milestone_084_2.py
     Explicit verification of each Milestone 08.4.2 requirement
 test_inputs.py
-    Input parameter definitions (vio, mecillinam, knockouts)
+    Input parameter definitions (SimDataParameter specs)
 test_aggregation.py
     Four aggregation strategies
 test_sensitivity.py

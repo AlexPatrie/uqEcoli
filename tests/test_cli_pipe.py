@@ -1,7 +1,7 @@
 """
 Integration test for uq.cli.pipe() end-to-end — REAL DATA, no mocking.
 
-Uses real simulation data from vEcoli-private/api_integration/sims for
+Uses real simulation data from vEcoli/api_integration/sims for
 the full RFC006 pipeline: data loading → aggregation → variance decomposition
 → Phase 1 (Morris + PCE + Sobol) → Phase 2 (Koopman + per-stage Sobol)
 → PipelineResult.
@@ -22,7 +22,7 @@ from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
 # Constants
 # ---------------------------------------------------------------------------
 
-SIM_BASE_PATH = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
+SIM_BASE_PATH = Path("/Users/alexanderpatrie/sms/vEcoli/api_integration/sims")
 EXPERIMENT_IDS = ["mecillinam", "api_simulation_default", "test_violacein_with_metabolism"]
 N_BINS = 5
 

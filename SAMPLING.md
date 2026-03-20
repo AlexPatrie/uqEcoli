@@ -97,8 +97,6 @@ The Typer command accepts:
 | `--max-duration` | 10800.0 | Max simulation wall-clock time (seconds) |
 | `--generations` | 1 | Number of cell generations per sample |
 | `--params-file` | None | JSON file with custom `SimDataParameter` specs |
-| `--include-vio` | None | Legacy: include violacein pathway params |
-| `--include-mecillinam` | None | Legacy: include mecillinam concentration |
 | `--batch-dir` | None | Explicit working directory (temp if omitted) |
 
 Validates that each `experiment_id` directory exists under `sim_base_path`, then delegates to `handlers.generate_samples()`.
@@ -138,8 +136,6 @@ When `--params-file` is provided, specs are loaded from JSON. Otherwise, `DEFAUL
 | `fraction_active_rnap_free` | `process.transcription.fraction_active_rnap_free` | (0.25, 0.47) |
 | `fraction_active_rnap_bound` | `process.transcription.fraction_active_rnap_bound` | (0.12, 0.22) |
 | `cell_dry_mass_fraction` | `mass.cell_dry_mass_fraction` | (0.25, 0.35) |
-
-**Legacy mode:** Activated by `--include-vio` / `--include-mecillinam` flags, using hardcoded vio pathway and mecillinam concentration parameters.
 
 ### 4. Build & Validate Parameter Space
 

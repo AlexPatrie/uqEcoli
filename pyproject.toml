@@ -29,6 +29,7 @@ dependencies = [
 
 [project.scripts]
 uq = "uq.cli:app"
+uq-simple = "uq_simple.cli:app"
 
 [tool.hatch.build.targets.sdist]
 include = [

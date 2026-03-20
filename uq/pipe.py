@@ -4,7 +4,7 @@ Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 Workflow:
       Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli
 
-      1. Define Parameter Space — param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True) → n parameters with bounds
+      1. Define Parameter Space — param_space = XSpaceVecoli(parameters=[SimDataParameter(...)]) → n parameters with bounds
       2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
       3. Aggregation Strategies 1-3 — aggregator runs 3 strategies → 3 × AggregatedOutput
         - 3a. Strategy 1: UNIFORM — mean, std across all cells/times
@@ -37,8 +37,8 @@ Workflow:
       - Feedback loop: Step 4 residual_fraction → Step 5b observable selection → Step 6b Koopman
 
       Final user-facing outputs:
-        1. Phase 1 Sobol: "vio_expression drives 60% of bulk mass variance, mecillinam_conc drives 25%, ..."
-        2. Phase 2 Sobol: "During C-period (DNA replication), mecillinam_conc drives 80% of variance; during D-period, vio_expression dominates"
+        1. Phase 1 Sobol: "param_A drives 60% of bulk mass variance, param_B drives 25%, ..."
+        2. Phase 2 Sobol: "During C-period (DNA replication), param_B drives 80% of variance; during D-period, param_A dominates"
 
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │  PIPELINE OUTPUTS                                                                   │
@@ -159,10 +159,9 @@ class DatasetMultiExperiment:
                 f"You must pass 1 parameter dataset for each experiment id. "
                 f"Expected: {self.experiment_ids}, Got: {n_param_ds}"
             )
-        if n_param_ds == 1:
-            self.parameter_space = parameter_datasets[0].to_parameter_space()
-        else:
-            self.parameter_space = ParameterDataset.merge_to_parameter_space(*parameter_datasets)
+        # Generic mode: parameter space is the same across experiments
+        # (all use the same SimDataParameter specs from DEFAULT_SIM_DATA_PARAMETERS)
+        self.parameter_space = parameter_datasets[0].to_parameter_space()
 
         # Resolve observable columns from the timeseries DataFrame
         self.observables = [c for c in self.y.columns if c not in self._METADATA_COLS]
@@ -213,10 +212,8 @@ def initialize_data(
 def test_initialize_data():
     experiments = [
         "api_simulation_default",
-        "mecillinam",
-        "test_violacein_with_metabolism",
     ]
-    base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
+    base_path = Path("/Users/alexanderpatrie/sms/vEcoli/api_integration/sims")
     ds = initialize_data(experiment_ids=experiments, sim_base_path=base_path)
     print()
 
@@ -384,13 +381,14 @@ class Pipeline(BaseClass):
         f = self.system.simulation_func
 
         # --- Phase 1 then Phase 2 (sequential to avoid OOM) ---
+        _export = Path(self.export_path) if self.export_path else None
         return run_phase1(
             param_space=param_space,
             simulation_func=f,
             polynomial_order=self.polynomial_order,
             n_samples=self.n_samples,
             prescreen_config=self.prescreen_config if self.cache is None else None,
-            export_path=self.export_path,
+            export_path=_export,
             precomputed_samples=self.cache.X if self.cache else None,
             precomputed_outputs=self.cache.Y if self.cache else None,
         )
@@ -400,6 +398,7 @@ class Pipeline(BaseClass):
     ) -> tuple[list[SobolIndices], PCESurrogate, CellCycleRelevanceResult]:
         param_space = self.system.dataset.parameter_space
         f = self.system.simulation_func
+        _export = Path(self.export_path) if self.export_path else None
         return run_phase2(
             param_space=param_space,
             simulation_func=f,
@@ -409,7 +408,7 @@ class Pipeline(BaseClass):
             polynomial_order=self.polynomial_order,
             n_samples=self.n_samples,
             expected_cycle_time=self.expected_cycle_time,
-            export_path=self.export_path,
+            export_path=_export,
             precomputed_samples=self.cache.X if self.cache else None,
             precomputed_timeseries=self.cache.Y_timeseries if self.cache else None,
         )

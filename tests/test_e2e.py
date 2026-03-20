@@ -28,33 +28,28 @@ class TestE2EInputToOutput:
 
     @pytest.mark.e2e
     def test_samples_to_params_conversion(self, input_parameter_space, rng):
-        """Should convert samples to UQInputParameters objects."""
+        """Should convert samples to GenericSimDataParams objects."""
         lb, ub = input_parameter_space.get_pytuq_bounds()
         sample = rng.uniform(lb, ub)
 
         params = input_parameter_space.sample_to_params(sample)
 
         assert params is not None
-        assert params.vio is not None
-        assert params.vio.expression == sample[0]
+        # GenericSimDataParams stores {name: value} dict
+        assert len(params.values) == input_parameter_space.n_parameters
 
     @pytest.mark.e2e
     def test_full_input_parameter_workflow(self):
         """Complete workflow from parameter space to simulation-ready params."""
-        from uq import (
-            UQInputParametersVecoli,
-            VioPathwayParams,
-            XSpaceVecoli,
-        )
+        from uq import XSpaceVecoli
+        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         # 1. Define parameter space
-        space = XSpaceVecoli(
-            include_vio=True,
-            include_mecillinam=True,
-            vio_expression_bounds=(0.5, 5.0),
-            vio_trl_eff_bounds=(0.5, 2.0),
-            mecillinam_conc_bounds=(0.0, 10.0),
-        )
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="param_a", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.0, 1.0)),
+            SimDataParameter(name="param_b", attr_path="mass.cell_dry_mass_fraction", bounds=(0.25, 0.35)),
+            SimDataParameter(name="param_c", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.25, 0.47)),
+        ])
 
         # 2. Generate sample
         rng = np.random.default_rng(42)
@@ -65,9 +60,9 @@ class TestE2EInputToOutput:
         params = space.sample_to_params(sample)
 
         # 4. Verify structure
-        assert isinstance(params, UQInputParametersVecoli)
-        assert isinstance(params.vio, VioPathwayParams)
-        assert space.parameter_bounds[0][0] <= params.vio.expression <= space.parameter_bounds[0][1]
+        assert isinstance(params, GenericSimDataParams)
+        assert len(params.values) == 3
+        assert space.parameter_bounds[0][0] <= sample[0] <= space.parameter_bounds[0][1]
 
 
 class TestE2EAggregationWorkflow:
@@ -158,15 +153,14 @@ class TestE2ESensitivityWorkflow:
     def test_pce_sensitivity_with_synthetic_function(self, rng):
         """Complete PCE sensitivity analysis with known analytic function."""
         from uq import SobolIndices, XSpaceVecoli
+        from uq.pipeline.models import SimDataParameter
 
         # 1. Define parameter space
-        space = XSpaceVecoli(
-            include_vio=True,
-            include_mecillinam=True,
-            vio_expression_bounds=(0.0, 1.0),
-            vio_trl_eff_bounds=(0.0, 1.0),
-            mecillinam_conc_bounds=(0.0, 1.0),
-        )
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="kinetic_obj_weight", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.0, 1.0)),
+            SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.0, 1.0)),
+            SimDataParameter(name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 1.0)),
+        ])
 
         # 2. Generate samples
         n_samples = 100
@@ -192,7 +186,7 @@ class TestE2ESensitivityWorkflow:
 
         # 5. Verify expected importance ranking
         top_params = indices.select(n=3)
-        assert top_params[0][0] == "vio_expression"  # Most influential
+        assert top_params[0][0] == "kinetic_obj_weight"  # Most influential
 
     @pytest.mark.e2e
     def test_sensitivity_with_precomputed_data(self, parameter_output_samples, input_parameter_space):
@@ -407,17 +401,16 @@ class TestE2ECompleteWorkflow:
             XSpaceVecoli,
             compute_variance_decomposition,
         )
+        from uq.pipeline.models import SimDataParameter
 
         # =========================================================
         # STEP 1: Define input parameter space
         # =========================================================
-        param_space = XSpaceVecoli(
-            include_vio=True,
-            include_mecillinam=True,
-            vio_expression_bounds=(0.5, 5.0),
-            vio_trl_eff_bounds=(0.5, 2.0),
-            mecillinam_conc_bounds=(0.0, 10.0),
-        )
+        param_space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="kinetic_obj_weight", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.5, 5.0)),
+            SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.5, 2.0)),
+            SimDataParameter(name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 10.0)),
+        ])
 
         assert param_space.n_parameters == 3
 

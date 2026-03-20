@@ -119,25 +119,12 @@ def prescreen_parameters(
 
 
 def prescreen_parameters_vecoli(
-    vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
-    vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-    mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
-    knockout_genes: list[str] | None = None,
     prescreen_config: PCEParameterSelectionConfig | None = None,
 ):
     """
     Prescreening attrs related to morris: n_trajectories, n_top (num selections)
     """
-    full_space = XSpaceVecoli(
-        vio_expression_bounds=vio_expression_bounds,
-        vio_trl_eff_bounds=vio_trl_eff_bounds,
-        mecillinam_conc_bounds=mecillinam_conc_bounds,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-        knockout_genes=knockout_genes,
-    )
+    full_space = XSpaceVecoli()
     return prescreen_parameters(full_space=full_space, config=prescreen_config)
 
 

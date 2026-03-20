@@ -5,22 +5,16 @@ Usage::
 
     from uq.pipeline.param_loader import ParameterDataset
 
-    ds = ParameterDataset(sim_data_path="sim_data/violacein/kb/simData.cPickle")
+    ds = ParameterDataset(sim_data_path="sim_data/baseline/kb/simData.cPickle")
     space = ds.to_parameter_space()          # XSpaceVecoli from real sim_data
     df = ds.to_dataframe()                   # long-format DataFrame
-
-    # Multi-condition merge:
-    vio = ParameterDataset(sim_data_path="sim_data/violacein/kb/simData.cPickle")
-    mec = ParameterDataset(sim_data_path="sim_data/mecillinam/kb/simData.cPickle")
-    space = ParameterDataset.merge_to_parameter_space(vio, mec)
 """
 
 import dataclasses
-import os
 import pickle
 import signal
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 
 import numpy as np
 import polars as pl
@@ -72,13 +66,6 @@ _SKIP_ATTRS = frozenset({
     "jacobian",
 })
 
-# Sim-data subdirectory → condition label
-_CONDITION_LABELS: dict[str, str] = {
-    "baseline": "baseline",
-    "violacein": "violacein",
-    "mecillinam": "mecillinam",
-}
-
 
 @dataclasses.dataclass
 class SimDataPayload:
@@ -108,14 +95,12 @@ class ParameterDataset:
     Provide *either* ``sim_data_path`` (a path to a ``simData.cPickle``)
     *or* an already-loaded ``sim_data`` instance.
 
-    Properties derived from the sim_data:
-        ``has_violacein``  — True if the vio pathway is active
-        ``vio_baselines``  — dict of 5 new-gene expression baseline floats
-        ``condition``      — inferred condition label (baseline/violacein/mecillinam)
+    Properties:
+        ``condition`` — inferred condition label from sim_data_path
 
     Parameter-space construction:
-        ``to_parameter_space(...)`` — builds an ``XSpaceVecoli`` from this dataset
-        ``merge_to_parameter_space(...)`` — class method to combine multiple datasets
+        ``to_parameter_space(...)`` — builds an ``XSpaceVecoli`` from generic
+            ``SimDataParameter`` specs (defaults to ``DEFAULT_SIM_DATA_PARAMETERS``)
     """
 
     sim_data_path: Path | str | None = None
@@ -134,130 +119,41 @@ class ParameterDataset:
 
     @property
     def condition(self) -> str:
-        """Infer condition label from the sim_data_path or sim_data contents."""
+        """Infer condition label from the sim_data_path directory name."""
         if self.sim_data_path is not None:
             for part in Path(self.sim_data_path).parts:
-                if part in _CONDITION_LABELS:
-                    return _CONDITION_LABELS[part]
-        # Fall back to content inspection
-        if self.has_violacein:
-            return "violacein"
+                if part in ("baseline", "violacein", "mecillinam"):
+                    return part
         return "baseline"
-
-    @property
-    def has_violacein(self) -> bool:
-        """True if this sim_data includes the violacein pathway."""
-        try:
-            return bool(self.sim_data.process.metabolism.include_violacein_reactions)
-        except AttributeError:
-            return False
-
-    # ── Parameter extraction ─────────────────────────────────────────────
-
-    @property
-    def vio_baselines(self) -> dict[str, float]:
-        """Extract the 5 new-gene expression baselines from sim_data.
-
-        Reads ``sim_data.process.transcription.new_gene_expression_baselines``,
-        which is a dict with keys:
-            new_gene_rna_synth_prob_baseline
-            new_gene_rna_expression_baseline
-            new_gene_exp_free_baseline
-            new_gene_exp_ppgpp_baseline
-            new_gene_reg_basal_prob_baseline
-
-        Returns empty dict if the attribute is absent.
-        """
-        ts = getattr(self.sim_data, "process", None)
-        ts = getattr(ts, "transcription", None) if ts else None
-        if ts is None:
-            return {}
-        raw = getattr(ts, "new_gene_expression_baselines", None)
-        if isinstance(raw, dict):
-            return {k: float(v) for k, v in raw.items()}
-        return {}
 
     # ── Parameter space construction ─────────────────────────────────────
 
     def to_parameter_space(
         self,
         parameters: list[SimDataParameter] | None = None,
-        include_vio: bool | None = None,
-        include_mecillinam: bool | None = None,
-        vio_expression_bounds: tuple[float, float] | None = None,
-        vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-        mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
     ) -> "XSpaceVecoli":
         """Build an ``XSpaceVecoli`` from this dataset.
 
-        **Generic mode** (``parameters`` provided):
         Uses a list of ``SimDataParameter`` specs identifying arbitrary
         scalar attributes in sim_data by dot-path. Each attr_path is
         validated against ``self.sim_data``. If ``parameters`` is not
-        provided and neither ``include_vio`` nor ``include_mecillinam``
-        is explicitly True, defaults to
-        ``DEFAULT_SIM_DATA_PARAMETERS`` (5 physiologically relevant
-        scalar parameters).
-
-        **Legacy mode** (``include_vio`` / ``include_mecillinam``):
-        Hardcoded vio + mecillinam parameters. Auto-detects from
-        sim_data if None.
+        provided, defaults to ``DEFAULT_SIM_DATA_PARAMETERS``.
 
         Args:
-            parameters: List of ``SimDataParameter`` specs for generic
-                mode. When provided, ``include_vio`` and
-                ``include_mecillinam`` are ignored.
-            include_vio: Include vio pathway parameters.
-            include_mecillinam: Include mecillinam parameters.
-            vio_expression_bounds: (lo, hi) for vio expression factor.
-            vio_trl_eff_bounds: (lo, hi) for translation efficiency.
-            mecillinam_conc_bounds: (lo, hi) for mecillinam concentration.
+            parameters: List of ``SimDataParameter`` specs. Defaults to
+                ``DEFAULT_SIM_DATA_PARAMETERS`` when None.
 
         Returns:
             Configured ``XSpaceVecoli`` instance.
         """
         from uq.inputs import XSpaceVecoli
 
-        # Determine mode: if parameters is provided, use generic mode.
-        # If neither vio nor mecillinam is explicitly requested, also
-        # default to generic mode with DEFAULT_SIM_DATA_PARAMETERS.
-        use_generic = parameters is not None or (
-            include_vio is None
-            and include_mecillinam is None
-            and not self.has_violacein
-            and self.condition != "mecillinam"
-        )
-
-        if use_generic:
-            if parameters is None:
-                parameters = list(DEFAULT_SIM_DATA_PARAMETERS)
-            validated = self._validate_sim_data_parameters(parameters)
-            return XSpaceVecoli(
-                experiment_id=self.condition,
-                parameters=validated,
-            )
-
-        # Legacy vio/mecillinam path
-        if include_vio is None:
-            include_vio = self.has_violacein
-        if include_mecillinam is None:
-            include_mecillinam = self.condition == "mecillinam"
-
-        if vio_expression_bounds is None and include_vio:
-            baselines = self.vio_baselines
-            base_expr = baselines.get("new_gene_rna_expression_baseline")
-            if base_expr is not None and base_expr > 0:
-                vio_expression_bounds = (0.0, 5.0 * base_expr / base_expr)
-            else:
-                vio_expression_bounds = (0.0, 5.0)
-
+        if parameters is None:
+            parameters = list(DEFAULT_SIM_DATA_PARAMETERS)
+        validated = self._validate_sim_data_parameters(parameters)
         return XSpaceVecoli(
             experiment_id=self.condition,
-            include_vio=include_vio,
-            include_mecillinam=include_mecillinam,
-            vio_expression_bounds=vio_expression_bounds or (0.0, 5.0),
-            vio_trl_eff_bounds=vio_trl_eff_bounds,
-            mecillinam_conc_bounds=mecillinam_conc_bounds,
+            parameters=validated,
         )
 
     def _validate_sim_data_parameters(
@@ -279,59 +175,6 @@ class ParameterDataset:
                 obj = getattr(obj, part)
             validated.append(p)
         return validated
-
-    @classmethod
-    def merge_to_parameter_space(
-        cls,
-        *datasets: "ParameterDataset",
-        vio_expression_bounds: tuple[float, float] | None = None,
-        vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-        mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
-    ) -> "XSpaceVecoli":
-        """Merge parameters from multiple condition datasets into one ``XSpaceVecoli``.
-
-        OR's the include flags across all datasets: if *any* dataset has
-        violacein, the merged space includes vio parameters.  Same for
-        mecillinam.
-
-        If ``vio_expression_bounds`` is None and any dataset has vio
-        baselines, bounds are derived from the first vio dataset.
-
-        Example::
-
-            vio = ParameterDataset(sim_data_path="sim_data/violacein/kb/simData.cPickle")
-            mec = ParameterDataset(sim_data_path="sim_data/mecillinam/kb/simData.cPickle")
-            space = ParameterDataset.merge_to_parameter_space(vio, mec)
-            # → XSpaceVecoli with include_vio=True, include_mecillinam=True
-        """
-        if not datasets:
-            raise ValueError("Need at least one ParameterDataset.")
-
-        include_vio = any(ds.has_violacein for ds in datasets)
-        include_mec = any(ds.condition == "mecillinam" for ds in datasets)
-
-        # Derive bounds from the first vio dataset
-        if vio_expression_bounds is None and include_vio:
-            for ds in datasets:
-                if ds.has_violacein and ds.vio_baselines:
-                    vio_expression_bounds = ds.to_parameter_space(
-                        include_vio=True,
-                        include_mecillinam=False,
-                    ).parameter_bounds[0]  # first param = vio_expression
-                    break
-
-        from uq.inputs import XSpaceVecoli
-
-        experiment_id = "+".join(ds.condition for ds in datasets)
-
-        return XSpaceVecoli(
-            experiment_id=experiment_id,
-            include_vio=include_vio,
-            include_mecillinam=include_mec,
-            vio_expression_bounds=vio_expression_bounds or (0.0, 5.0),
-            vio_trl_eff_bounds=vio_trl_eff_bounds,
-            mecillinam_conc_bounds=mecillinam_conc_bounds,
-        )
 
     # ── Serialization ────────────────────────────────────────────────────
 

@@ -9,133 +9,68 @@ import numpy as np
 import pytest
 
 
-class TestVioPathwayParams:
-    """Tests for violacein pathway parameter definitions."""
+class TestGenericSimDataParams:
+    """Tests for generic sim_data parameter definitions."""
 
     @pytest.mark.unit
-    def test_creation_with_defaults(self):
-        """VioPathwayParams should have sensible defaults."""
-        from uq import VioPathwayParams
+    def test_creation(self):
+        """GenericSimDataParams should store parameter specs and values."""
+        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
-        params = VioPathwayParams()
-        assert params.enabled is True
-        assert params.expression >= 0
-
-    @pytest.mark.unit
-    def test_creation_with_custom_values(self, vio_params):
-        """VioPathwayParams should accept custom values."""
-        assert vio_params.expression == 2.5
-        assert vio_params.translation_efficiency == 1.2
-        assert vio_params.induction_gen == 1
-        assert vio_params.condition == "basal"
-
-    @pytest.mark.unit
-    def test_expression_bounds(self):
-        """Expression should be non-negative."""
-        from uq import VioPathwayParams
-
-        params = VioPathwayParams(expression=0.0)
-        assert params.expression >= 0
-
-    @pytest.mark.unit
-    def test_disabled_state(self):
-        """VioPathwayParams can be disabled."""
-        from uq import VioPathwayParams
-
-        params = VioPathwayParams(enabled=False)
-        assert params.enabled is False
-
-
-class TestMecillinamParams:
-    """Tests for mecillinam antibiotic parameter definitions."""
-
-    @pytest.mark.unit
-    def test_creation_with_defaults(self):
-        """MecillinamParams should have sensible defaults."""
-        from uq import MecillinamParams
-
-        params = MecillinamParams()
-        assert isinstance(params.times, list)
-        assert isinstance(params.concentrations, list)
-
-    @pytest.mark.unit
-    def test_creation_with_custom_values(self, mecillinam_params):
-        """MecillinamParams should accept custom values."""
-        assert mecillinam_params.times == [0.0, 3600.0]
-        assert mecillinam_params.concentrations == [0.0, 5.0]
-        assert mecillinam_params.knockouts == ["murG"]
-
-    @pytest.mark.unit
-    def test_times_and_concentrations_match(self):
-        """Times and concentrations should have matching lengths."""
-        from uq import MecillinamParams
-
-        params = MecillinamParams(
-            times=[0.0, 100.0, 200.0],
-            concentrations=[0.0, 1.0, 2.0],
+        specs = [
+            SimDataParameter(
+                name="kinetic_weight",
+                attr_path="process.metabolism.kinetic_objective_weight",
+                bounds=(0.0, 1.0),
+            ),
+        ]
+        params = GenericSimDataParams(
+            parameter_specs=specs,
+            values={"kinetic_weight": 0.5},
         )
-        assert len(params.times) == len(params.concentrations)
-
-
-class TestGeneKnockoutParams:
-    """Tests for gene knockout parameter definitions."""
+        assert len(params.values) == 1
+        assert params.values["kinetic_weight"] == 0.5
 
     @pytest.mark.unit
-    def test_creation_with_defaults(self):
-        """GeneKnockoutParams should have empty defaults."""
-        from uq import GeneKnockoutParams
+    def test_from_sample(self):
+        """XSpaceVecoli.sample_to_params should produce GenericSimDataParams."""
+        from uq.inputs import XSpaceVecoli
+        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
-        params = GeneKnockoutParams()
-        assert isinstance(params.gene_deletions, list)
-        assert isinstance(params.translation_knockouts, list)
-
-    @pytest.mark.unit
-    def test_creation_with_custom_values(self, knockout_params):
-        """GeneKnockoutParams should accept custom values."""
-        assert "lacZ" in knockout_params.gene_deletions
-        assert "galK" in knockout_params.gene_deletions
-        assert "murG" in knockout_params.translation_knockouts
-
-
-class TestUQInputParameters:
-    """Tests for the combined UQ input parameter container."""
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
+            SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
+        ])
+        sample = np.array([0.5, 1.0])
+        params = space.sample_to_params(sample)
+        assert isinstance(params, GenericSimDataParams)
+        assert params.values["param_a"] == 0.5
+        assert params.values["param_b"] == 1.0
 
     @pytest.mark.unit
-    def test_creation_with_subparams(self, vio_params, mecillinam_params, knockout_params):
-        """UQInputParameters should combine all parameter types."""
-        from uq import UQInputParametersVecoli
+    def test_to_simulation_config(self):
+        """to_simulation_config should produce a mutations dict."""
+        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
-        params = UQInputParametersVecoli(
-            vio=vio_params,
-            mecillinam=mecillinam_params,
-            knockouts=knockout_params,
-            seed=42,
-            generations=8,
+        specs = [
+            SimDataParameter(name="p1", attr_path="a.b.c", bounds=(0.0, 1.0)),
+            SimDataParameter(name="p2", attr_path="x.y.z", bounds=(0.0, 2.0)),
+        ]
+        params = GenericSimDataParams(
+            parameter_specs=specs,
+            values={"p1": 0.3, "p2": 1.5},
         )
-
-        assert params.vio is vio_params
-        assert params.mecillinam is mecillinam_params
-        assert params.knockouts is knockout_params
-        assert params.seed == 42
-        assert params.generations == 8
-
-    @pytest.mark.unit
-    def test_default_subparams(self):
-        """UQInputParameters should create defaults for subparams."""
-        from uq import UQInputParametersVecoli
-
-        params = UQInputParametersVecoli()
-        assert params.vio is not None
-        assert params.mecillinam is not None
-        assert params.knockouts is not None
+        config = params.to_simulation_config()
+        assert config["sim_data_mutations"]["a.b.c"] == 0.3
+        assert config["sim_data_mutations"]["x.y.z"] == 1.5
 
 
 class TestInputParameterSpace:
     """Tests for InputParameterSpace used in sensitivity analysis."""
 
     @pytest.mark.unit
-    def test_creation_with_vio_and_mecillinam(self, input_parameter_space):
-        """InputParameterSpace should include both parameter sets."""
+    def test_creation_with_parameters(self, input_parameter_space):
+        """InputParameterSpace should include all configured parameters."""
         assert input_parameter_space.n_parameters == 3
         names = input_parameter_space.parameter_names
         assert "vio_expression" in names
@@ -156,35 +91,29 @@ class TestInputParameterSpace:
         assert bounds.shape == (3, 2)
 
     @pytest.mark.unit
-    def test_vio_only(self):
-        """InputParameterSpace can include only vio parameters."""
-        from uq import XSpaceVecoli
+    def test_subset_parameters(self):
+        """InputParameterSpace works with a subset of parameters."""
+        from uq.inputs import XSpaceVecoli
+        from uq.pipeline.models import SimDataParameter
 
-        space = XSpaceVecoli(include_vio=True, include_mecillinam=False)
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
+            SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
+        ])
         assert space.n_parameters == 2
-        assert all("vio" in name for name in space.parameter_names)
-
-    @pytest.mark.unit
-    def test_mecillinam_only(self):
-        """InputParameterSpace can include only mecillinam parameters."""
-        from uq import XSpaceVecoli
-
-        space = XSpaceVecoli(include_vio=False, include_mecillinam=True)
-        assert space.n_parameters == 1
-        assert "mecillinam" in space.parameter_names[0]
+        assert space.parameter_names == ["param_a", "param_b"]
 
     @pytest.mark.unit
     def test_custom_bounds(self):
-        """InputParameterSpace accepts custom bounds."""
-        from uq import XSpaceVecoli
+        """InputParameterSpace accepts custom bounds via SimDataParameter."""
+        from uq.inputs import XSpaceVecoli
+        from uq.pipeline.models import SimDataParameter
 
-        space = XSpaceVecoli(
-            vio_expression_bounds=(1.0, 3.0),
-            vio_trl_eff_bounds=(0.5, 1.5),
-            mecillinam_conc_bounds=(0.0, 5.0),
-            include_vio=True,
-            include_mecillinam=True,
-        )
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="p1", attr_path="a.b", bounds=(1.0, 3.0)),
+            SimDataParameter(name="p2", attr_path="c.d", bounds=(0.5, 1.5)),
+            SimDataParameter(name="p3", attr_path="e.f", bounds=(0.0, 5.0)),
+        ])
 
         bounds = space.parameter_bounds
         assert bounds[0] == (1.0, 3.0)
@@ -203,10 +132,13 @@ class TestInputParameterSpace:
 
     @pytest.mark.unit
     def test_sample_to_params_conversion(self, input_parameter_space):
-        """sample_to_params converts array to UQInputParameters."""
-        sample = np.array([2.0, 1.0, 5.0])
+        """sample_to_params converts array to GenericSimDataParams."""
+        from uq.pipeline.models import GenericSimDataParams
 
+        sample = np.array([2.0, 1.0, 5.0])
         params = input_parameter_space.sample_to_params(sample)
 
-        assert params.vio.expression == 2.0
-        assert params.vio.translation_efficiency == 1.0
+        assert isinstance(params, GenericSimDataParams)
+        assert params.values["vio_expression"] == 2.0
+        assert params.values["vio_trl_eff"] == 1.0
+        assert params.values["mecillinam_concentration"] == 5.0

@@ -786,15 +786,15 @@ def compute_variance_decomposition(
         - 'generation_fraction': Fraction of variance from generation
         - 'seed_fraction': Fraction of variance from lineage seed
     """
-    total_var = aggregated_uniform.std**2
+    total_var = np.nan_to_num(aggregated_uniform.std, nan=0.0)**2
 
     # Between-group variance is variance of group means
-    gen_between_var = np.var(aggregated_by_gen.mean, axis=0)
-    seed_between_var = np.var(aggregated_by_seed.mean, axis=0)
+    gen_between_var = np.var(np.nan_to_num(aggregated_by_gen.mean, nan=0.0), axis=0)
+    seed_between_var = np.var(np.nan_to_num(aggregated_by_seed.mean, nan=0.0), axis=0)
 
     # Within-group variance is mean of group variances
-    gen_within_var = np.mean(aggregated_by_gen.std**2, axis=0)
-    seed_within_var = np.mean(aggregated_by_seed.std**2, axis=0)
+    gen_within_var = np.mean(np.nan_to_num(aggregated_by_gen.std, nan=0.0)**2, axis=0)
+    seed_within_var = np.mean(np.nan_to_num(aggregated_by_seed.std, nan=0.0)**2, axis=0)
 
     # Avoid division by zero
     total_var_safe = np.where(total_var > 0, total_var, 1.0)
