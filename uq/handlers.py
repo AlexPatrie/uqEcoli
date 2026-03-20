@@ -228,7 +228,8 @@ def generate_samples(
     generations: int = 1,
     live: bool = False,
     include_vio: bool | None = None,
-    include_mecillinam: bool = True,
+    include_mecillinam: bool | None = None,
+    params_file: str | None = None,
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
@@ -237,9 +238,14 @@ def generate_samples(
 
     By default uses ``DataDrivenWrapper`` (synthetic response surface
     built from the existing data's statistics).  Pass ``live=True``
-    to use ``VecoliSimulationFunc``, which runs a real ``EcoliSim``
-    for each LHS sample — requires the ``ecoli`` package and a
-    ``simData.cPickle`` at the standard path.
+    to run real vEcoli simulations as subprocesses.
+
+    **Parameter selection:** By default, uses 5 physiologically relevant
+    scalar sim_data parameters (see ``DEFAULT_SIM_DATA_PARAMETERS``).
+    To specify custom parameters, pass ``--params-file`` pointing to a
+    JSON file with a list of ``SimDataParameter`` specs.  To use the
+    legacy vio/mecillinam parameters, pass ``--include-vio`` or
+    ``--include-mecillinam``.
 
     Args:
         experiment_ids: Experiment IDs whose sim_data to load.
@@ -248,18 +254,19 @@ def generate_samples(
         n_samples: Number of LHS samples.
         seed: Random seed for LHS generation.
         observable_columns: Which output columns to extract.
-        max_workers: If > 1, use parallel local evaluation via
-            ProcessPoolExecutor.  None = sequential (default).
+        max_workers: Max parallel subprocesses. None = sequential.
         max_duration: Simulation wall-clock limit in seconds (live mode).
         generations: Number of generations per sim (live mode).
-        live: If True, run real vEcoli simulations via
-            ``VecoliSimulationFunc`` instead of the synthetic
-            ``DataDrivenWrapper``.
-        include_vio: Include vio pathway parameters.  Auto-detected from
-            sim_data if None (requires violacein-enabled sim_data).
-        include_mecillinam: Include mecillinam concentration parameter.
+        live: If True, run real vEcoli simulations as subprocesses.
+        include_vio: Include vio pathway parameters (legacy mode).
+        include_mecillinam: Include mecillinam concentration (legacy mode).
+        params_file: Path to a JSON file with a list of
+            ``SimDataParameter`` specs for custom parameter selection.
     """
+    import json as _json
+
     from uq.pipe import initialize_data
+    from uq.pipeline.models import SimDataParameter
     from uq.pipeline.workflow import aggregate_timeseries
     from uq.sampling import run_and_cache
     from uq.wrappers import DataDrivenWrapper
@@ -279,23 +286,27 @@ def generate_samples(
         observable_columns=observable_columns,
     )
 
-    # Build parameter space — use explicit flags, falling back to
-    # auto-detection from sim_data when include_vio is None.
     if not ds.x:
         raise RuntimeError(
             f"No ParameterDataset loaded. Ensure simData.cPickle exists under {sim_base_path}/*/parca/kb/"
         )
+
+    # Load custom parameter specs from JSON file if provided
+    sim_data_parameters = None
+    if params_file is not None:
+        raw = _json.loads(Path(params_file).read_text())
+        sim_data_parameters = [SimDataParameter.from_dict(p) for p in raw]
+
+    # Build parameter space
     param_space = ds.x[0].to_parameter_space(
+        parameters=sim_data_parameters,
         include_vio=include_vio,
         include_mecillinam=include_mecillinam,
     )
     if param_space.n_parameters == 0:
         raise RuntimeError(
-            f"Parameter space is empty (include_vio={include_vio}, "
-            f"include_mecillinam={include_mecillinam}). For baseline "
-            f"sim_data without violacein, use --include-mecillinam "
-            f"(default) or provide a violacein-enabled sim_data for "
-            f"--include-vio."
+            "Parameter space is empty. Provide --params-file, "
+            "--include-vio, or --include-mecillinam."
         )
 
     if live:

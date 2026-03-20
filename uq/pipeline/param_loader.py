@@ -29,12 +29,49 @@ from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 from scipy import sparse
 
 from uq.common import get_repo_root
+from uq.pipeline.models import SimDataParameter
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 _DEFAULT_PICKLE = (get_repo_root() / "sim_data" / "baseline" / "kb" / "simData.cPickle").__str__()
+
+
+# ── Default generic sim_data parameters for UQ ────────────────────────────
+
+DEFAULT_SIM_DATA_PARAMETERS: list[SimDataParameter] = [
+    SimDataParameter(
+        name="kinetic_objective_weight",
+        attr_path="process.metabolism.kinetic_objective_weight",
+        bounds=(0.0, 1.0),
+        description="FBA kinetic vs homeostatic objective weight (0=homeostatic, 1=kinetic)",
+    ),
+    SimDataParameter(
+        name="secretion_penalty_coeff",
+        attr_path="process.metabolism.secretion_penalty_coeff",
+        bounds=(0.0, 2.0),
+        description="Penalty coefficient on secretion fluxes in FBA",
+    ),
+    SimDataParameter(
+        name="fraction_active_rnap_free",
+        attr_path="process.transcription.fraction_active_rnap_free",
+        bounds=(0.1, 1.0),
+        description="Fraction of RNAP that is active when ppGpp-free",
+    ),
+    SimDataParameter(
+        name="fraction_active_rnap_bound",
+        attr_path="process.transcription.fraction_active_rnap_bound",
+        bounds=(0.0, 0.5),
+        description="Fraction of RNAP that is active when ppGpp-bound",
+    ),
+    SimDataParameter(
+        name="cell_dry_mass_fraction",
+        attr_path="mass.cell_dry_mass_fraction",
+        bounds=(0.2, 0.4),
+        description="Fraction of total cell mass that is dry mass",
+    ),
+]
 
 # Attribute names that are known to be expensive to access or not useful data
 _SKIP_ATTRS = frozenset({
@@ -153,6 +190,7 @@ class ParameterDataset:
 
     def to_parameter_space(
         self,
+        parameters: list[SimDataParameter] | None = None,
         include_vio: bool | None = None,
         include_mecillinam: bool | None = None,
         vio_expression_bounds: tuple[float, float] | None = None,
@@ -161,17 +199,27 @@ class ParameterDataset:
     ) -> "XSpaceVecoli":
         """Build an ``XSpaceVecoli`` from this dataset.
 
-        When ``include_vio`` is *None* (default), it is auto-detected from
-        ``self.has_violacein``.  When ``vio_expression_bounds`` is *None*,
-        bounds are derived from the sim_data baselines: [0, 5× baseline].
+        **Generic mode** (``parameters`` provided):
+        Uses a list of ``SimDataParameter`` specs identifying arbitrary
+        scalar attributes in sim_data by dot-path. Each attr_path is
+        validated against ``self.sim_data``. If ``parameters`` is not
+        provided and neither ``include_vio`` nor ``include_mecillinam``
+        is explicitly True, defaults to
+        ``DEFAULT_SIM_DATA_PARAMETERS`` (5 physiologically relevant
+        scalar parameters).
+
+        **Legacy mode** (``include_vio`` / ``include_mecillinam``):
+        Hardcoded vio + mecillinam parameters. Auto-detects from
+        sim_data if None.
 
         Args:
-            include_vio: Include vio pathway parameters.  Auto-detected if None.
-            include_mecillinam: Include mecillinam parameters.  Defaults to
-                True only when condition is "mecillinam".
+            parameters: List of ``SimDataParameter`` specs for generic
+                mode. When provided, ``include_vio`` and
+                ``include_mecillinam`` are ignored.
+            include_vio: Include vio pathway parameters.
+            include_mecillinam: Include mecillinam parameters.
             vio_expression_bounds: (lo, hi) for vio expression factor.
-                Derived from sim_data baselines if None.
-            vio_trl_eff_bounds: (lo, hi) for translation efficiency multiplier.
+            vio_trl_eff_bounds: (lo, hi) for translation efficiency.
             mecillinam_conc_bounds: (lo, hi) for mecillinam concentration.
 
         Returns:
@@ -179,19 +227,36 @@ class ParameterDataset:
         """
         from uq.inputs import XSpaceVecoli
 
-        # Auto-detect flags from sim_data content
+        # Determine mode: if parameters is provided, use generic mode.
+        # If neither vio nor mecillinam is explicitly requested, also
+        # default to generic mode with DEFAULT_SIM_DATA_PARAMETERS.
+        use_generic = parameters is not None or (
+            include_vio is None
+            and include_mecillinam is None
+            and not self.has_violacein
+            and self.condition != "mecillinam"
+        )
+
+        if use_generic:
+            if parameters is None:
+                parameters = list(DEFAULT_SIM_DATA_PARAMETERS)
+            validated = self._validate_sim_data_parameters(parameters)
+            return XSpaceVecoli(
+                experiment_id=self.condition,
+                parameters=validated,
+            )
+
+        # Legacy vio/mecillinam path
         if include_vio is None:
             include_vio = self.has_violacein
         if include_mecillinam is None:
             include_mecillinam = self.condition == "mecillinam"
 
-        # Derive vio expression bounds from baselines
         if vio_expression_bounds is None and include_vio:
             baselines = self.vio_baselines
             base_expr = baselines.get("new_gene_rna_expression_baseline")
             if base_expr is not None and base_expr > 0:
-                # UQ sweep: 0 to 5× the baseline expression level
-                vio_expression_bounds = (0.0, 5.0 * base_expr / base_expr)  # normalized to multiplier
+                vio_expression_bounds = (0.0, 5.0 * base_expr / base_expr)
             else:
                 vio_expression_bounds = (0.0, 5.0)
 
@@ -203,6 +268,26 @@ class ParameterDataset:
             vio_trl_eff_bounds=vio_trl_eff_bounds,
             mecillinam_conc_bounds=mecillinam_conc_bounds,
         )
+
+    def _validate_sim_data_parameters(
+        self,
+        parameters: list[SimDataParameter],
+    ) -> list[SimDataParameter]:
+        """Validate that each attr_path exists on self.sim_data."""
+        validated = []
+        for p in parameters:
+            obj = self.sim_data
+            parts = p.attr_path.split(".")
+            for part in parts:
+                if not hasattr(obj, part):
+                    raise ValueError(
+                        f"SimDataParameter '{p.name}': attr_path "
+                        f"'{p.attr_path}' not found on sim_data "
+                        f"(failed at '{part}')"
+                    )
+                obj = getattr(obj, part)
+            validated.append(p)
+        return validated
 
     @classmethod
     def merge_to_parameter_space(

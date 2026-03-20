@@ -86,9 +86,394 @@ from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import Pipeline, execute_pipeline
 from uq.pipeline import PipelineResult
 
-app = typer.Typer()
+
 console = Console()
 dotenv.load_dotenv()
+
+
+demo_app = typer.Typer(help="Perform Uncertainty Quantification.")
+app = typer.Typer(help="Perform Uncertainty Quantification.")
+app.add_typer(demo_app, name="demo")
+
+
+@app.command()
+def quantify(
+        experiment_ids: list[str],
+        outdir_root: str,
+        lb_generation: int | None = 2,
+        lb_time: float | None = 100.0,
+        n_bins: int = 10,
+        pce_polynomial_order: int = 3,
+        n_samples: int = 20,
+        expected_cycle_time: float = 3600.0,
+        pce_n_trajectories: int = 10,
+        pce_n_selected_params: int = 5,
+        export_path: str | None = None,
+        precomputed_path: str | None = None,
+) -> None:
+    """Run the full RFC006 UQ pipeline."""
+    pipeline: Pipeline = handlers.pipeline(
+        experiment_ids=experiment_ids,
+        sim_base_path=outdir_root,
+        lb_generation=lb_generation,
+        lb_time=lb_time,
+        n_bins=n_bins,
+        polynomial_order=pce_polynomial_order,
+        n_samples=n_samples,
+        expected_cycle_time=expected_cycle_time,
+        prescreen_config=PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params),
+        export_path=export_path,
+        precomputed_path=precomputed_path,
+        execute=True,
+    )
+    print_report(pipeline.result, export_path=export_path)
+
+
+@app.command()
+def dashboard(
+        run_mode: Literal["tk", "mo"] = "tk",
+        results_path: str | None = None,
+) -> None:
+    """Launch the UQ results dashboard.
+
+    Args:
+        run_mode: 'tk' for Tkinter DAW (default) or 'mo' for Marimo notebook.
+        results_path: Path to uq_results.json (tk mode only). If omitted,
+            opens a file picker dialog.
+    """
+    if run_mode == "mo":
+        _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
+    else:
+        from app.uq_daw import run_tk_dashboard
+        run_tk_dashboard(data_path=results_path)
+
+
+def _verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
+    if not all([(Path(sim_base_path) / p).exists() for p in experiment_ids]):
+        raise ValueError(
+            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}")
+
+
+@app.command(
+    name="sample",
+    help=(""" \
+        Generate Latin Hypercube Samples for UQ sensitivity analysis.
+
+        By default, varies 5 physiologically relevant sim_data parameters.
+        Use --params-file to specify custom parameters via a JSON file.
+        Use --include-vio / --include-mecillinam for legacy vio/mecillinam mode.
+    """)
+)
+def generate_samples(
+        experiment_ids: list[str],
+        sim_base_path: str | None = None,
+        cache_dir: str | None = None,
+        n_samples: int = 200,
+        seed: int = 42,
+        observable_columns: list[str] | None = None,
+        max_workers: int | None = None,
+        max_duration: float = 10800.0,
+        generations: int = 1,
+        live: bool = True,
+        include_vio: bool | None = None,
+        include_mecillinam: bool | None = None,
+        params_file: str | None = None,
+) -> None:
+    """Generate LHS samples, evaluate simulation function, cache (X, Y).
+
+    By default varies 5 physiologically relevant scalar sim_data
+    parameters.  Pass --params-file to specify custom parameters.
+    Pass --include-vio / --include-mecillinam for legacy mode.
+    Pass --live to run real vEcoli simulations as subprocesses.
+    """
+    _verify_out_dirs(sim_base_path, experiment_ids)
+
+    samples = handlers.generate_samples(
+        experiment_ids=experiment_ids,
+        sim_base_path=sim_base_path,
+        cache_dir=cache_dir,
+        n_samples=n_samples,
+        seed=seed,
+        observable_columns=observable_columns,
+        max_workers=max_workers,
+        max_duration=max_duration,
+        generations=generations,
+        live=live,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+        params_file=params_file,
+    )
+    print(samples)
+
+
+@demo_app.command(name="sampling")
+def demo_sampling() -> None:
+    observable_columns = [
+        "listeners__mass__dry_mass",
+        "listeners__mass__cell_mass",
+        "listeners__mass__volume",
+        "listeners__mass__growth",
+    ]
+    sim_base_path = Path("/Users/alexanderpatrie/sms/vecoli_data/outputs")
+    experiment_ids = [p.name for p in sim_base_path.iterdir()]
+    cache_dir = "examples/uq_artifacts/demos"
+    n_samples = 3
+    seed = 1111
+    samples = handlers.generate_samples(
+        experiment_ids=experiment_ids,
+        sim_base_path=sim_base_path,
+        cache_dir=cache_dir,
+        n_samples=n_samples,
+        seed=seed,
+        observable_columns=observable_columns,
+        max_workers=4,
+        max_duration=22.0,
+        generations=1,
+        live=True,
+        include_vio=False,
+        include_mecillinam=False,
+        params_file="examples/params_custom.json"
+    )
+    print(samples)
+
+
+@app.command(name="export-configs")
+def export_configs(
+        sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+        batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
+        n_samples: int = 200,
+        seed: int = 42,
+        include_vio: bool = True,
+        include_mecillinam: bool = True,
+        base_config_path: str | None = None,
+        generations: int = 1,
+        emitter: str = "parquet",
+) -> None:
+    """Export per-sample vEcoli configs for Nextflow/HPC batch execution.
+
+    Generates LHS samples, applies variants to sim_data, writes per-sample
+    JSON configs and pickled sim_data files.  Submit the resulting directory
+    to Nextflow for parallel execution on HPC.
+    """
+    handlers.export_configs(
+        sim_data_path=sim_data_path,
+        batch_dir=batch_dir,
+        n_samples=n_samples,
+        seed=seed,
+        include_vio=include_vio,
+        include_mecillinam=include_mecillinam,
+        base_config_path=base_config_path,
+        generations=generations,
+        emitter=emitter,
+    )
+
+
+@app.command(name="collect-results")
+def collect_results(
+        batch_dir: str = typer.Argument(..., help="Directory from export-configs"),
+        output_dir: str = typer.Argument(..., help="Root dir with per-sample Parquet outputs"),
+        observable_columns: list[str] | None = None,
+        cache_dir: str | None = None,
+) -> None:
+    """Collect completed Nextflow/HPC batch outputs into a PrecomputedCache.
+
+    After Nextflow completes, run this to assemble (X, Y) from per-sample
+    Parquet outputs.  The resulting cache can be passed to
+    ``quantify --precomputed-path``.
+    """
+    handlers.collect_results(
+        batch_dir=batch_dir,
+        output_dir=output_dir,
+        observable_columns=observable_columns,
+        cache_dir=cache_dir,
+    )
+
+
+@app.command(name="configure-pipeline")
+def configure_pipeline(name: str, dest: str | None = None):
+    d = dest or os.path.join(os.getcwd(), f"{name}.json")
+    # from uq.pipe import PipelineConfig
+    config = PipelineConfig(
+        experiment_ids=["api_simulation_default", "mecillinam", "test_violacein_with_metabolism"],
+        sim_base_path=os.getenv("SIM_BASE_PATH"),
+        export_path="uq_results",
+        samples=SamplingConfig(
+            cache_dir="uq_cache", n_samples=22, max_workers=4, include_vio=False, include_mecillinam=True
+        ),
+    )
+    with open(d, "w") as fp:
+        json.dump(config.model_dump(), fp, indent=3)
+
+
+@app.command()
+def flow_chart(rfc_id: str = "RFC006") -> None:
+    txt = (
+        None
+        if not rfc_id == "RFC006"
+        else """
+ ⏺ ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │                          RFC006 FULL UQ WORKFLOW                                    │
+    │                                                                                     │
+    │  Inputs:  experiment_id: str                                                        │
+    │           hpc_sim_base_path: Path                                                   │
+    │           param_space: InputParameterSpaceVecoli                                    │
+    │           f: Callable[[np.ndarray], np.ndarray]   (simulation or precomputed)       │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │  STEP 1: Define Parameter Space                                                     │
+    │                                                                                     │
+    │  param_space = InputParameterSpaceVecoli(                                           │
+    │      include_vio=True, include_mecillinam=True                                      │
+    │  )                                                                                  │
+    │  → n parameters with bounds                                                         │
+    │  X = {x_1, ..., x_n} with bounds [a_i, b_i]                                        │
+    │  • Vio pathway (expression, translation efficiency)                                 │
+    │  • Mecillinam concentration • Gene knockouts                                        │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │  STEP 2: Load Simulation Data                                                       │
+    │                                                                                     │
+    │  df = load_dataset(experiment_id, hpc_sim_base_path)                                │
+    │  → Polars DataFrame from hive-partitioned Parquet                                   │
+    │  Y(t) = f(X) + ε  (stochastic timeseries)                                          │
+    │  Outputs: transcriptome, proteome, metabolic fluxes, mass/volume/growth             │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │  STEP 3: Aggregation Strategies 1-3 (RFC006 §1)                                    │
+    │                                                                                     │
+    │  ┌──────────────────┐ ┌──────────────────────┐ ┌─────────────────────┐              │
+    │  │  S1: UNIFORM     │ │  S2: BY GENERATION   │ │  S3: BY LINEAGE     │              │
+    │  │  Ȳ = (1/N)∑Y_i   │ │  Ȳ_g (convergence    │ │  Ȳ_s (exogenous    │              │
+    │  │                  │ │  ctrl)               │ │  var ctrl)          │              │
+    │  └──────────────────┘ └──────────────────────┘ └─────────────────────┘              │
+    │  Temporal aggregation of subsampled trajectories (RFC006 §4, Step B)                │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │  STEP 4: Variance Decomposition                                                     │
+    │                                                                                     │
+    │  Var(Y) = Var_gen + Var_seed + Var_resid                                            │
+    │  ANOVA-style decomposition per observable:                                          │
+    │  • gen_frac = Var_between_gen / Var_total                                           │
+    │  • residual = cell cycle + param sensitivity                                        │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────┴─────────────────┐
+                          │                                   │
+             Bulk population analysis              Cell cycle conditioned analysis
+                          │                                   │
+                          ▼                                   ▼
+    ╔═══════════════════════════════════╗   ╔═══════════════════════════════════════════╗
+    ║  GSA PHASE 1: Population (Bulk)  ║   ║  GSA PHASE 2: Cell Cycle (Phenotypic)    ║
+    ║  "Across all cells, all times —  ║   ║  "Within each cell cycle stage —         ║
+    ║   which parameters drive output  ║   ║   which parameters matter?"              ║
+    ║   variance?"                     ║   ║                                          ║
+    ╠══════════════════════════════════╣   ╠══════════════════════════════════════════╣
+    ║                                  ║   ║                                          ║
+    ║  STEP 5a: Morris Prescreening    ║   ║  STEP 5b: GSA-Informed Observable       ║
+    ║  ──────────────────────────────  ║   ║  Selection                               ║
+    ║  EE_i = [f(x+Δe_i) − f(x)] / Δ ║   ║  ────────────────────────────────────    ║
+    ║  • μ* = mean(|EE_i|) — robust   ║   ║  resid_i = 1 − gen_frac_i − seed_frac_i ║             
+    ║    importance measure            ║   ║  Rank observables by residual variance.  ║           
+    ║  • σ = std(EE_i) — high →       ║   ║  High residual → variance NOT from       ║            
+    ║    nonlinear or interactive      ║   ║  gen/seed → likely cell-cycle-driven     ║           
+    ║  Cost: O(r×(n+1)) evaluations   ║   ║  → CellCycleRelevanceResult (top-K obs)  ║            
+    ║  n params → K params (K ≪ n)    ║   ║                                          ║            
+    ║  → MorrisIndices, selected      ║   ║                    │                      ║           
+    ║              │                   ║   ║                    ▼                      ║          
+    ║              ▼                   ║   ║  STEP 6b: Koopman DMD → Cell Cycle θ    ║            
+    ║  STEP 6a: PCE Surrogate         ║   ║  ────────────────────────────────────    ║            
+    ║  (Strategies 1-3)               ║   ║  DMD on selected observables:            ║            
+    ║  ──────────────────────────────  ║   ║  λ = |λ|e^(iω),  θ(x) = arg(φ(x))/2π  ║              
+    ║  f(x) ≈ ∑ c_α Ψ_α(x)           ║   ║  • Identify mode at ω ≈ 1/T_cycle       ║              
+    ║  • Ψ_α(x) = ∏ P_{α_i}(x_i)    ║   ║  • Extract eigenfunction phase → θ∈[0,1]║               
+    ║    tensor-product Legendre polys ║   ║  • Data-driven, no mechanistic          ║            
+    ║  • c_α fit via least-squares on  ║   ║    assumptions                           ║           
+    ║    LHS samples (N points)        ║   ║                    │                      ║          
+    ║  • |α| ≤ p (order, typically 2-3)║   ║                    ▼                      ║          
+    ║  → PCESurrogate (instant         ║   ║  STEP 6c/6d: Strategy 4 — Cell Cycle   ║             
+    ║    predict(x), no simulation)    ║   ║  Stratification (RFC006 §1)              ║           
+    ║              │                   ║   ║  ────────────────────────────────────    ║           
+    ║              ▼                   ║   ║  Bin timepoints into n_bins stages by θ: ║           
+    ║  STEP 7a: Sobol Indices from     ║   ║  Stage k: θ ∈ [k/n, (k+1)/n)            ║            
+    ║  PCE Coefficients                ║   ║  → Ȳ_k = mean(Y | θ ∈ stage k)          ║            
+    ║  ──────────────────────────────  ║   ║  • θ≈0.0–0.15: B-period (birth→init)    ║            
+    ║  Variance-based sensitivity      ║   ║  • θ≈0.2–0.7:  C-period (DNA repl)      ║            
+    ║  (no additional sampling):       ║   ║  • θ≈0.7–1.0:  D-period (→division)     ║            
+    ║  S_i  = ∑{α:α_i>0,α_j=0∀j≠i}   ║   ║  Strategy4Wrapper: f_s4(x) =            ║              
+    ║         c_α² / ∑{α≠0} c_α²      ║   ║    bin(θ(f(x))) → per-stage means       ║             
+    ║  • S_i  = first-order (main)     ║   ║                    │                      ║          
+    ║  • S_Ti = total-order (w/ inter) ║   ║                    ▼                      ║          
+    ║  → SobolIndices, variance-       ║   ║  STEP 7b: Per-Stage PCE + Sobol         ║            
+    ║    weighted across outputs       ║   ║  (Phenotypic GSA)                        ║           
+    ║                                  ║   ║  ────────────────────────────────────    ║           
+    ╠══════════════════════════════════╣   ║  For each stage k, fit independent PCE:  ║           
+    ║  Phase 1 Output:                 ║   ║  S_i^(k) = Var_i[E(Ȳ_k|X_i)] / Var(Ȳ_k)║             
+    ║  UqProfile(strat=POPULATION)     ║   ║  for k = 0, ..., n_bins−1               ║            
+    ║  ├ SobolIndices × 1 (bulk)       ║   ║  Phase 2 Sobol are NOT time-averages of  ║           
+    ║  ├ PCESurrogate (bulk)           ║   ║  Phase 1 — they are orthogonal           ║           
+    ║  ├ MorrisIndices (screening)     ║   ║  decompositions                          ║           
+    ║  ├ AggregatedOutput × 3          ║   ║  → list[SobolIndices] (n_bins sets)      ║           
+    ║  └ variance_decomposition        ║   ║    + PCESurrogate (phenotypic)            ║          
+    ║    (gen_frac, seed_frac,         ║   ╠══════════════════════════════════════════╣           
+    ║     residual_frac → Phase 2)     ║   ║  Phase 2 Output:                         ║           
+    ╚═══════════════════════════════════╝   ║  UqProfile(strat=CELL_CYCLE)             ║          
+                                            ║  ├ list[SobolIndices] × n_bins           ║          
+                                            ║  ├ PCESurrogate (phenotypic)              ║         
+                                            ║  ├ CellCycleRelevanceResult               ║         
+                                            ║  ├ cell_cycle_profile (per-stage means)   ║         
+                                            ║  └ Koopman spectrum (eigenvalues, modes)  ║         
+                                            ╚═══════════════════════════════════════════╝         
+                          │                                   │                                   
+                          └─────────────────┬─────────────────┘                                   
+                                            │                                                     
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐     
+    │  FEEDBACK LOOP (Phase 1 → Phase 2, RFC006 §3)                                      │        
+    │                                                                                     │       
+    │  Step 4: residual_frac per obs → Step 5b: rank by residual, select top-K            │       
+    │  → Step 6b: Koopman DMD on selected obs → Step 6c/6d: θ-binned aggregation          │       
+    │  → Step 7b: per-stage Sobol                                                         │       
+    └─────────────────────────────────────────────────────────────────────────────────────┘       
+                                            │                                                     
+                                            ▼                                                   
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐       
+    │  PipelineResult — Complete RFC006 Output                                            │     
+    │                                                                                     │       
+    │  Phase 1 (Population / Bulk):          │  Phase 2 (Cell Cycle / Phenotypic):        │       
+    │  ├ SobolIndices (1 set) — S_i, S_Ti   │  ├ list[SobolIndices] (n_bins sets)        │        
+    │  │   per parameter across all cells    │  │   S_i^(k), S_Ti^(k) per stage          │        
+    │  ├ PCESurrogate — cheap polynomial     │  ├ PCESurrogate (stage-conditioned)        │       
+    │  │   approximation of f(x)             │  ├ CellCycleRelevanceResult                │       
+    │  ├ MorrisIndices — μ*, σ per param     │  ├ cell_cycle_profile — per-stage means    │       
+    │  ├ variance_decomposition — gen_frac,  │  └ Koopman spectrum — eigenvalues,         │       
+    │  │   seed_frac, residual per obs       │      frequencies, mode shapes              │       
+    │  └ AggregatedOutput × 3 (per strat)   │                                            │        
+    │                                                                                     │       
+    │  Phase 1 & Phase 2 are orthogonal decompositions of the same total variance.        │       
+    │  Phase 1 collapses time; Phase 2 conditions on cell cycle stage.                    │       
+    └─────────────────────────────────────────────────────────────────────────────────────┘       
+                                            │                                                     
+                                            ▼                                                     
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐       
+    │  TWO-STAGE WORKFLOW (CLI)                                                           │       
+    │                                                                                     │     
+    │  Stage 1 (compute-intensive):                                                       │       
+    │  uv run uq generate-samples ... --n-samples 200 --live                              │       
+    │                         │                                                           │       
+    │                         ▼  PrecomputedCache                                         │       
+    │  Stage 2 (fast, repeatable):                                                        │       
+    │  uv run uq quantify ... --precomputed-path ./cache --export-path ./results          │       
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+"""
+    )
+    show(txt)
 
 
 def _pct(v: float) -> str:
@@ -295,259 +680,6 @@ def show(self):
     )
 
     console.print(panel)
-
-
-@app.command()
-def quantify(
-    experiment_ids: list[str],
-    outdir_root: str,
-    lb_generation: int | None = 2,
-    lb_time: float | None = 100.0,
-    n_bins: int = 10,
-    pce_polynomial_order: int = 3,
-    n_samples: int = 20,
-    expected_cycle_time: float = 3600.0,
-    pce_n_trajectories: int = 10,
-    pce_n_selected_params: int = 5,
-    export_path: str | None = None,
-    precomputed_path: str | None = None,
-) -> None:
-    """Run the full RFC006 UQ pipeline."""
-    pipeline: Pipeline = handlers.pipeline(
-        experiment_ids=experiment_ids,
-        sim_base_path=outdir_root,
-        lb_generation=lb_generation,
-        lb_time=lb_time,
-        n_bins=n_bins,
-        polynomial_order=pce_polynomial_order,
-        n_samples=n_samples,
-        expected_cycle_time=expected_cycle_time,
-        prescreen_config=PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params),
-        export_path=export_path,
-        precomputed_path=precomputed_path,
-        execute=True,
-    )
-    print_report(pipeline.result, export_path=export_path)
-
-
-@app.command()
-def dashboard(
-    run_mode: Literal["tk", "mo"] = "tk",
-    results_path: str | None = None,
-) -> None:
-    """Launch the UQ results dashboard.
-
-    Args:
-        run_mode: 'tk' for Tkinter DAW (default) or 'mo' for Marimo notebook.
-        results_path: Path to uq_results.json (tk mode only). If omitted,
-            opens a file picker dialog.
-    """
-    if run_mode == "mo":
-        _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
-    else:
-        from app.uq_daw import run_tk_dashboard
-
-        run_tk_dashboard(data_path=results_path)
-
-
-@app.command()
-def demo(
-    demo_type: str = "sampling",
-    export_path: str = "uq_results",
-    precomputed_path: str | None = None,
-) -> None:
-    experiment_ids = [
-        "api_simulation_default",
-        "mecillinam",
-        "test_violacein_with_metabolism",
-    ]
-    base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
-    observable_columns = [
-        "listeners__mass__dry_mass",
-        "listeners__mass__cell_mass",
-        "listeners__mass__volume",
-        "listeners__mass__growth",
-    ]
-    cache_dir = tempfile.TemporaryDirectory()
-
-    def demo_full():
-        """Run the pipeline on the 3 default experiments with real vEcoli data."""
-        param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=10, n_top=5)
-        result: PipelineResult = execute_pipeline(
-            experiment_ids=experiment_ids,
-            sim_base_path=str(base_path),
-            observable_columns=observable_columns,
-            prescreen_config=param_prescreen_config,
-            n_bins=5,
-            n_samples=20,
-            polynomial_order=2,
-            export_path=Path(export_path) if export_path else None,
-            precomputed_path=Path(precomputed_path) if precomputed_path else None,
-        )
-        if export_path:
-            console.print(f"[bold green]Pipeline complete.[/bold green] Results exported to {export_path}")
-        else:
-            console.print("[bold green]Pipeline complete.[/bold green]")
-
-    def demo_sample_generation():
-        samples = handlers.generate_samples(
-            experiment_ids=experiment_ids,
-            sim_base_path=base_path,
-            cache_dir=cache_dir.name,
-            n_samples=10,
-            seed=1111,
-            observable_columns=observable_columns,
-        )
-        print("Created samples:")
-        pp(samples)
-
-    demo_sample_generation() if demo_type == "sampling" else demo_full()
-    cache_dir.cleanup()
-
-
-@app.command(name="generate-samples")
-def create_samples(
-    experiment_ids: list[str],
-    sim_base_path: str | None = None,
-    cache_dir: str | None = None,
-    n_samples: int = 200,
-    seed: int = 42,
-    observable_columns: list[str] | None = None,
-    max_workers: int | None = None,
-    max_duration: float = 10800.0,
-    generations: int = 1,
-    live: bool = True,
-    include_vio: bool | None = None,
-    include_mecillinam: bool = True,
-) -> None:
-    """Generate LHS samples, evaluate simulation function, cache (X, Y).
-
-    By default uses a synthetic response surface (DataDrivenWrapper).
-    Pass --live to run real vEcoli simulations via VecoliSimulationFunc.
-
-    --include-vio auto-detects from sim_data (requires violacein-enabled
-    sim_data).  --include-mecillinam is on by default.
-    """
-    samples = handlers.generate_samples(
-        experiment_ids=experiment_ids,
-        sim_base_path=sim_base_path,
-        cache_dir=cache_dir,
-        n_samples=n_samples,
-        seed=seed,
-        observable_columns=observable_columns,
-        max_workers=max_workers,
-        max_duration=max_duration,
-        generations=generations,
-        live=live,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-    )
-    print(samples)
-
-
-@app.command(name="export-configs")
-def export_configs(
-    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
-    batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
-    n_samples: int = 200,
-    seed: int = 42,
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
-    base_config_path: str | None = None,
-    generations: int = 1,
-    emitter: str = "parquet",
-) -> None:
-    """Export per-sample vEcoli configs for Nextflow/HPC batch execution.
-
-    Generates LHS samples, applies variants to sim_data, writes per-sample
-    JSON configs and pickled sim_data files.  Submit the resulting directory
-    to Nextflow for parallel execution on HPC.
-    """
-    handlers.export_configs(
-        sim_data_path=sim_data_path,
-        batch_dir=batch_dir,
-        n_samples=n_samples,
-        seed=seed,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-        base_config_path=base_config_path,
-        generations=generations,
-        emitter=emitter,
-    )
-
-
-@app.command(name="collect-results")
-def collect_results(
-    batch_dir: str = typer.Argument(..., help="Directory from export-configs"),
-    output_dir: str = typer.Argument(..., help="Root dir with per-sample Parquet outputs"),
-    observable_columns: list[str] | None = None,
-    cache_dir: str | None = None,
-) -> None:
-    """Collect completed Nextflow/HPC batch outputs into a PrecomputedCache.
-
-    After Nextflow completes, run this to assemble (X, Y) from per-sample
-    Parquet outputs.  The resulting cache can be passed to
-    ``quantify --precomputed-path``.
-    """
-    handlers.collect_results(
-        batch_dir=batch_dir,
-        output_dir=output_dir,
-        observable_columns=observable_columns,
-        cache_dir=cache_dir,
-    )
-
-
-@app.command(name="configure-pipeline")
-def configure_pipeline(name: str, dest: str | None = None):
-    d = dest or os.path.join(os.getcwd(), f"{name}.json")
-    # from uq.pipe import PipelineConfig
-    config = PipelineConfig(
-        experiment_ids=["api_simulation_default", "mecillinam", "test_violacein_with_metabolism"],
-        sim_base_path=os.getenv("SIM_BASE_PATH"),
-        export_path="uq_results",
-        samples=SamplingConfig(
-            cache_dir="uq_cache", n_samples=22, max_workers=4, include_vio=False, include_mecillinam=True
-        ),
-    )
-    with open(d, "w") as fp:
-        json.dump(config.model_dump(), fp, indent=3)
-
-
-@app.command()
-def readme(rfc_id: str = "RFC006") -> None:
-    txt = (
-        None
-        if not rfc_id == "RFC006"
-        else """
-⏺ ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │                          RFC006 FULL UQ WORKFLOW                                    │
-  │                                                                                     │
-  │  Inputs:  experiment_id: str                                                        │
-  │           hpc_sim_base_path: Path                                                   │
-  │           param_space: InputParameterSpaceVecoli                                    │
-  │           f: Callable[[np.ndarray], np.ndarray]   (simulation or precomputed)       │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  STEP 1: Define Parameter Space                                                     │
-  │                                                                                     │
-  │  param_space = InputParameterSpaceVecoli(                                           │
-  │      include_vio=True, include_mecillinam=True                                      │
-  │  )                                                                                  │
-  │  → n parameters with bounds                                                         │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  STEP 2: Load Simulation Data                                                       │
-  │                                                                                     │
-  │  df = load_dataset(experiment_id, hpc_sim_base_path)                                │
-  │  → Polars DataFrame from hive-partitioned Parquet                                   │
-  └─────────────────────────────────────────────────────────────────────────────────────┘
-"""
-    )
-    print(txt)
 
 
 def main() -> None:

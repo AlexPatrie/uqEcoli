@@ -135,6 +135,7 @@ class DatasetMultiExperiment:
         experiment_ids: list[str]
         x: list[ParameterDataset]
         y: polars.DataFrame — timeseries data from load_timeseries()
+        parameter_space: XSpace - parameter space with defined select parameters
         observables: list[str] — resolved observable column names
     """
 

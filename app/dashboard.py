@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.21.0"
+__generated_with = "0.21.1"
 app = marimo.App(
     width="full",
     app_title="UQ Results // DAW",
@@ -53,7 +53,7 @@ with app.setup:
 
 
 @app.cell
-def helpers(data):
+def helpers():
     # helper lib
 
     def header(text: str) -> mo.accordion:
@@ -77,7 +77,7 @@ def helpers(data):
     <div>{value}</div>
     </div>""")
 
-    def get_params():
+    def get_params(data):
         if data is None:
             return mo.stop(True, mo.md("Waiting for data..."))
         return data["parameter_names"]
@@ -97,13 +97,67 @@ def helpers(data):
             for _i, _p in enumerate(_params)
         ])
 
-    return get_params, get_sliders, header, render_panel
+    def load_uq_data(file_input: mo.ui.text, file_area: mo.ui.file) -> dict:
+        """Extract uq_results.json for results data"""
+        _path = Path(file_input.value)
+        if not _path.exists():
+            #
+            #
+            if file_area.value:
+                data = json.loads(file_area.value[0].contents)
+            else:
+                mo.output.replace(mo.md(f"**File not found:** `{_path}`"))
+                data = None
+        else:
+            with open(_path) as _f:
+                data = json.load(_f)
+    
+        if file_area.value:
+            data = json.loads(file_area.value[0].contents)
+        return data 
+
+    return get_params, get_sliders, header, load_uq_data, render_panel
 
 
 @app.cell
 def file_area(set_file_input):
-    file_area = mo.ui.file(kind="area", on_change=lambda v: set_file_input(v[0].name))
+    def file_upload_area() -> mo.ui.file:
+        return mo.ui.file(kind="button", on_change=lambda v: set_file_input(v[0].name))
+
+    file_area = file_upload_area()
     return (file_area,)
+
+
+@app.cell
+def file_input(get_file_input, set_file_input):
+    def file_upload_input() -> mo.ui.text:
+        # handle file
+        val = get_file_input()
+        if val is None:
+            set_file_input(_default)
+        return mo.ui.text(
+            value=get_file_input(),
+            # value=file_val,
+            label="",
+            full_width=True,
+        )
+
+    file_input = file_upload_input()
+    return (file_input,)
+
+
+@app.cell
+def param_dropdown(data, get_params):
+    def parameter_dropdown() -> mo.ui.dropdown:
+        _params = get_params(data)
+        return mo.ui.dropdown(
+            options={p: p for p in _params},
+            value=_params[0],
+            label="",
+        )
+
+    param_dropdown = parameter_dropdown()
+    return (param_dropdown,)
 
 
 @app.cell
@@ -116,84 +170,40 @@ def _():
 
 
 @app.cell
-def _(get_file_input, set_file_input):
-    # handle file
-    val = get_file_input()
-    if val is None:
-        set_file_input(_default)
-
-    file_input = mo.ui.text(
-        value=get_file_input(),
-        # value=file_val,
-        label="",
-        full_width=True,
-    )
-    return (file_input,)
-
-
-@app.cell
-def _(file_area, file_input):
-    # extract uq_results.json for results data
-    _path = Path(file_input.value)
-    if not _path.exists():
-        #
-        #
-        if file_area.value:
-            data = json.loads(file_area.value[0].contents)
-        else:
-            mo.output.replace(mo.md(f"**File not found:** `{_path}`"))
-            data = None
-    else:
-        with open(_path) as _f:
-            data = json.load(_f)
-
-    if file_area.value:
-        data = json.loads(file_area.value[0].contents)
+def data(file_area, file_input, load_uq_data):
+    data = load_uq_data(file_area=file_area, file_input=file_input)
     return (data,)
 
 
 @app.cell
-def param_dropdown(get_params):
-    _params = get_params()
-    param_dropdown = mo.ui.dropdown(
-        options={p: p for p in _params},
-        value=_params[0],
-        label="",
-    )
-    return (param_dropdown,)
-
-
-@app.cell
-def ui_file_loader(file_area, file_input, header):
-    def file_loader() -> mo.vstack:
+def ui_file_loader(file_area, header):
+    def ui_file_loader() -> mo.vstack:
         """component 0"""
         _header = header("""
         ### 0. File Loader:
-    
+
         Upload the `uq_results.json` file generated from a given `uq` pipeline workflow.
         """)
         return mo.vstack([
                 # _header,
                 mo.md(f"""
         <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-            <div> {_header} </div>
             <div style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:2px;padding-top:22px;padding-bottom:5px;">Load UQ Results</div>
-            <div>{file_input}</div>
             <div>{file_area}</div>
         </div>
         """)])
 
-    return
+    return (ui_file_loader,)
 
 
 @app.cell
 def ui_parameter_selector(data, get_params, header, param_dropdown):
-    def parameter_selector() -> mo.vstack:
+    def ui_parameter_selector() -> mo.vstack:
         _badges = " ".join(
             f'<span style="background:{PARAM_COLORS.get(p, "#666")};color:#000;'
             f"padding:2px 8px;border-radius:3px;font-size:11px;font-family:monospace;"
             f'font-weight:bold;margin-right:4px;">{p}</span>'
-            for p in get_params()
+            for p in get_params(data)
         )
         _surr = data.get("surrogates", {})
         _pop_r2 = _surr.get("population", {}).get("r_squared", "?")
@@ -206,21 +216,22 @@ def ui_parameter_selector(data, get_params, header, param_dropdown):
         ### 1. Parameter Selector
         >> A dropdown to pick one parameter, with color-coded badges for all parameters (cyan = vio_expression, amber = vio_trl_eff, pink =
         mecillinam_concentration).
-    
+
         >> This is the master control. Every reactive panel below highlights the selected ("soloed") parameter and dims the others. Like soloing a
         channel in a DAW — you're isolating one parameter's contribution to hear it above the mix. A stakeholder can click through each parameter and instantly see
         how its influence changes across the cell cycle, without the other parameters' curves cluttering the view.
                 """)
+        # <div style="padding-bottom:22px;"> {_header} </div>
         return mo.vstack([
                 mo.md(f"""
         <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-        <div style="padding-bottom:22px;"> {_header} </div>
+    
         <div style="display:flex;align-items:center;gap:16px;">
           <div style="color:#888;font-size:12px;text-transform:uppercase;letter-spacing:2px;">Solo Parameter</div>
           <div>{param_dropdown}</div>
           <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px 16px;
                 display:flex;gap:32px;align-items:center;font-family:monospace;font-size:12px;">
-    
+
           <div style="color:{C["accent1"]};"><b>PARAMS</b> <span style="color:#e0e0e0;">{_n_params}</span></div>
           <div style="color:{C["accent3"]};"><b>STAGES</b> <span style="color:#e0e0e0;">{_n_stages}</span></div>
           <div style="color:{C["accent4"]};"><b>POP R\u00b2</b> <span style="color:#e0e0e0;">{_pop_r2}</span></div>
@@ -231,32 +242,32 @@ def ui_parameter_selector(data, get_params, header, param_dropdown):
         </div>
         </div>
         <div style="margin-top:10px;">{_badges}</div>
-    
+
         </div>
         """),
             ])
 
-    return
+    return (ui_parameter_selector,)
 
 
 @app.cell
 def _(data, header, param_dropdown):
-    def parameteric_eq() -> mo.vstack:
+    def ui_parameteric_eq() -> mo.vstack:
         """Sobol EQ: per-stage S_i shown as frequency bands, selected param highlighted."""
         if data is None:
             mo.stop(True)
-    
+
         _selected = param_dropdown.value
         _stages = data["phase2_cell_cycle_sobol_per_stage"]
         _params = data["parameter_names"]
         _n = len(_stages)
-    
+
         # Build x-axis: theta bin centers
         _x = [(s["theta_range"][0] + s["theta_range"][1]) / 2 for s in _stages]
         _x_labels = [f"\u03b8={s['theta_range'][0]:.1f}" for s in _stages]
-    
+
         _fig = go.Figure()
-    
+
         # Background traces (dimmed)
         for _p in _params:
             _y = [s["total_order"].get(_p, 0) for s in _stages]
@@ -276,7 +287,7 @@ def _(data, header, param_dropdown):
                     hovertemplate=f"<b>{_p}</b><br>\u03b8=%{{x:.2f}}<br>S_Ti=%{{y:.3f}}<extra></extra>",
                 )
             )
-    
+
         # Fill under selected param
         _sel_y = [s["total_order"].get(_selected, 0) for s in _stages]
         _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
@@ -292,7 +303,7 @@ def _(data, header, param_dropdown):
                 hoverinfo="skip",
             )
         )
-    
+
         # First-order as dashed overlay for selected
         _sel_s1 = [s["first_order"].get(_selected, 0) for s in _stages]
         _fig.add_trace(
@@ -306,7 +317,7 @@ def _(data, header, param_dropdown):
                 hovertemplate=f"<b>{_selected} (main effect)</b><br>\u03b8=%{{x:.2f}}<br>S_i=%{{y:.3f}}<extra></extra>",
             )
         )
-    
+
         # Interaction band (S_Ti - S_i)
         _interaction = [t - s for t, s in zip(_sel_y, _sel_s1)]
         if max(_interaction) > 0.01:
@@ -321,7 +332,7 @@ def _(data, header, param_dropdown):
                     hovertemplate="Interaction=%{y:.3f}<extra></extra>",
                 )
             )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=280,
@@ -334,36 +345,36 @@ def _(data, header, param_dropdown):
         )
         _header = header(""" \
         ### 3. Parametric EQ (eq_strip, line 149)
-    
+
         #### What it shows: Three overlapping spline curves, one per parameter, plotted across `θ` (cell cycle position, 0 to 1).
-    
+
         >> The soloed parameter is thick with a filled area underneath; the others are ghosted.
-    
+
         Two lines for the soloed param:
         - Solid line = S_Ti (total-order Sobol index — includes all interactions)
         - Dashed line = S_i (first-order — main effect only, no interactions)
         - Semi-transparent bars = the gap between them (S_Ti - S_i = interaction contribution)
-    
+
         #### Why it's useful: This is the core visualization of the entire pipeline. It answers the central RFC006 question: "How does each parameter's importance change across the cell cycle?"
-    
+
         In vecoli data, you can see vio_expression (cyan) starts high at θ=0 (birth, `S_Ti ≈ 0.64`) and drops to near zero at `θ=1` (pre-division). Mecillinam
         (pink) does the opposite — negligible early, dominant late. This tells a biologist: "vio pathway matters most during early growth; mecillinam's
         PBP2 inhibition matters most during septation/division." That's actionable — it tells you when in the cell cycle each drug/perturbation has its
         effect.
-    
+
         The EQ analogy: each parameter is a frequency band. The curve shape shows where in the cell cycle "spectrum" that parameter's energy concentrates; Soloing isolates one band.
-    
+
         #### Governing equations: Per-stage Sobol indices from PCE coefficients (Phase 2, Strategy 4):
-    
+
         ```
         S_i^(k) = Var[E(Y_bar_k | X_i)] / Var(Y_bar_k)
                 = sum_{alpha: alpha_i>0, alpha_j=0 for j!=i} c_alpha^2 / sum_{alpha!=0} c_alpha^2
-    
+
         S_Ti^(k) = 1 - Var[E(Y_bar_k | X_~i)] / Var(Y_bar_k)
         ```
-    
+
         ...where `Y_bar_k = mean(Y | theta in stage k)` is the stage-binned output and the sums run over PCE multi-indices alpha. `S_Ti - S_i` is the interaction contribution.
-    
+
         _RFC006 call to action (§3)_: "A second type of analysis will need to be generated for the aggregation strategy (4), and will involve the definition of a low-dimensional (possibly scalar) 'cell cycle variable' computed from omics variables. This variable or 'coordinate' will be used for deterministically binning simulation data into cell stages, in order to then perform a 'phenotypic' sensitivity analysis across the physiological time dimension."
         """)
         return mo.vstack([
@@ -379,15 +390,15 @@ def _(data, header, param_dropdown):
 
 @app.cell
 def channel_strip(data, header, param_dropdown, render_panel):
-    def channel_strip() -> mo.vstack:
+    def ui_channel_strip() -> mo.vstack:
         """Channel strip: population fader + Morris meter + variance decomp pie."""
         if data is None:
             mo.stop(True)
-    
+
         _selected = param_dropdown.value
         _params = data["parameter_names"]
         _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
-    
+
         _fig = make_subplots(
             rows=1,
             cols=3,
@@ -400,7 +411,7 @@ def channel_strip(data, header, param_dropdown, render_panel):
             horizontal_spacing=0.08,
             specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "domain"}]],
         )
-    
+
         # -- Panel 1: Population Sobol as vertical faders --
         _p1 = data["phase1_population_sobol"]
         for _i, _p in enumerate(_params):
@@ -436,9 +447,9 @@ def channel_strip(data, header, param_dropdown, render_panel):
                 row=1,
                 col=1,
             )
-    
+
         _fig.update_yaxes(range=[0, 1], title_text="Index", row=1, col=1)
-    
+
         # -- Panel 2: Morris mu* vs sigma scatter --
         _morris = data.get("morris_screening")
         if _morris:
@@ -492,16 +503,16 @@ def channel_strip(data, header, param_dropdown, render_panel):
                 xref="x2",
                 yref="y2",
             )
-    
+
         _fig.update_xaxes(title_text="\u03bc* (importance)", row=1, col=2)
         _fig.update_yaxes(title_text="\u03c3 (nonlinearity)", row=1, col=2)
-    
+
         # -- Panel 3: Variance decomposition pie --
         _decomp = data.get("variance_decomposition", {})
         _gen_f = _decomp.get("generation_fraction", [0])[0]
         _seed_f = _decomp.get("seed_fraction", [0])[0]
         _resid_f = _decomp.get("residual_fraction", [1])[0]
-    
+
         _fig.add_trace(
             go.Pie(
                 labels=["Generation", "Seed", "Residual (cell cycle)"],
@@ -515,7 +526,7 @@ def channel_strip(data, header, param_dropdown, render_panel):
             row=1,
             col=3,
         )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=300,
@@ -526,36 +537,36 @@ def channel_strip(data, header, param_dropdown, render_panel):
             _ann.font = dict(color=C["text_dim"], size=11)
         _header = header(""" \
         Channel Strip (channel_strip, line 232)
-    
+
           Three sub-panels side by side:
-    
+
           Panel 1 — Population Faders (S_i / S_Ti): Vertical bars for each parameter's bulk Sobol indices
           (Phase 1). Wide bar = S_Ti, narrow inner bar = S_i. Soloed param is full opacity; others dimmed.
-    
+
           Why it's useful: This is the "summary view" — one number per parameter for the entire population. It
           tells you the overall importance ranking without cell-cycle resolution. A stakeholder can see at a
           glance: "vio_expression and mecillinam are roughly equal in total importance (0.55 and 0.50),
           vio_trl_eff is negligible (0.08)." The gap between the wide and narrow bars is the interaction effect
            — if S_Ti is much larger than S_i, that parameter interacts with others.
-    
+
           Governing equations: Population-level Sobol decomposition (Phase 1, Strategies 1-3):
-    
+
         ```
           Var(Y) = sum_i V_i + sum_{i<j} V_ij + ... + V_{1,2,...,n}
           S_i  = V_i / Var(Y)
           S_Ti = 1 - Var[E(Y|X_~i)] / Var(Y)
           where Y = (1/N) sum Y_cell is the uniformly aggregated output (Strategy 1) and V_i = Var[E(Y|X_i)] is the variance due to parameter i alone.
         ```
-    
+
         >> RFC006 call to action (§4, Activity 4): "Implement well established global sensitivity analysis
           methods based on the aggregation strategies (1-3). Expected to use PCE surrogate method for the
           stochastic function (sim_data -> SIM output)."
-    
+
           ---
           Panel 2 — Morris Screening (mu vs sigma): Scatter plot of each parameter's Morris mu (x-axis,
           importance) vs sigma (y-axis, nonlinearity). A dashed diagonal line at sigma = 0.5 * mu* separates
           "linear effect" (below) from "nonlinear/interactive" (above).
-    
+
           Why it's useful: Morris is the cheap prescreening step (O(n) evaluations vs O(n^2) for Sobol). It
           tells you which parameters to bother with before running the expensive PCE. Parameters in the
           lower-right (high mu*, low sigma) have strong, predictable effects. Parameters above the line have
@@ -563,42 +574,42 @@ def channel_strip(data, header, param_dropdown, render_panel):
            your data, mecillinam has sigma = 0.22 vs mu* = 0.40, putting it closer to the "interactive" zone —
           consistent with the fact that mecillinam's cell wall effects interact with vio pathway resource
           competition.
-    
+
           Governing equations: Morris Elementary Effects:
-    
+
         ```
           EE_i(x) = [f(x + delta * e_i) - f(x)] / delta
           mu*_i = mean(|EE_i|)   (robust importance)
           sigma_i = std(EE_i)    (nonlinearity/interaction indicator)
           Cost = r x (n+1) evaluations, where r = n_trajectories, n = n_params.
         ```
-    
+
         >> RFC006 call to action (§4, footnote): "using UQPy or PyTUQ libraries" — Morris is the prescreening
           method from these libraries that reduces n params to K params (K << n) before the expensive PCE
           fitting.
-    
+
           ---
           Panel 3 — Variance Decomposition Pie: Donut chart showing how total output variance splits into
           generation effects, lineage seed effects, and residual (cell cycle + parameter sensitivity).
-    
+
           Why it's useful: This answers "Where does the uncertainty come from?" If generation_fraction were
           large, it would mean the simulation hasn't converged — you'd need more generations. If seed_fraction
           were large, stochastic noise dominates and you'd need more lineage seeds. In your data, residual ≈
           99.99%, meaning almost all variance is from parameter sensitivity and cell cycle dynamics, not from
           convergence artifacts or random seed effects. That's exactly what you want to see — it means the
           Sobol indices are measuring real parameter effects, not noise.
-    
+
           Governing equations: ANOVA-style variance decomposition across Strategies 1-3:
-    
+
           ```
           Var(Y) = Var_gen + Var_seed + Var_residual
           gen_fraction  = Var_between_generations / Var_total
           seed_fraction = Var_between_seeds / Var_total
           residual      = 1 - gen_fraction - seed_fraction
           ```
-    
+
         >> RFC006 call to action (§1): "This will enable us to deconvolve different types of uncertainty, and to model the relationship between 'bulk' and 'single-cell' attributes more accurately."
-    
+
         """)
         return mo.vstack([render_panel(_header, mo.ui.plotly(_fig))])
 
@@ -607,18 +618,18 @@ def channel_strip(data, header, param_dropdown, render_panel):
 
 @app.cell
 def heatmap_strip(data, header, param_dropdown, render_panel):
-    def sensitivity_spectrogram() -> mo.vstack:
+    def ui_sensitivity_spectrogram() -> mo.vstack:
         """Heatmap: all params x stages as spectrogram + cell cycle profile overlay."""
         if data is None:
             mo.stop(True)
-    
+
         _selected = param_dropdown.value
         _stages = data["phase2_cell_cycle_sobol_per_stage"]
         _params = data["parameter_names"]
         _n_stages = len(_stages)
         _n_params = len(_params)
         _profile = data.get("cell_cycle_profile")
-    
+
         _fig = make_subplots(
             rows=2,
             cols=1,
@@ -627,13 +638,13 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             vertical_spacing=0.12,
             shared_xaxes=True,
         )
-    
+
         # -- Panel 1: Heatmap (params x stages) --
         _z = np.zeros((_n_params, _n_stages))
         for _j, _s in enumerate(_stages):
             for _i, _p in enumerate(_params):
                 _z[_i, _j] = _s["total_order"].get(_p, 0)
-    
+
         _theta_labels = [f"{s['theta_range'][0]:.1f}-{s['theta_range'][1]:.1f}" for s in _stages]
         _short_params = [
             p.replace("mecillinam_concentration", "mecillinam")
@@ -641,10 +652,10 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             .replace("vio_trl_eff", "vio_trl")
             for p in _params
         ]
-    
+
         # Highlight row for selected param
         _sel_idx = _params.index(_selected) if _selected in _params else 0
-    
+
         _fig.add_trace(
             go.Heatmap(
                 z=_z,
@@ -665,7 +676,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             row=1,
             col=1,
         )
-    
+
         # Selection indicator bracket on y-axis
         _fig.add_annotation(
             x=-0.5,
@@ -676,16 +687,16 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
             xref="x",
             yref="y",
         )
-    
+
         # -- Panel 2: Cell cycle profile (mass + growth) --
         if _profile:
             _stages_x = _profile["stages"]
             _x_labels_p = [f"{i / len(_stages_x):.1f}-{(i + 1) / len(_stages_x):.1f}" for i in _stages_x]
-    
+
             # Find mass and growth keys dynamically
             _mass_key = next((k for k in _profile if "mass" in k.lower() and "mean" in k.lower()), None)
             _growth_key = next((k for k in _profile if "growth" in k.lower() and "mean" in k.lower()), None)
-    
+
             if _mass_key:
                 _mass = _profile[_mass_key]
                 _fig.add_trace(
@@ -702,7 +713,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
                     col=1,
                 )
                 _fig.update_yaxes(title_text="Dry Mass", row=2, col=1, title_font=dict(color=C["accent3"]))
-    
+
             if _growth_key:
                 _growth = _profile[_growth_key]
                 # Normalize growth to mass scale for dual-axis overlay
@@ -712,7 +723,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
                     _g_norm = [_m_min + (_m_max - _m_min) * (g - _g_min) / (_g_max - _g_min + 1e-12) for g in _growth]
                 else:
                     _g_norm = _growth
-    
+
                 _fig.add_trace(
                     go.Scatter(
                         x=_x_labels_p,
@@ -727,7 +738,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
                     row=2,
                     col=1,
                 )
-    
+
             # Add B/C/D period annotations
             _fig.add_vrect(
                 x0=_x_labels_p[0],
@@ -766,7 +777,7 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
                     annotation_position="top left",
                     annotation=dict(font=dict(color=C["accent2"], size=10)),
                 )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=520,
@@ -779,57 +790,57 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
                 _ann.font = dict(color=C["text_dim"], size=11)
         _header = header("""
         ### 5. Sensitivity Spectrogram + Cell Cycle Profile (heatmap_strip, line 349)
-    
+
           Top panel — Sensitivity Spectrogram: A heatmap with parameters on the y-axis, θ-bins on the x-axis,
           and S_Ti as color intensity (dark = low, cyan/amber/pink = high). A ▶ arrow marks the soloed
           parameter's row.
-    
+
           Why it's useful: This is the "bird's eye view" of Phase 2. Instead of reading 10 separate Sobol
           tables, you see the entire parameter-vs-stage landscape at once. Hot colors reveal where and which
           parameters drive variance. In your data, you'd see the upper-left corner lit up (vio_expression at
           early stages) and the lower-right lit up (mecillinam at late stages), with vio_trl_eff as a dim band
           across the middle. This pattern tells a biologist that the two perturbations affect the cell at
           different lifecycle phases — they're temporally orthogonal.
-    
+
           The DAW analogy: this is the spectrogram view in an audio editor — frequency (parameters) vs time
           (cell cycle), with intensity as color.
-    
+
           Bottom panel — Cell Cycle Profile: Two overlaid curves — dry mass (green, solid) and growth rate
           (amber, dashed, scaled to mass axis). Shaded vertical bands mark approximate B, C, and D periods.
-    
+
           Why it's useful: This is the biological ground truth that the spectrogram above explains. Mass
           increases monotonically from ~1.03 to ~1.91 (the cell doubles before dividing). Growth rate peaks in
           early/mid cycle then dips during D-period as resources shift to division machinery. The B/C/D shading
            lets a biologist correlate the spectrogram patterns with known cell biology — "vio_expression
           dominates during B/C period (active growth), mecillinam dominates during D period (cell wall
           synthesis for septation)."
-    
+
           Having the spectrogram directly above the profile with shared x-axes means you can visually trace:
           "stage 7 is where mass ≈ 1.65 and growth rate hits its minimum — and that's exactly where
           mecillinam's S_Ti peaks."
-    
+
           Governing equations: Cell cycle variable θ and Strategy 4 binning:
-    
+
         ```
           lambda = |lambda| * e^(i*omega)       (Koopman eigenvalue from DMD)
-    
+
           theta(x) = arg(phi(x)) / 2*pi         (eigenfunction phase, theta in [0,1])
-    
+
           Stage k: theta in [k/n_bins, (k+1)/n_bins)
-    
+
           Y_bar_k = mean(Y | theta in stage k)  (per-stage aggregated output)
-    
+
           Profile values: mass_mean_k = mean(M | theta in stage k), growth_mean_k = mean(dM/dt | theta in stage k).
         ```
-    
+
         #### RFC006 call to action (§3):
-    
+
         "The choice of the 'cell cycle variable' will be informed by the
           sensitivity analyses (1-3), will be explored through dedicated visualisations, and will be discussed
           with all subteams. An established example for such a variable is the 'cell angle', and in principle,
           any deterministic function of relevant process variables inside vEcoli may be considered if it has
           approximately cyclic behaviour."
-    
+
         """)
         return mo.vstack([render_panel(_header, mo.ui.plotly(_fig))])
 
@@ -838,14 +849,14 @@ def heatmap_strip(data, header, param_dropdown, render_panel):
 
 @app.cell
 def relevance_strip(data, header, render_panel):
-    def relevance_meters() -> mo.vstack:
+    def ui_relevance_meters() -> mo.vstack:
         """Relevance meters + surrogate specs."""
         if data is None:
             mo.stop(True)
-    
+
         _ccr = data.get("cell_cycle_relevance")
         _surr = data.get("surrogates", {})
-    
+
         _fig = make_subplots(
             rows=1,
             cols=2,
@@ -854,13 +865,13 @@ def relevance_strip(data, header, render_panel):
             horizontal_spacing=0.1,
             specs=[[{"type": "bar"}, {"type": "table"}]],
         )
-    
+
         if _ccr:
             _obs = _ccr.get("relevant_observables", [])
             _scores = _ccr.get("relevance_scores", {})
             _names = [o.split("__")[-1] for o in _obs]
             _vals = [_scores.get(o, 0) for o in _obs]
-    
+
             _fig.add_trace(
                 go.Bar(
                     x=_vals,
@@ -878,9 +889,9 @@ def relevance_strip(data, header, render_panel):
                 row=1,
                 col=1,
             )
-    
+
         _fig.update_xaxes(title_text="Relevance Score", range=[0, 1.1], row=1, col=1)
-    
+
         # Surrogate specs table
         _pop = _surr.get("population", {})
         _cc = _surr.get("cell_cycle", {})
@@ -923,7 +934,7 @@ def relevance_strip(data, header, render_panel):
             row=1,
             col=2,
         )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=250,
@@ -932,15 +943,15 @@ def relevance_strip(data, header, render_panel):
             _ann.font = dict(color=C["text_dim"], size=11)
         _header = header("""
         ### 6. Observable Relevance + Surrogate Specs (relevance_strip, line 475)
-    
+
         #### Left panel — Observable Relevance:
-    
+
         Horizontal bar chart showing which simulation observables were
           identified as cell-cycle-relevant by the GSA-informed selection (Step 5b). Color-coded by score
           (green > 0.8, amber > 0.5, grey otherwise).
-    
+
         #### Why it's useful:
-    
+
         This answers "Which outputs did we give to the Koopman DMD to define θ?" Not all
           simulation outputs carry cell-cycle information — some vary due to generation convergence or seed
           noise. The relevance score is the residual variance fraction (1 - gen_frac - seed_frac): observables
@@ -948,47 +959,47 @@ def relevance_strip(data, header, render_panel):
           and growth (0.78) are both highly relevant. If an observable had a score of 0.02, it would mean
           generation/seed effects explain almost all its variance and it's useless for defining the cell cycle
           coordinate.
-    
+
         #### Right panel — Surrogate Specs:
-    
+
         A table comparing the two PCE surrogates (Population and Cell Cycle) —
            basis type, polynomial order, input/output dimensions, R^2, and number of terms.
-    
+
         #### Why it's useful:
-    
+
         ### This is the model card. A reviewer can check: "The population surrogate uses
           `Legendre basis order 3` with `R^2=0.92` — that's a good fit." If R^2 were low, you'd know to increase
           polynomial_order or n_samples. The output_dim difference (2 for population vs 10 for cell cycle)
           reflects that Phase 2 fits one surrogate across all 10 stages simultaneously.
-    
+
         #### Governing equations:
-    
+
         Observable relevance (GSA-informed selection, Step 5b):
-    
+
         ```
           relevance_score_j = residual_j = 1 - gen_fraction_j - seed_fraction_j
-    
+
           ...where j indexes observables.
         ```
-    
+
         High residual means the observable's variance is NOT explained by
           generation or seed effects — it's cell-cycle or parameter-driven, making it informative input for
           Koopman DMD.
-    
+
         #### PCE surrogate structure:
-    
+
         ```
           f_hat(x) = sum_alpha c_alpha * prod_i P_{alpha_i}(x_i)
-    
+
           ...where P_n are Legendre polynomials, |alpha| <= p (polynomial order), and the number of terms = C(n+p,
            p).
         ```
-    
+
         >> RFC006 call to action (§3): "The choice of the 'cell cycle variable' will be informed by the
           sensitivity analyses (1-3)" — this is Step 5b, where Strategies 1-3 determine which observables are
           relevant for defining the cell cycle variable.
-    
-    
+
+
             """)
         return mo.vstack([render_panel(_header, mo.ui.plotly(_fig))])
 
@@ -997,24 +1008,24 @@ def relevance_strip(data, header, render_panel):
 
 @app.cell
 def stage_detail(data, header, param_dropdown, render_panel):
-    def per_stage_sensitivity() -> mo.vstack:
+    def ui_per_stage_sensitivity() -> mo.vstack:
         """Per-stage detail: bar chart of all params' S_Ti for selected param highlighted."""
         if data is None:
             mo.stop(True)
-    
+
         _selected = param_dropdown.value
         _stages = data["phase2_cell_cycle_sobol_per_stage"]
         _params = data["parameter_names"]
-    
+
         _fig = go.Figure()
-    
+
         _x_stages = [f"Stage {s['stage']}" for s in _stages]
-    
+
         for _p in _params:
             _st = [s["total_order"].get(_p, 0) for s in _stages]
             _pc = PARAM_COLORS.get(_p, "#666")
             _is_sel = _p == _selected
-    
+
             # Total order bars
             _fig.add_trace(
                 go.Bar(
@@ -1026,7 +1037,7 @@ def stage_detail(data, header, param_dropdown, render_panel):
                     hovertemplate=f"<b>{_p}</b> S_Ti=%{{y:.3f}}<extra></extra>",
                 )
             )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=260,
@@ -1039,25 +1050,25 @@ def stage_detail(data, header, param_dropdown, render_panel):
         )
         _header = header("""
         ### 7. Mixer (stage_detail, line 552)
-    
+
         #### What it shows:
-    
+
         >> Grouped bar chart — one cluster per cell cycle stage, with one bar per parameter colored by its identity. The soloed parameter is full opacity; others are ghosted at 20%.
-    
+
         #### Why it's useful:
-    
+
         >> This is the discrete, stage-by-stage version of the EQ curve. While the EQ shows smooth splines (good for seeing trends), the mixer shows the exact S_Ti value at each stage as a bar you can compare across parameters. It answers "At stage 5 specifically, is mecillinam or vio_expression more important?" You can read the bar heights directly. The grouping makes cross-parameter comparison at a single stage easy, whereas the EQ makes cross-stage comparison for a single parameter easy — complementary views of the same data.
-    
+
         #### Governing equation: Same per-stage total-order Sobol as the EQ, displayed differently:
-    
+
         ```
           S_Ti^(k) for all params i, at each stage k
         ```
-    
+
         >> The mixer transposes the EQ's perspective: EQ sweeps across `k` for fixed `i`, the mixer compares across `i` at each fixed `k`.
-    
+
         #### RFC006 call to action (§4, Activity 5):
-    
+
         >> "Apply the sensitivity analysis for aggregation strategies (1-3) for representative simulations from each use case. Report (slides) containing explanation of methods and results on representative simulations." — the mixer is the per-stage view that would go into such a report.
         """)
         return mo.vstack([render_panel(_header, mo.ui.plotly(_fig))])
@@ -1067,22 +1078,22 @@ def stage_detail(data, header, param_dropdown, render_panel):
 
 @app.cell
 def interaction_analyzer(data, header, param_dropdown, render_panel):
-    def interaction_gap_sidechain() -> mo.vstack:
+    def ui_interaction_gap_sidechain() -> mo.vstack:
         """Interaction gap (S_Ti - S_i) across stages for all params."""
         if data is None:
             mo.stop(True)
-    
+
         _selected = param_dropdown.value
         _stages = data["phase2_cell_cycle_sobol_per_stage"]
         _params = data["parameter_names"]
-    
+
         _fig = go.Figure()
-    
+
         for _p in _params:
             _gaps = [s["total_order"].get(_p, 0) - s["first_order"].get(_p, 0) for s in _stages]
             _pc = PARAM_COLORS.get(_p, "#666")
             _is_sel = _p == _selected
-    
+
             _fig.add_trace(
                 go.Scatter(
                     x=list(range(len(_stages))),
@@ -1095,7 +1106,7 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
                     hovertemplate=f"<b>{_p}</b><br>Stage %{{x}}<br>Interaction=%{{y:.4f}}<extra></extra>",
                 )
             )
-    
+
         _fig.update_layout(
             **DAW_LAYOUT,
             height=220,
@@ -1106,42 +1117,42 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
         )
         _header = header("""
         ### 8. Sidechain / Interaction Analyzer (interaction_analyzer, line 594)
-    
+
         #### What it shows:
-    
+
         Spline curves of (`S_Ti - S_i`) for each parameter across stages. This is the
         interaction gap — the fraction of variance that comes from joint effects between parameters rather
         than individual effects.
-    
+
         #### Why it's useful:
-    
+
         This is the most subtle and potentially most important panel. If the interaction gap
         is near zero, parameters act independently — you can study them in isolation. If it's large,
         parameters interact — changing vio_expression and mecillinam together produces effects that neither
         alone would predict.
-    
+
         In your data, vio_expression has a larger interaction gap (~0.06) at early stages that shrinks to
         near zero at late stages. Mecillinam's gap grows from ~0.03 to ~0.07 across the cycle. This means: at
         early stages, vio interacts with other parameters (probably mecillinam — they compete for cellular
         resources during active growth). At late stages, mecillinam's interaction grows (PBP2 inhibition
         interacts with vio-induced metabolic load during septation).
-    
+
         A biologist designing a combination treatment would look at this panel to know: "If I change both
         vio_expression and mecillinam_concentration simultaneously, stages 7-9 are where the interaction is
         strongest — that's where synergistic or antagonistic drug effects would manifest." That's not visible
          in the main-effect S_i alone.
-    
+
         #### Governing equation: Interaction decomposition from the Sobol ANOVA:
-    
+
         ```
           Interaction_i^(k) = S_Ti^(k) - S_i^(k) = sum_{j!=i} V_ij^(k) / Var(Y_bar_k) + higher-order terms
         ```
-    
+
         >> This captures all variance involving parameter i jointly with at least one other parameter. It equals
            zero if and only if parameter i acts independently of all other parameters at stage k.
-    
+
         #### RFC006 call to action (§3):
-    
+
         >> "We will extend this by directly applying well established global sensitivity analysis methods for the stochastic function (sim_data -> SIM output), based on the aggregation strategies (1-3)." — Sobol total-order indices inherently decompose into main effects and  interactions; the sidechain panel makes that decomposition explicit and visible across the cell cycle.
         """)
         return mo.vstack([render_panel(_header, mo.ui.plotly(_fig))])
@@ -1150,88 +1161,90 @@ def interaction_analyzer(data, header, param_dropdown, render_panel):
 
 
 @app.cell
-def load_surrogates(data, file_input):
-    """Load PCE surrogates from the export directory (sibling files to uq_results.json)."""
-    if data is None:
-        mo.stop(True)
+def load_surrogates(data):
+    def load_pce_surrogates(file_input: mo.ui.text):
+        """Load PCE surrogates from the export directory (sibling files to uq_results.json)."""
+        if data is None:
+            mo.stop(True)
+    
+        _export_dir = Path(file_input.value).parent
+        _pop_dir = _export_dir / "population_surrogate"
+        _cc_dir = _export_dir / "cell_cycle_surrogate"
+    
+        surr_data = {"available": False}
+    
+        if _pop_dir.exists() and _cc_dir.exists():
+            try:
+                surr_data = {
+                    "available": True,
+                    "pop_coeffs": np.load(_pop_dir / "coefficients.npy"),
+                    "pop_mi": np.load(_pop_dir / "multi_indices.npy"),
+                    "cc_coeffs": np.load(_cc_dir / "coefficients.npy"),
+                    "cc_mi": np.load(_cc_dir / "multi_indices.npy"),
+                }
+                # Bounds from surrogate metadata or from JSON
+                if (_pop_dir / "input_bounds.npy").exists():
+                    surr_data["bounds"] = np.load(_pop_dir / "input_bounds.npy")
+                else:
+                    surr_data["bounds"] = np.array([[0, 5], [0, 2], [0, 10]], dtype=float)
+            except Exception as _e:
+                surr_data = {"available": False, "error": str(_e)}
 
-    _export_dir = Path(file_input.value).parent
-    _pop_dir = _export_dir / "population_surrogate"
-    _cc_dir = _export_dir / "cell_cycle_surrogate"
+        return surr_data
 
-    surr_data = {"available": False}
+    return (load_pce_surrogates,)
 
-    if _pop_dir.exists() and _cc_dir.exists():
-        try:
-            surr_data = {
-                "available": True,
-                "pop_coeffs": np.load(_pop_dir / "coefficients.npy"),
-                "pop_mi": np.load(_pop_dir / "multi_indices.npy"),
-                "cc_coeffs": np.load(_cc_dir / "coefficients.npy"),
-                "cc_mi": np.load(_cc_dir / "multi_indices.npy"),
-            }
-            # Bounds from surrogate metadata or from JSON
-            if (_pop_dir / "input_bounds.npy").exists():
-                surr_data["bounds"] = np.load(_pop_dir / "input_bounds.npy")
-            else:
-                surr_data["bounds"] = np.array([[0, 5], [0, 2], [0, 10]], dtype=float)
-        except Exception as _e:
-            surr_data = {"available": False, "error": str(_e)}
+
+@app.cell
+def surr_data(file_input, load_pce_surrogates):
+    surr_data = load_pce_surrogates(file_input=file_input)
     return (surr_data,)
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def pce_eq_sliders(data, get_sliders, surr_data):
-    """Parameter sliders for the PCE prediction EQ."""
-    if data is None or not surr_data.get("available"):
-        mo.stop(True)
+    def eq_sliders():
+        """Parameter sliders for the PCE prediction EQ."""
+        if data is None or not surr_data.get("available"):
+            mo.stop(True)
+    
+        _params = data["parameter_names"]
+        _bounds = surr_data["bounds"]
+    
+        _sliders = get_sliders(_params, _bounds)
+        param_sliders = _sliders
+        return param_sliders
 
-    _params = data["parameter_names"]
-    _bounds = surr_data["bounds"]
-
-    _sliders = get_sliders(_params, _bounds)
-    param_sliders = _sliders
-
-    # mo.output.replace(
-    #     mo.vstack([
-    #
-    #         mo.md(f"""
-    # <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
-    #   <div style="color:{C['accent3']};font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">
-    # PCE Surrogate Knobs
-    #   </div>
-    #   {mo.hstack([_sliders[_i] for _i in range(len(_sliders))])}
-    # </div>
-    # """),
-    #     ])
-    # )
-
+    param_sliders = eq_sliders()
     return (param_sliders,)
 
 
 @app.cell
-def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
+def pce_eq_plot(
+    data,
+    header,
+    param_dropdown,
+    param_sliders,
+    surr_data,
+    ui_file_loader,
+    ui_parameter_selector,
+):
     def prediction_eq() -> mo.vstack:
         """PCE prediction EQ with dual heatmaps — matches tk dashboard functionality."""
         if data is None or not surr_data.get("available"):
             mo.stop(True)
-    
+
         _n_stages = data.get("n_cell_cycle_stages", 10)
         _selected = param_dropdown.value
         _params = data["parameter_names"]
         _bounds = surr_data["bounds"]
         _stage_data = data.get("phase2_cell_cycle_sobol_per_stage", [])
         _profile = data.get("cell_cycle_profile")
-    
+
         # Current parameter values from sliders
         _x = np.array([float(param_sliders[_i].value) for _i in range(len(_params))])
         _x_norm = 2.0 * (_x - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0
-    
+
         # Direct Legendre evaluation
         def _legendre_eval(_x_n, _coeffs, _mi):
             _max_ord = int(_mi.max())
@@ -1249,10 +1262,10 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     _term *= _P[_mi[_t, _pp], _pp]
                 _result += _term
             return _result
-    
+
         # Population surrogate prediction
         _pop_y = _legendre_eval(_x_norm, surr_data["pop_coeffs"], surr_data["pop_mi"])
-    
+
         # Sweep all parameters + compute local sensitivity
         _n_sweep = 60
         _sweeps = {}
@@ -1268,7 +1281,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 _x_sw_n = 2.0 * (_x_sw - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-12) - 1.0
                 _sy.append(_legendre_eval(_x_sw_n, surr_data["pop_coeffs"], surr_data["pop_mi"]))
             _sweeps[_p] = (_sv, np.array(_sy))
-    
+
             # Local sensitivity via finite difference
             _delta = (_hi - _lo) * 0.005
             _x_plus = _x.copy()
@@ -1287,10 +1300,10 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             )
             _local_sens[_p] = abs(_y_plus - _y_minus) / (2 * _delta + 1e-12)
             _param_effects[_p] = _local_sens[_p] * _x_norm[_pi]
-    
+
         _sel_idx = _params.index(_selected) if _selected in _params else 0
         _sel_color = PARAM_COLORS.get(_selected, C["accent1"])
-    
+
         # ========== FIGURE 1: Response Curves ==========
         _fig1 = go.Figure()
         for _pi, _p in enumerate(_params):
@@ -1328,7 +1341,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     hovertemplate=f"<b>{_p}</b>={_x[_pi]:.2f}<br>Y\u0302={_pop_y:.4f}<extra></extra>",
                 )
             )
-    
+
         # Fill under soloed curve
         _sel_sv_norm = (_sweeps[_selected][0] - _bounds[_sel_idx, 0]) / (
             _bounds[_sel_idx, 1] - _bounds[_sel_idx, 0] + 1e-12
@@ -1344,7 +1357,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 hoverinfo="skip",
             )
         )
-    
+
         _fig1.update_layout(
             **DAW_LAYOUT,
             height=280,
@@ -1354,10 +1367,10 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=9)),
             # margin=dict(l=45, r=15, t=35, b=45),
         )
-    
+
         # ========== FIGURE 2: Sensitivity Spectrogram + Per-Stage Prediction ==========
         _theta_labels = [f"\u03b8{s['stage']}" for s in _stage_data] if _stage_data else []
-    
+
         _fig2 = make_subplots(
             rows=2,
             cols=1,
@@ -1369,7 +1382,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             vertical_spacing=0.15,
             shared_xaxes=True,
         )
-    
+
         if _stage_data:
             # Heatmap: params x stages (S_Ti)
             _z_sens = [[s["total_order"].get(_p, 0) for s in _stage_data] for _p in _params]
@@ -1401,14 +1414,14 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 row=1,
                 col=1,
             )
-    
+
             # Per-stage prediction using Sobol weights
             _n_s = len(_stage_data)
             _stage_preds = np.zeros(_n_s)
             for _si in range(_n_s):
                 _contrib = sum(_param_effects.get(_p, 0) * _stage_data[_si]["total_order"].get(_p, 0) for _p in _params)
                 _stage_preds[_si] = _pop_y + _contrib
-    
+
             _fig2.add_trace(
                 go.Scatter(
                     x=_theta_labels,
@@ -1422,7 +1435,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 row=2,
                 col=1,
             )
-    
+
             # Highlight peak stage
             _peak = int(np.argmax(_stage_preds))
             _fig2.add_trace(
@@ -1440,14 +1453,14 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 row=2,
                 col=1,
             )
-    
+
         _fig2.update_layout(**DAW_LAYOUT, height=300, showlegend=False,
             # margin=dict(l=45, r=15, t=35, b=30)
                            )
         _fig2.update_yaxes(title_text="Y\u0302", row=2, col=1, title_font=dict(color=C["accent3"]))
         for _ann in _fig2.layout.annotations:
             _ann.font = dict(color=C["text_dim"], size=11)
-    
+
         # ========== FIGURE 3: Observable Waveform (matches tk ObservableWaveformCanvas) ==========
         _fig3 = None
         _fig3_heatmap = None
@@ -1455,21 +1468,21 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             _obs_names = [_k for _k in _profile if _k != "stages"]
             _n_obs = len(_obs_names)
             _n_s = len(_profile.get("stages", []))
-    
+
             if _n_obs > 0 and _n_s > 0:
                 _baselines = np.array([_profile[_k][:_n_s] for _k in _obs_names], dtype=float)
                 _modulated = _baselines.copy()
-    
+
                 for _si in range(min(_n_s, len(_stage_data))):
                     _mod = sum(_param_effects.get(_p, 0) * _stage_data[_si]["total_order"].get(_p, 0) for _p in _params)
                     for _oi in range(_n_obs):
                         _base_mag = abs(_baselines[_oi, _si]) + 1e-12
                         _modulated[_oi, _si] = _baselines[_oi, _si] * (1 + _mod / _base_mag)
-    
+
                 _obs_short = [_k.split("__")[-1] if "__" in _k else _k for _k in _obs_names]
                 _stage_labels = [f"\u03b8{_si}" for _si in range(_n_s)]
                 _obs_colors_list = [C["accent3"], C["accent4"], C["accent1"], C["accent2"], C["accent5"]]
-    
+
                 # Waveform figure: one trace per observable (baseline dashed + modulated solid + fill)
                 _fig3 = make_subplots(
                     rows=_n_obs, cols=1,
@@ -1477,11 +1490,11 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     vertical_spacing=0.08,
                     subplot_titles=[f"{_obs_short[_oi]}" for _oi in range(_n_obs)],
                 )
-    
+
                 for _oi in range(_n_obs):
                     _oc = _obs_colors_list[_oi % len(_obs_colors_list)]
                     _row = _oi + 1
-    
+
                     # Baseline (dashed)
                     _fig3.add_trace(go.Scatter(
                         x=_stage_labels, y=_baselines[_oi].tolist(),
@@ -1490,7 +1503,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                         line=dict(color=C["text_dim"], width=1, dash="dash"),
                         hovertemplate="Baseline: %{y:.4f}<extra></extra>",
                     ), row=_row, col=1)
-    
+
                     # Modulated (solid + markers)
                     _fig3.add_trace(go.Scatter(
                         x=_stage_labels, y=_modulated[_oi].tolist(),
@@ -1500,7 +1513,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                         marker=dict(size=6, color=_oc),
                         hovertemplate=f"<b>{_obs_short[_oi]}</b><br>\u03b8: %{{x}}<br>Value: %{{y:.4f}}<extra></extra>",
                     ), row=_row, col=1)
-    
+
                     # Fill between baseline and modulated
                     _fig3.add_trace(go.Scatter(
                         x=_stage_labels + _stage_labels[::-1],
@@ -1509,7 +1522,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                         fillcolor=f"rgba({int(_oc[1:3], 16)},{int(_oc[3:5], 16)},{int(_oc[5:7], 16)},0.12)",
                         showlegend=False, hoverinfo="skip",
                     ), row=_row, col=1)
-    
+
                     # Delta annotations at first, last, and max-delta stage
                     _deltas = _modulated[_oi] - _baselines[_oi]
                     _max_delta_idx = int(np.argmax(np.abs(_deltas)))
@@ -1524,10 +1537,10 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                                 ax=0, ay=-20,
                                 xref=f"x{_row if _row > 1 else ''}", yref=f"y{_row if _row > 1 else ''}",
                             )
-    
+
                     _fig3.update_yaxes(title_text=_obs_short[_oi], row=_row, col=1,
                                         title_font=dict(color=_oc, size=10))
-    
+
                 _fig3.update_layout(
                     **DAW_LAYOUT,
                     height=130 * _n_obs + 30,
@@ -1538,7 +1551,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 for _ann in _fig3.layout.annotations:
                     if not hasattr(_ann, "arrowhead"):
                         _ann.font = dict(color=C["text_dim"], size=10)
-    
+
                 # Heatmap minimap (for accordion toggle)
                 _delta_text = [["" for _ in range(_n_s)] for _ in range(_n_obs)]
                 for _oi in range(_n_obs):
@@ -1546,7 +1559,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                         _d = _modulated[_oi, _si] - _baselines[_oi, _si]
                         if abs(_d) > 1e-6:
                             _delta_text[_oi][_si] = f"{'+' if _d > 0 else ''}{_d:.3f}"
-    
+
                 _fig3_heatmap = go.Figure()
                 _fig3_heatmap.add_trace(go.Heatmap(
                     z=_modulated.tolist(), x=_stage_labels, y=_obs_short,
@@ -1560,7 +1573,7 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                     title=dict(text="OBSERVABLE DOMAIN // Heatmap Minimap", font=dict(size=11)),
                     # margin=dict(l=45, r=15, t=30, b=25)
                                            )
-    
+
         # ========== Local sensitivity readout ==========
         _sens_max = max(_local_sens.values()) if _local_sens else 1
         _sens_bars_html = (
@@ -1575,20 +1588,20 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
             if _local_sens
             else ""
         )
-    
+
         # ========== Assemble output ==========
         _header_text = header("""\
         ### 9. PCE Prediction EQ (Surrogate Knobs)
-    
+
         >> Sliders control PCE surrogate evaluation. All response curves, the sensitivity spectrogram,
         the observable waveform, and local sensitivity bars update in lock-step.
         The waveform shows per-stage observable values in physical units with baseline comparison.
-    
+
         ```
         Y_obs_k(x) = baseline_obs_k * (1 + sum_i [|dY/dx_i| * (x_i - mid) * S_Ti^(k)] / |baseline|)
         ```
         """)
-    
+
         # ========== DAW Layout: controls left, signal stack right ==========
         # Left column: readout + local sens + knobs (persistent, like a channel strip)
         _control_panel = mo.md(f"""<div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:10px;height:100%;">
@@ -1602,36 +1615,40 @@ def pce_eq_plot(data, header, param_dropdown, param_sliders, surr_data):
                 {mo.vstack([param_sliders[_i] for _i in range(len(param_sliders))])}
             </div>
         </div>""")
-    
+
         # Right column: signal stack (top=waveform, mid=response curves, bottom=spectrogram)
         # Like a DAW: timeline/waveform on top, effect rack below
         _signal_stack_items = []
-    
+
         # Top: Observable waveform (the "signal" / timeline view)
         if _fig3 is not None:
             _signal_stack_items.append(mo.ui.plotly(_fig3))
-    
+
         # Middle: Response curves (the "EQ effect pedal")
         _signal_stack_items.append(mo.ui.plotly(_fig1))
-    
+
         # Bottom: Sensitivity spectrogram + stage prediction (the "analyzer")
         _signal_stack_items.append(mo.ui.plotly(_fig2))
-    
+
         _signal_stack = mo.vstack(_signal_stack_items, gap=0.25)
-    
+
         # Combine: controls left (narrow) | signal stack right (wide)
         _main_row = mo.hstack([_control_panel, _signal_stack], widths=[1, 4], align="start")
-    
+
         # Heatmap minimap (toggleable, full width below)
         _minimap = None
         if _fig3_heatmap is not None:
             _minimap = mo.accordion({"\u25bc Heatmap Minimap": mo.ui.plotly(_fig3_heatmap)})
-    
-        _grid = [_header_text, _main_row]
+
+        _grid = [_main_row]
         if _minimap is not None:
             _grid.append(_minimap)
-    
-        return mo.vstack(_grid, gap=0.5), _grid
+
+        return mo.md(f""" \
+        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:16px;">
+            <div>{mo.vstack([_header_text, ui_file_loader(), ui_parameter_selector(), *_grid], gap=0.5)}</div>
+        </div>
+        """), _grid
 
     return (prediction_eq,)
 

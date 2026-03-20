@@ -108,32 +108,45 @@ The `uq` CLI exposes the following commands:
 
 ### 1. Generate Samples
 
-Generate Latin Hypercube samples and evaluate them against a simulation function, caching the results to disk:
+Generate Latin Hypercube samples and evaluate them against vEcoli, caching the results to disk:
 
 ```bash
-uv run uq generate-samples \
-    api_simulation_default mecillinam test_violacein_with_metabolism \
+# Default: 5 physiologically relevant sim_data parameters
+uv run uq sample \
+    api_simulation_default \
     --sim-base-path /path/to/vEcoli/api_integration/sims \
     --cache-dir ./uq_cache \
-    --n-samples 200
+    --n-samples 50 --live --max-workers 4
 ```
 
-**Important:** By default this uses a **synthetic response surface** (`DataDrivenWrapper`) — it builds a linear model from the statistics of your existing Parquet data and evaluates it instantly. This is useful for testing the pipeline but does not produce biologically meaningful sensitivity indices.
+**Custom parameters** — create a JSON file specifying any `SimulationDataEcoli` attributes:
 
-To run **real vEcoli simulations** at each sample point, add the `--live` flag:
+```json
+[
+  {"name": "kinetic_obj_wt", "attr_path": "process.metabolism.kinetic_objective_weight", "bounds": [0.0, 1.0]},
+  {"name": "rnap_active_free", "attr_path": "process.transcription.fraction_active_rnap_free", "bounds": [0.1, 1.0]}
+]
+```
 
 ```bash
-uv run uq generate-samples \
-    api_simulation_default \
+uv run uq sample api_simulation_default \
     --sim-base-path /path/to/sims \
     --cache-dir ./uq_cache \
-    --n-samples 50 \
-    --live \
-    --max-duration 300 \
-    --max-workers 4
+    --n-samples 50 --live --params-file my_params.json
 ```
 
-**`generate-samples` options:**
+**Legacy vio/mecillinam mode** (for violacein/antibiotic-enabled sim_data):
+
+```bash
+uv run uq sample api_simulation_default \
+    --sim-base-path /path/to/sims \
+    --cache-dir ./uq_cache \
+    --n-samples 50 --live --include-vio --include-mecillinam
+```
+
+Live mode runs vEcoli simulations as **subprocesses** — no `EcoliSim` is held in the UQ process memory. Without `--live`, uses a synthetic response surface for fast testing.
+
+**`sample` options:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -141,12 +154,13 @@ uv run uq generate-samples \
 | `--cache-dir` | None | Where to write cached X.npy, Y.npy, metadata.json |
 | `--n-samples` | 200 | Number of LHS sample points |
 | `--seed` | 42 | Random seed for reproducible sampling |
-| `--live` | off | Run real `EcoliSim` per sample (requires `ecoli` package) |
+| `--live` | on | Run real vEcoli simulations as subprocesses |
+| `--params-file` | None | JSON file with custom `SimDataParameter` specs |
 | `--max-duration` | 10800 | Simulation wall-clock limit in seconds (live mode) |
 | `--generations` | 1 | Generations per simulation (live mode) |
-| `--max-workers` | None | Parallel workers for evaluation (None = sequential) |
-| `--include-vio` | auto | Include violacein pathway parameters (auto-detected from sim_data) |
-| `--include-mecillinam` | True | Include mecillinam concentration parameter |
+| `--max-workers` | None | Parallel subprocesses (None = sequential) |
+| `--include-vio` | None | Include violacein parameters (legacy mode) |
+| `--include-mecillinam` | None | Include mecillinam parameter (legacy mode) |
 | `--observable-columns` | mass cols | Which output columns to extract |
 
 ### 2. Run the Pipeline
