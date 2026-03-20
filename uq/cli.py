@@ -181,51 +181,77 @@ def sample(
     Pass --include-vio / --include-mecillinam for legacy mode.
     Pass --live to run real vEcoli simulations as subprocesses.
     """
+    from rich.progress import (
+        BarColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+
     verify_out_dirs(sim_base_path, experiment_ids)
 
     if batch_dir is not None:
         batch_dir = Path(batch_dir)
 
-    samples = handlers.generate_samples(
-        experiment_ids=experiment_ids,
-        sim_base_path=sim_base_path,
-        cache_dir=cache_dir,
-        n_samples=n_samples,
-        seed=seed,
-        observable_columns=observable_columns,
-        max_workers=max_workers,
-        max_duration=max_duration,
-        generations=generations,
-        live=live,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-        params_file=params_file,
-        batch_dir=batch_dir
+    with Progress(
+        SpinnerColumn("dots", style="bold magenta"),
+        TextColumn("[bold cyan]{task.description:<35}"),
+        BarColumn(bar_width=40, complete_style="magenta", finished_style="green"),
+        TextColumn("[bold green]{task.percentage:>5.1f}%"),
+        TextColumn("[dim]|[/dim]"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Initializing", total=100)
+
+        def _on_progress(description: str, advance: int) -> None:
+            progress.update(task, advance=advance, description=description)
+
+        samples = handlers.generate_samples(
+            experiment_ids=experiment_ids,
+            sim_base_path=sim_base_path,
+            cache_dir=cache_dir,
+            n_samples=n_samples,
+            seed=seed,
+            observable_columns=observable_columns,
+            max_workers=max_workers,
+            max_duration=max_duration,
+            generations=generations,
+            live=live,
+            include_vio=include_vio,
+            include_mecillinam=include_mecillinam,
+            params_file=params_file,
+            batch_dir=batch_dir,
+            on_progress=_on_progress,
+        )
+
+    console.print(
+        f"[bold green]Cached {samples.X.shape[0]} samples[/bold green] "
+        f"({samples.X.shape[1]} params, {samples.Y.shape[1]} outputs) "
+        f"to [cyan]{cache_dir}[/cyan]"
     )
-    print(samples)
+    if samples.Y_timeseries is not None:
+        console.print(f"  [dim]Timeseries: {len(samples.Y_timeseries)} samples[/dim]")
 
 
 @demo_app.command(name="sampling")
 def demo_sampling() -> None:
-    observable_columns = [
-        "listeners__mass__dry_mass",
-        "listeners__mass__cell_mass",
-        "listeners__mass__volume",
-        "listeners__mass__growth",
-    ]
     sim_base_path = Path("/Users/alexanderpatrie/sms/vecoli_data/outputs")
     experiment_ids = [p.name for p in sim_base_path.iterdir()]
-    cache_dir = "examples/uq_artifacts/demos"
-    batch_dir = Path("examples/uq_artifacts/batch")
-    n_samples = 3
-    seed = 1111
-    samples = handlers.generate_samples(
+    sample(
         experiment_ids=experiment_ids,
-        sim_base_path=sim_base_path,
-        cache_dir=cache_dir,
-        n_samples=n_samples,
-        seed=seed,
-        observable_columns=observable_columns,
+        sim_base_path=str(sim_base_path),
+        cache_dir="examples/uq_artifacts/demos",
+        n_samples=3,
+        seed=1111,
+        observable_columns=[
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+            "listeners__mass__volume",
+            "listeners__mass__growth",
+        ],
         max_workers=4,
         max_duration=22.0,
         generations=1,
@@ -233,9 +259,8 @@ def demo_sampling() -> None:
         include_vio=False,
         include_mecillinam=False,
         params_file=PARAM_CONFIG_DEMO.__str__(),
-        batch_dir=batch_dir,
+        batch_dir="examples/uq_artifacts/batch",
     )
-    print(samples)
 
 
 @app.command(name="export-configs")
