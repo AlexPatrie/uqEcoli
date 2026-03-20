@@ -6,7 +6,7 @@ Exercises the full RFC006 pipeline via the CLI entrypoint:
   2. Run `quantify` with --precomputed-path (Stage 2)
   3. Verify PipelineResult structure, report output, and export artifacts
 
-Uses real simulation data from vEcoli-private/api_integration/sims.
+Uses real simulation data from vEcoli/api_integration/sims.
 Tests are skipped when data is not available.
 """
 
@@ -25,7 +25,7 @@ from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
 # Constants
 # ---------------------------------------------------------------------------
 
-SIM_BASE_PATH = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
+SIM_BASE_PATH = Path("/Users/alexanderpatrie/sms/vEcoli/api_integration/sims")
 EXPERIMENT_IDS = ["mecillinam", "api_simulation_default", "test_violacein_with_metabolism"]
 
 OBSERVABLE_COLUMNS = [

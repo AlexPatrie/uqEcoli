@@ -28,17 +28,14 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import polars as pl
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 
 from uq.common import BaseClass
-from uq.io import get_bucket
-from uq.pipeline.models import SimulationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -301,26 +298,6 @@ def _build_variants_section_generic(
     }
 
 
-def _build_variants_section_legacy(
-    X: np.ndarray,
-    param_space: Any,
-) -> dict[str, Any]:
-    """Build the ``variants`` config section for legacy vio/mecillinam.
-
-    Converts each LHS sample to UQInputParametersVecoli, extracts
-    the variant config, and encodes as zip-combined variant params.
-
-    Since vEcoli's create_variants only supports ONE variant function,
-    and legacy mode may need both ``new_gene_internal_shift_variable_strength``
-    AND ``mecillinam_timeline``, we use ``sim_data_setattr`` as a
-    wrapper that applies mutations by pre-computing the variant effects.
-    """
-    # For legacy mode, we still use sim_data_setattr but let the
-    # _apply_parameter_mutations handle the complex variant logic.
-    # This means we need to pre-compute the mutated sim_data pickles.
-    # Return None to signal that the caller should use the pickle-based path.
-    return None
-
 
 def _run_workflow(
     config_path: Path,
@@ -435,6 +412,8 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
     param_space: Any  # XSpace — avoid circular import
     sim_config_path: str | None = None
     max_duration: float = 10800.0
+    generations: int = 1
+    n_init_sims: int = 1
     output_keys: list[str] | None = None
     observable_names: list[str] | None = None
     _obs_names: list[str] | None = field(default=None, init=False, repr=False)
@@ -540,14 +519,9 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 pickle.dump(self.baseline_sim_data, f)
 
             # --- Step 2: Build variants section ---
-            if hasattr(self.param_space, 'is_generic') and self.param_space.is_generic:
-                variants_section = _build_variants_section_generic(
-                    X, self.param_space._sim_data_parameters,
-                )
-            else:
-                # Legacy vio/mecillinam: pre-compute mutations into
-                # sim_data_setattr format
-                variants_section = self._build_legacy_variants(X)
+            variants_section = _build_variants_section_generic(
+                X, self.param_space._sim_data_parameters,
+            )
 
             # --- Step 3: Build workflow config ---
             config = _build_workflow_config(
@@ -556,8 +530,8 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 output_dir=str(output_dir),
                 max_duration=self.max_duration,
                 variants_section=variants_section,
-                n_init_sims=1,
-                generations=1,
+                n_init_sims=self.n_init_sims,
+                generations=self.generations,
             )
 
             config_path = batch_dir / "workflow_config.json"
@@ -621,6 +595,10 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
             sort_cols = []
             if "variant" in df.columns:
                 sort_cols.append("variant")
+            if "lineage_seed" in df.columns:
+                sort_cols.append("lineage_seed")
+            if "generation" in df.columns:
+                sort_cols.append("generation")
             if "time" in df.columns:
                 sort_cols.append("time")
             if sort_cols:
@@ -677,56 +655,6 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         finally:
             if cleanup:
                 shutil.rmtree(batch_dir, ignore_errors=True)
-
-    def _build_legacy_variants(self, X: np.ndarray) -> dict[str, Any]:
-        """Build variants section for legacy vio/mecillinam params.
-
-        Since vEcoli's create_variants supports only ONE variant function,
-        and legacy mode may need both vio + mecillinam, we pre-compute
-        the full sim_data mutations and encode them via sim_data_setattr.
-
-        This works by:
-        1. For each sample, compute the full variant config
-        2. Apply variants to a deep-copied sim_data
-        3. Diff against baseline to get the effective mutations
-        4. Encode as sim_data_setattr mutations
-        """
-        # For now, extract the variant configs and encode directly
-        n_samples = X.shape[0]
-        mutations_list = []
-        for i in range(n_samples):
-            uq_params = self.param_space.sample_to_params(X[i])
-            sim_config = uq_params.to_simulation_config()
-            variants = sim_config.get("variants", {})
-            # Flatten all variant params into a single mutations dict
-            # by recording what each variant function would set
-            all_mutations = {}
-            for _vname, param_dicts in variants.items():
-                for pd in param_dicts:
-                    # Store the variant call as a nested mutation
-                    all_mutations.update(pd)
-            mutations_list.append({"variants": variants})
-
-        # Use sim_data_setattr but pass the raw variant configs
-        # Actually, for legacy mode we need the real variant functions.
-        # The cleanest approach: serialize each mutated sim_data as a
-        # separate pickle and use a simple variant that loads from path.
-        # But that defeats the purpose of using workflow.py's variant system.
-        #
-        # Better approach: just use sim_data_setattr with the mutations
-        # that the variant functions would apply. For vio/mecillinam,
-        # the mutations are well-defined.
-        #
-        # Simplest correct approach: create the mutated pickles ourselves
-        # and pass sim_data_path per variant. But create_variants.py
-        # doesn't support that.
-        #
-        # PRAGMATIC: For legacy mode, we fall back to creating variant
-        # pickles directly and running workflow.py with skip_baseline.
-        raise NotImplementedError(
-            "Legacy vio/mecillinam mode not yet supported via workflow.py. "
-            "Use generic SimDataParameter specs instead (--params-file)."
-        )
 
     def evaluate_batch(
         self,
@@ -872,58 +800,3 @@ def collect_batch_results(
     )
     cache.save()
     return cache
-
-
-# -- Legacy config classes (kept for backward compatibility) -----------------
-
-
-class NextflowProfile(StrEnum):
-    STANDARD = "standard"
-    AWS = "aws"
-    CCAM = "ccam"
-
-
-@dataclass
-class OutputEmitterConfig(BaseClass):
-    type: Literal["parquet", "timeseries", "xarray"] = "parquet"
-    out_dir: str | None = None
-    out_uri: str | None = None
-    args: dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.out_uri is None and self.out_dir is None:
-            self.out_uri = get_bucket()
-
-
-@dataclass
-class VariantVecoli(BaseClass):
-    id: Literal["new_gene_internal_shift_variable_strength", "condition", "mecillinam_timeline"]
-    config: dict[str, Any]
-
-
-@dataclass
-class SimulationConfigVecoli(SimulationConfig):
-    """Vecoli simulation config (JSON), 1:1"""
-    experiment_id: str
-    sim_data_path: str | None = None
-    n_init_sims: int = field(default=1)
-    generations: int = field(default=1)
-    variants: list[VariantVecoli] = field(default_factory=list)
-    emitter_arg: OutputEmitterConfig = field(default=OutputEmitterConfig)
-
-    def validate(self) -> bool:
-        return True
-
-    def model_dump(self) -> dict[str, Any]:
-        attrs = ["experiment_id", "sim_data_path", "n_init_sims", "generations"]
-        config = dict(zip(attrs, [getattr(self, attr) for attr in attrs]))
-        config.update(self._format_emitter())
-        config.update({"variants": {variant.id: variant.config for variant in self.variants}})
-        return config
-
-    def _format_emitter(self) -> dict[str, Any]:
-        outdir_key = "out_dir"
-        path = self.emitter_arg.out_dir or self.emitter_arg.out_uri
-        if path == self.emitter_arg.out_uri:
-            outdir_key = "out_uri"
-        return {"emitter": self.emitter_arg.type, "emitter_arg": {outdir_key: path}}

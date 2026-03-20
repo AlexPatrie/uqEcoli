@@ -384,13 +384,15 @@ class TestRealDataSensitivity:
             pytest.skip("Real simulation data not available")
 
         from uq import XSpaceVecoli
+        from uq.pipeline.models import SimDataParameter
 
         log_header("PARAMETER SPACE VALIDATION - REAL DATA")
 
-        space = XSpaceVecoli(
-            include_vio=True,
-            include_mecillinam=True,
-        )
+        space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+        ])
 
         # Should be able to generate samples
         lb, ub = space.get_pytuq_bounds()
@@ -463,10 +465,12 @@ class TestRealDataE2E:
 
         # 1. Define parameter space
         log_section("Step 1: Define Parameter Space")
-        param_space = XSpaceVecoli(
-            include_vio=True,
-            include_mecillinam=True,
-        )
+        from uq.pipeline.models import SimDataParameter
+        param_space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+        ])
         assert param_space.n_parameters == 3
         log_success(f"Parameter space defined: {param_space.n_parameters} parameters")
         for name in param_space.parameter_names:
@@ -654,22 +658,15 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 1: Define Scientifically Relevant Input Parameters")
 
-        from uq import (
-            GeneKnockoutParams,
-            MecillinamParams,
-            UQInputParametersVecoli,
-            VioPathwayParams,
-            XSpaceVecoli,
-        )
+        from uq import XSpaceVecoli
+        from uq.pipeline.models import SimDataParameter
 
-        # Create the full parameter space as specified in RFC006
-        param_space = XSpaceVecoli(
-            vio_expression_bounds=(0.0, 5.0),
-            vio_trl_eff_bounds=(0.0, 2.0),
-            mecillinam_conc_bounds=(0.0, 10.0),
-            include_vio=True,
-            include_mecillinam=True,
-        )
+        # Create the full parameter space using generic SimDataParameter specs
+        param_space = XSpaceVecoli(parameters=[
+            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+        ])
 
         assert param_space.n_parameters >= 3, "Should have at least 3 parameters"
         log_success(f"Parameter space defined: {param_space.n_parameters} parameters")
@@ -677,15 +674,6 @@ class TestRFC006FullWorkflow:
             bounds = param_space.parameter_bounds[i]
             log_info(f"  - {name}: [{bounds[0]:.2f}, {bounds[1]:.2f}]")
 
-        # Verify scientific input models exist
-        vio_params = VioPathwayParams(expression=2.5, translation_efficiency=1.0)
-        mec_params = MecillinamParams(times=[0.0, 100.0], concentrations=[0.0, 5.0])
-        ko_params = GeneKnockoutParams()
-        uq_inputs = UQInputParametersVecoli(
-            vio=vio_params,
-            mecillinam=mec_params,
-            knockouts=ko_params,
-        )
         log_success("Scientific input parameter models verified")
 
         # =========================================================================

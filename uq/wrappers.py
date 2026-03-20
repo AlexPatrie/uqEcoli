@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 
 from uq.aggregation import AggregatedOutput, AggregationStrategy, Aggregator
-from uq.inputs import UQInputParametersVecoli, XSpaceVecoli
+from uq.inputs import XSpaceVecoli
 from uq.outputs import OutputType
 
 if TYPE_CHECKING:
@@ -161,7 +161,7 @@ class SimulationWrapper:
             results.append(self(x))
         return np.vstack(results)
 
-    def _get_cache_key(self, params: UQInputParametersVecoli) -> str:
+    def _get_cache_key(self, params: Any) -> str:
         """Generate a unique cache key for the parameters."""
         config_dict = params.model_dump()
         config_str = json.dumps(config_dict, sort_keys=True, default=str)
@@ -179,7 +179,7 @@ class SimulationWrapper:
         cache_path = Path(self.config.cache_dir) / f"{cache_key}.npy"
         np.save(cache_path, result)
 
-    def _run_simulation(self, params: UQInputParametersVecoli, run_id: str) -> str:
+    def _run_simulation(self, params: Any, run_id: str) -> str:
         """
         Run a vEcoli simulation with the specified parameters.
 
@@ -427,10 +427,9 @@ class PrecomputedWrapper:
         Y_list = []
 
         for sim_id, sim_info in self.simulation_index.items():
-            # Extract input parameters
+            # Extract input parameters from generic config
             config = sim_info["config"]
-            params = self._config_to_params(config)
-            x = self.parameter_space.params_to_sample(params)
+            x = self._config_to_sample(config)
             X_list.append(x)
 
             # Extract outputs
@@ -451,46 +450,39 @@ class PrecomputedWrapper:
 
         return np.vstack(X_list), np.vstack(Y_list)
 
-    def _config_to_params(self, config: dict[str, Any]) -> UQInputParametersVecoli:
-        """Convert a config dictionary back to UQInputParameters."""
-        from uq.inputs import (
-            MecillinamParams,
-            MediaCondition,
-            VioPathwayParams,
-        )
+    def _config_to_sample(self, config: dict[str, Any]) -> np.ndarray:
+        """Extract parameter values from a generic workflow config.
 
-        params = UQInputParametersVecoli()
+        Reads the ``sim_data_setattr`` mutations from the config's
+        ``variants`` section and returns a parameter vector aligned
+        with ``self.parameter_space``.
+        """
+        param_names = self.parameter_space.parameter_names
+        x = np.zeros(len(param_names))
 
-        if "variants" in config:
-            variants = config["variants"]
+        variants = config.get("variants", {})
+        mutations = {}
+        if "sim_data_setattr" in variants:
+            setattr_cfg = variants["sim_data_setattr"]
+            # mutations may be a dict with a single entry or a list
+            mut_val = setattr_cfg.get("mutations", {})
+            if isinstance(mut_val, dict) and "value" in mut_val:
+                # Batch format: take first entry
+                val_list = mut_val["value"]
+                if isinstance(val_list, list) and len(val_list) > 0:
+                    mutations = val_list[0]
+            elif isinstance(mut_val, dict):
+                mutations = mut_val
 
-            # Extract vio parameters
-            if "new_gene_internal_shift_variable_strength" in variants:
-                vio_config = variants["new_gene_internal_shift_variable_strength"][0]
-                params.vio = VioPathwayParams(
-                    enabled=True,
-                    induction_gen=vio_config.get("induction_gen", 1),
-                    knockout_gen=vio_config.get("knockout_gen"),
-                    expression=vio_config.get("exp_trl_eff", {}).get("exp", 1.0),
-                    translation_efficiency=vio_config.get("exp_trl_eff", {}).get("trl_eff", 1.0),
-                    condition=MediaCondition(vio_config.get("condition", "basal")),
-                )
-            else:
-                params.vio.enabled = False
+        for i, name in enumerate(param_names):
+            if name in mutations:
+                val = mutations[name]
+                if isinstance(val, dict) and "__value__" in val:
+                    x[i] = float(val["__value__"])
+                else:
+                    x[i] = float(val)
 
-            # Extract mecillinam parameters
-            if "mecillinam_timeline" in variants:
-                mec_config = variants["mecillinam_timeline"][0]
-                params.mecillinam = MecillinamParams(
-                    times=mec_config.get("times", [0.0]),
-                    concentrations=mec_config.get("concentrations", [0.0]),
-                    knockouts=mec_config.get("knockouts", []),
-                )
-
-        params.seed = config.get("seed", 0)
-        params.generations = config.get("generations", 8)
-
-        return params
+        return x
 
     def _extract_outputs(self, aggregator: Aggregator) -> dict[str, AggregatedOutput]:
         """Extract and aggregate outputs using the aggregator."""

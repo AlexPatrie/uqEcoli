@@ -31,7 +31,7 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
 
   1. Generate (X, Y) pairs from existing sim data. You don't need to re-run sims. You already have outputs for one
   parameter configuration. The gap is: the pipeline needs outputs at multiple parameter configurations (LHS samples
-  across the vio/mecillinam space) to fit a surrogate. A single experiment at one parameter point gives you
+  across the parameter space) to fit a surrogate. A single experiment at one parameter point gives you
   aggregation and variance decomposition, but not sensitivity analysis.
   2. Run generate-samples against real vEcoli. This requires:
     - ecoli package importable (hard imports in uq/pipe.py, uq/generators/vecoli.py)
@@ -56,8 +56,7 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
   Blockers for this path:
   - ecoli package must be importable for Stage 1 (is it installed in this env?)
   - Stage 1 wall-clock time depends on sim duration
-  - The VecoliSimulationFunc must correctly apply parameter variants (vio expression, mecillinam concentration) — this
-   was the knockout gap that MISSING.md documented as fixed
+  - The TimeseriesGeneratorVecoli must correctly apply parameter variants via sim_data_setattr
 """
 
 import json
@@ -110,11 +109,13 @@ def quantify(
         pce_n_selected_params: int = 5,
         export_path: str | None = None,
         precomputed_path: str | None = None,
+        observable_columns: list[str] | None = None,
 ) -> None:
     """Run the full RFC006 UQ pipeline."""
     pipeline: Pipeline = handlers.pipeline(
         experiment_ids=experiment_ids,
         sim_base_path=outdir_root,
+        observable_columns=observable_columns,
         lb_generation=lb_generation,
         lb_time=lb_time,
         n_bins=n_bins,
@@ -155,7 +156,6 @@ def dashboard(
 
         By default, varies 5 physiologically relevant sim_data parameters.
         Use --params-file to specify custom parameters via a JSON file.
-        Use --include-vio / --include-mecillinam for legacy vio/mecillinam mode.
     """)
 )
 def sample(
@@ -168,9 +168,8 @@ def sample(
         max_workers: int | None = None,
         max_duration: float = 10800.0,
         generations: int = 1,
+        n_init_sims: int = 1,
         live: bool = True,
-        include_vio: bool | None = None,
-        include_mecillinam: bool | None = None,
         params_file: str | None = None,
         batch_dir: str | None = None
 ) -> None:
@@ -178,7 +177,6 @@ def sample(
 
     By default varies 5 physiologically relevant scalar sim_data
     parameters.  Pass --params-file to specify custom parameters.
-    Pass --include-vio / --include-mecillinam for legacy mode.
     Pass --live to run real vEcoli simulations as subprocesses.
     """
     from rich.progress import (
@@ -219,9 +217,8 @@ def sample(
             max_workers=max_workers,
             max_duration=max_duration,
             generations=generations,
+            n_init_sims=n_init_sims,
             live=live,
-            include_vio=include_vio,
-            include_mecillinam=include_mecillinam,
             params_file=params_file,
             batch_dir=batch_dir,
             on_progress=_on_progress,
@@ -256,8 +253,6 @@ def demo_sampling() -> None:
         max_duration=22.0,
         generations=1,
         live=True,
-        include_vio=False,
-        include_mecillinam=False,
         params_file=PARAM_CONFIG_DEMO.__str__(),
         batch_dir="examples/uq_artifacts/batch",
     )
@@ -269,8 +264,6 @@ def export_configs(
         batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
         n_samples: int = 200,
         seed: int = 42,
-        include_vio: bool = True,
-        include_mecillinam: bool = True,
         base_config_path: str | None = None,
         generations: int = 1,
         emitter: str = "parquet",
@@ -286,8 +279,6 @@ def export_configs(
         batch_dir=batch_dir,
         n_samples=n_samples,
         seed=seed,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
         base_config_path=base_config_path,
         generations=generations,
         emitter=emitter,
@@ -320,11 +311,11 @@ def configure_pipeline(name: str, dest: str | None = None):
     d = dest or os.path.join(os.getcwd(), f"{name}.json")
     # from uq.pipe import PipelineConfig
     config = PipelineConfig(
-        experiment_ids=["api_simulation_default", "mecillinam", "test_violacein_with_metabolism"],
+        experiment_ids=["api_simulation_default"],
         sim_base_path=os.getenv("SIM_BASE_PATH"),
         export_path="uq_results",
         samples=SamplingConfig(
-            cache_dir="uq_cache", n_samples=22, max_workers=4, include_vio=False, include_mecillinam=True
+            cache_dir="uq_cache", n_samples=22, max_workers=4,
         ),
     )
     with open(d, "w") as fp:
@@ -376,7 +367,6 @@ def flow_chart(rfc_id: str = "RFC006") -> None:
         "  Any scalar [bold]SimulationDataEcoli[/bold] attribute by dot-path.\n"
         "  Default: 3 params (see [cyan]DEFAULT_SIM_DATA_PARAMETERS[/cyan])\n"
         "  Custom: [green]--params-file params.json[/green]\n\n"
-        "[bold magenta]Legacy mode:[/bold magenta] [green]--include-vio[/green] / [green]--include-mecillinam[/green]\n\n"
         "[dim]-> XSpaceVecoli with n parameters and bounds [a_i, b_i][/dim]",
     ))
     console.print(_arrow())

@@ -312,54 +312,28 @@ def parameter_output_samples(
 
 
 @pytest.fixture
-def vio_params():
-    """Sample VioPathwayParams for testing."""
-    from uq import VioPathwayParams
+def sim_data_params():
+    """Sample SimDataParameter specs for testing (equivalent to former vio/mecillinam params)."""
+    from uq.pipeline.models import SimDataParameter
 
-    return VioPathwayParams(
-        enabled=True,
-        induction_gen=1,
-        expression=2.5,
-        translation_efficiency=1.2,
-        condition="basal",
-    )
-
-
-@pytest.fixture
-def mecillinam_params():
-    """Sample MecillinamParams for testing."""
-    from uq import MecillinamParams
-
-    return MecillinamParams(
-        times=[0.0, 3600.0],
-        concentrations=[0.0, 5.0],
-        knockouts=["murG"],
-    )
-
-
-@pytest.fixture
-def knockout_params():
-    """Sample GeneKnockoutParams for testing."""
-    from uq import GeneKnockoutParams
-
-    return GeneKnockoutParams(
-        gene_deletions=["lacZ", "galK"],
-        translation_knockouts=["murG"],
-    )
+    return [
+        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+    ]
 
 
 @pytest.fixture
 def input_parameter_space():
     """InputParameterSpace configured for testing."""
-    from uq import XSpaceVecoli
+    from uq.inputs import XSpaceVecoli
+    from uq.pipeline.models import SimDataParameter
 
-    return XSpaceVecoli(
-        include_vio=True,
-        include_mecillinam=True,
-        vio_expression_bounds=(0.0, 5.0),
-        vio_trl_eff_bounds=(0.0, 2.0),
-        mecillinam_conc_bounds=(0.0, 10.0),
-    )
+    return XSpaceVecoli(parameters=[
+        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
+        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
+        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+    ])
 
 
 # =============================================================================

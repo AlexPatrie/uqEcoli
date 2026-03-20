@@ -111,26 +111,50 @@ def pipeline(config: PipelineConfig | None = None, execute: bool = True, **kwarg
         init: bool = True
     """
     if len(kwargs) and config is None:
-        config = PipelineConfig(**kwargs)
-    if config.sim_base_path is None:
-        config.sim_base_path = os.getenv("SIM_BASE_PATH", throw_env())
-    _pipe = Pipeline(
-        experiment_ids=config.experiment_ids,
-        sim_base_path=config.sim_base_path,
-        observable_columns=config.observable_columns,
-        lb_generation=config.lb_generation,
-        lb_time=config.lb_time,
-        n_bins=config.n_bins,
-        polynomial_order=config.polynomial_order,
-        n_samples=config.n_samples,
-        expected_cycle_time=config.expected_cycle_time,
-        max_duration=config.max_duration,
-        prescreen_config=PCEParameterSelectionConfig(**config.prescreen_config.model_dump()),
-        export_path=config.export_path,
-        precomputed_path=config.precomputed_path,
-        sim_config_path=config.sim_config_path,
-        init=config.init,
-    )
+        # Build Pipeline directly from kwargs (avoids PipelineConfig schema mismatch)
+        sim_base_path = kwargs.get("sim_base_path")
+        if sim_base_path is None:
+            sim_base_path = os.getenv("SIM_BASE_PATH", throw_env())
+        _pipe = Pipeline(
+            experiment_ids=kwargs["experiment_ids"],
+            sim_base_path=sim_base_path,
+            observable_columns=kwargs.get("observable_columns"),
+            lb_generation=kwargs.get("lb_generation", 2),
+            lb_time=kwargs.get("lb_time", 100.0),
+            n_bins=kwargs.get("n_bins", 10),
+            polynomial_order=kwargs.get("polynomial_order", 3),
+            n_samples=kwargs.get("n_samples", 200),
+            expected_cycle_time=kwargs.get("expected_cycle_time", 3600.0),
+            max_duration=kwargs.get("max_duration", 10800.0),
+            prescreen_config=kwargs.get("prescreen_config"),
+            export_path=kwargs.get("export_path"),
+            precomputed_path=kwargs.get("precomputed_path"),
+            sim_config_path=kwargs.get("sim_config_path"),
+            init=kwargs.get("init", True),
+        )
+    else:
+        if config.sim_base_path is None:
+            config.sim_base_path = os.getenv("SIM_BASE_PATH", throw_env())
+        prescreen = None
+        if config.prescreen_config is not None:
+            prescreen = PCEParameterSelectionConfig(**config.prescreen_config.model_dump())
+        _pipe = Pipeline(
+            experiment_ids=config.experiment_ids,
+            sim_base_path=config.sim_base_path,
+            observable_columns=config.observable_columns,
+            lb_generation=config.lb_generation,
+            lb_time=config.lb_time,
+            n_bins=config.n_bins,
+            polynomial_order=config.polynomial_order,
+            n_samples=config.n_samples,
+            expected_cycle_time=config.expected_cycle_time,
+            max_duration=config.max_duration,
+            prescreen_config=prescreen,
+            export_path=config.export_path,
+            precomputed_path=config.precomputed_path,
+            sim_config_path=config.sim_config_path,
+            init=config.init,
+        )
     if execute:
         _pipe.run()
 
@@ -181,10 +205,8 @@ def demo(
     # start with exp ids, outdir_base, observable cols if needed
     experiment_ids = [
         "api_simulation_default",
-        "mecillinam",
-        "test_violacein_with_metabolism",
     ]
-    base_path = Path("/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims")
+    base_path = Path("/Users/alexanderpatrie/sms/vEcoli/api_integration/sims")
     observable_columns = [
         "listeners__mass__dry_mass",
         "listeners__mass__cell_mass",
@@ -228,9 +250,8 @@ def generate_samples(
     max_workers: int | None = None,
     max_duration: float = 10800.0,
     generations: int = 1,
+    n_init_sims: int = 1,
     live: bool = False,
-    include_vio: bool | None = None,
-    include_mecillinam: bool | None = None,
     params_file: str | None = None,
     batch_dir: Path | None = None,
     system_config: SystemConfig | None = None,
@@ -248,9 +269,7 @@ def generate_samples(
     **Parameter selection:** By default, uses 5 physiologically relevant
     scalar sim_data parameters (see ``DEFAULT_SIM_DATA_PARAMETERS``).
     To specify custom parameters, pass ``--params-file`` pointing to a
-    JSON file with a list of ``SimDataParameter`` specs.  To use the
-    legacy vio/mecillinam parameters, pass ``--include-vio`` or
-    ``--include-mecillinam``.
+    JSON file with a list of ``SimDataParameter`` specs.
 
     Args:
         experiment_ids: Experiment IDs whose sim_data to load.
@@ -263,8 +282,6 @@ def generate_samples(
         max_duration: Simulation wall-clock limit in seconds (live mode).
         generations: Number of generations per sim (live mode).
         live: If True, run real vEcoli simulations as subprocesses.
-        include_vio: Include vio pathway parameters (legacy mode).
-        include_mecillinam: Include mecillinam concentration (legacy mode).
         params_file: Path to a JSON file with a list of
             ``SimDataParameter`` specs for custom parameter selection.
         batch_dir: Destination for batch output artifacts.
@@ -327,13 +344,10 @@ def generate_samples(
     # Build parameter space
     param_space = ds.x[0].to_parameter_space(
         parameters=sim_data_parameters,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
     )
     if param_space.n_parameters == 0:
         raise RuntimeError(
-            "Parameter space is empty. Provide --params-file, "
-            "--include-vio, or --include-mecillinam."
+            "Parameter space is empty. Provide --params-file with SimDataParameter specs."
         )
 
     if live:
@@ -345,13 +359,15 @@ def generate_samples(
             baseline_sim_data=ds.x[0].sim_data,
             param_space=param_space,
             max_duration=max_duration,
+            generations=generations,
+            n_init_sims=n_init_sims,
             output_keys=[c.split("__")[-1] for c in observable_columns],
         )
         if on_progress is None:
             console.print(
                 f"[bold cyan]Live mode:[/bold cyan] subprocess execution "
                 f"(max_duration={max_duration:.0f}s, generations={generations}, "
-                f"params={param_space.parameter_names})"
+                f"n_init_sims={n_init_sims}, params={param_space.parameter_names})"
             )
         _tick(f"Running {n_samples} simulations", 5)
 
@@ -404,8 +420,6 @@ def export_configs(
     batch_dir: str,
     n_samples: int = 200,
     seed: int = 42,
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
     base_config_path: str | None = None,
     generations: int = 1,
     emitter: str = "parquet",
@@ -424,13 +438,10 @@ def export_configs(
     from uq.sampling import generate_lhs_samples
 
     ds = ParameterDataset(sim_data_path=sim_data_path)
-    param_space = ds.to_parameter_space(
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-    )
+    param_space = ds.to_parameter_space()
 
     if param_space.n_parameters == 0:
-        raise ValueError("Parameter space is empty. Set include_vio=True and/or include_mecillinam=True.")
+        raise ValueError("Parameter space is empty. DEFAULT_SIM_DATA_PARAMETERS may not match available sim_data attributes.")
 
     sim_func = TimeseriesGeneratorVecoli(
         baseline_sim_data=ds.sim_data,
@@ -515,8 +526,8 @@ def readme(rfc_id: str = "RFC006") -> None:
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │  STEP 1: Define Parameter Space                                                     │
   │                                                                                     │
-  │  param_space = InputParameterSpaceVecoli(                                           │
-  │      include_vio=True, include_mecillinam=True                                      │
+  │  param_space = XSpaceVecoli(                                                        │
+  │      parameters=[SimDataParameter(name, attr_path, bounds), ...]                    │
   │  )                                                                                  │
   │  → n parameters with bounds                                                         │
   └─────────────────────────────────────────────────────────────────────────────────────┘

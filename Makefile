@@ -4,7 +4,7 @@ PACKAGE_LOCATION=/Users/alexanderpatrie/sms/uqEcoli/uq
 test-sampling:
 	@time uv run uq generate-samples \
       api_simulation_default mecillinam test_violacein_with_metabolism \
-      --sim-base-path /Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims \
+      --sim-base-path /Users/alexanderpatrie/sms/vEcoli/api_integration/sims \
       --cache-dir ./uq_cache \
       --n-samples 20 \
       --live \
@@ -12,7 +12,7 @@ test-sampling:
 
 .PHONY: add-vecoli
 add-vecoli:
-	@echo "/Users/alexanderpatrie/sms/vEcoli-private" > $(uv run python -c "import site; print(site.getsitepackages()[0])")/vecoli.pth
+	@echo "/Users/alexanderpatrie/sms/vEcoli" > $(uv run python -c "import site; print(site.getsitepackages()[0])")/vecoli.pth
 
 .PHONY: install
 install:

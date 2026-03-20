@@ -95,7 +95,7 @@ def test_xspace_generic_mode():
 
     assert space.n_parameters == 2
     assert space.parameter_names == ["p1", "p2"]
-    assert space.is_generic is True
+    assert space.n_parameters == 2  # all generic now
 
     sample = np.array([0.3, 0.8])
     result = space.sample_to_params(sample)

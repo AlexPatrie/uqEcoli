@@ -45,11 +45,8 @@ Basic sensitivity analysis workflow::
         AggregationStrategy,
     )
 
-    # Define parameter space
-    param_space = InputParameterSpace(
-        include_vio=True,
-        include_mecillinam=True,
-    )
+    # Define parameter space (uses generic SimDataParameter specs)
+    param_space = InputParameterSpace()
 
     # Configure wrapper
     config = WrapperConfig(
@@ -167,10 +164,6 @@ from uq.pce.surrogate import (
 from uq.pipeline.models import (
     CellCyclePhase,
     CellCycleVariable,
-    GeneKnockoutParams,
-    MecillinamParams,
-    UQInputParametersVecoli,
-    VioPathwayParams,
 )
 
 # Sensitivity analysis
@@ -201,11 +194,7 @@ from uq.wrappers import (
 
 __all__ = [
     # Input parameters
-    "GeneKnockoutParams",
     "XSpaceVecoli",
-    "MecillinamParams",
-    "UQInputParametersVecoli",
-    "VioPathwayParams",
     "get_available_columns",
     "load_dataset",
     # Output extraction

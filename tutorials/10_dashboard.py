@@ -135,7 +135,7 @@ def _(mo, os):
     sim_base_path_input = mo.ui.text(
         value=os.getenv(
             "SIM_BASE_PATH",
-            "/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims",
+            "/Users/alexanderpatrie/sms/vEcoli/api_integration/sims",
         ),
         label="Simulation base path",
         full_width=True,

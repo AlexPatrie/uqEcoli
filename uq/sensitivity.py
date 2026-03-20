@@ -524,6 +524,7 @@ class SensitivityAnalyzer:
         self,
         polynomial_order: int = 3,
         n_samples: Optional[int] = None,
+        per_output: bool = False,
     ) -> tuple[SobolIndices, PCESurrogate]:
         """
         Perform PCE-based sensitivity analysis using PyTUQ's PCSobol.
@@ -554,6 +555,7 @@ class SensitivityAnalyzer:
                 self.outputs,
                 bounds,
                 polynomial_order,
+                per_output=per_output,
             )
         else:
             return self._fit_pce_with_wrapper(
@@ -601,6 +603,7 @@ class SensitivityAnalyzer:
         Y: np.ndarray,
         bounds: np.ndarray,
         polynomial_order: int,
+        per_output: bool = False,
     ) -> tuple[SobolIndices, PCESurrogate]:
         """Fit PCE directly to pre-provided (X, Y) without a wrapper.
 
@@ -635,6 +638,7 @@ class SensitivityAnalyzer:
             polynomial_order,
             pc_sobol=pc_ref,
             X_germ_override=X_germ,
+            per_output=per_output,
         )
 
     # ------------------------------------------------------------------
@@ -648,6 +652,7 @@ class SensitivityAnalyzer:
         polynomial_order: int,
         pc_sobol,
         X_germ_override: np.ndarray | None = None,
+        per_output: bool = False,
     ) -> tuple[SobolIndices, PCESurrogate]:
         """Fit PCE and compute Sobol indices.
 
@@ -703,8 +708,13 @@ class SensitivityAnalyzer:
                 all_first.append(fo)
                 all_total.append(to)
 
-            first_order = sum(w * fo for w, fo in zip(weights, all_first))
-            total_order = sum(w * to for w, to in zip(weights, all_total))
+            if per_output:
+                # Return (n_outputs, n_params) for per-stage splitting
+                first_order = np.vstack(all_first)
+                total_order = np.vstack(all_total)
+            else:
+                first_order = sum(w * fo for w, fo in zip(weights, all_first))
+                total_order = sum(w * to for w, to in zip(weights, all_total))
             second_order = None
             pc_sobol = pc_j  # last one for surrogate extraction
 
@@ -913,11 +923,6 @@ def run_sensitivity_analysis(
     aggregation_strategy: AggregationStrategy = AggregationStrategy.UNIFORM,
     polynomial_order: int = 3,
     n_samples: Optional[int] = None,
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
-    vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
-    vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-    mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
 ) -> tuple[SobolIndices, PCESurrogate]:
     """
     Run a complete sensitivity analysis workflow.
@@ -931,22 +936,11 @@ def run_sensitivity_analysis(
         aggregation_strategy: Strategy for aggregating simulation outputs
         polynomial_order: PCE polynomial order
         n_samples: Number of samples (None for automatic)
-        include_vio: Include vio pathway parameters
-        include_mecillinam: Include mecillinam parameters
-        vio_expression_bounds: Bounds for vio expression
-        vio_trl_eff_bounds: Bounds for vio translation efficiency
-        mecillinam_conc_bounds: Bounds for mecillinam concentration
     Returns:
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = XSpaceVecoli(
-        vio_expression_bounds=vio_expression_bounds,
-        vio_trl_eff_bounds=vio_trl_eff_bounds,
-        mecillinam_conc_bounds=mecillinam_conc_bounds,
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-    )
+    parameter_space = XSpaceVecoli()
 
     # Set up wrapper config
     config = WrapperConfig(
@@ -1155,8 +1149,6 @@ def analyze_precomputed_results(
     data_dir: str,
     aggregation_strategy: AggregationStrategy = AggregationStrategy.UNIFORM,
     polynomial_order: int = 3,
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
 ) -> tuple[SobolIndices, PCESurrogate]:
     """
     Run sensitivity analysis on precomputed simulation results.
@@ -1165,17 +1157,12 @@ def analyze_precomputed_results(
         data_dir: Directory containing simulation outputs
         aggregation_strategy: Strategy for aggregating outputs
         polynomial_order: PCE polynomial order
-        include_vio: Include vio pathway parameters
-        include_mecillinam: Include mecillinam parameters
 
     Returns:
         Tuple of (SobolIndices, PCESurrogate)
     """
     # Set up parameter space
-    parameter_space = XSpaceVecoli(
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-    )
+    parameter_space = XSpaceVecoli()
 
     # Create precomputed wrapper
     wrapper = PrecomputedWrapper(

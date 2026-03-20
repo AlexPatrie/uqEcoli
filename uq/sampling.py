@@ -114,8 +114,8 @@ def generate_lhs_samples(
 
     In this codebase, generate_lhs_samples() in uq/sampling.py:100 uses
     scipy.stats.qmc.LatinHypercube to generate unit-cube samples, then scales
-    them to the physical parameter bounds (e.g., vio_expression in [0, 5],
-    mecillinam_concentration in [0, 10]).
+    them to the physical parameter bounds (e.g., fraction_active_rnap_free
+    in [0.25, 0.47]).
 
     The result is an (n_samples, n_params) array where each row is a parameter
      vector x that gets fed to the simulation function f(x) -> y for PCE

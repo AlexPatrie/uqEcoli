@@ -2,6 +2,22 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+# Re-export PCE and pipeline models so tests/consumers can import from uq.models
+from uq.pce.models import (  # noqa: F401
+    Parameter,
+    PCEConfig,
+    PCEFitResult,
+    PCEParameterSelectionConfig,
+    PCEPreprocessingConfig,
+    PCESolverConfig,
+    PCESurrogateConfig,
+)
+from uq.pipeline.models import (  # noqa: F401
+    CellCyclePhase,
+    CellCycleVariable,
+    MediaCondition,
+)
+
 
 class _BaseModel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -16,8 +32,6 @@ class SamplingConfig(_BaseModel):
         max_workers: int | None = None
         generations: int = 1
         live: bool = True
-        include_vio: bool | None = None
-        include_mecillinam: bool = True
     """
 
     cache_dir: str | None = None
@@ -26,8 +40,6 @@ class SamplingConfig(_BaseModel):
     max_workers: int | None = None
     generations: int = 1
     live: bool = True
-    include_vio: bool | None = None
-    include_mecillinam: bool = True
 
 
 class XPrescreenConfig(_BaseModel):

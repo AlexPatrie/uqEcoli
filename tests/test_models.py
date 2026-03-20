@@ -393,7 +393,7 @@ class TestCellCycleVariable:
             variable_name="test_variable",
         )
 
-        np.testing.assert_array_equal(ccv.parameters, values)
+        np.testing.assert_array_equal(ccv.values, values)
         assert ccv.normalized is True
         assert ccv.variable_name == "test_variable"
 
@@ -452,30 +452,3 @@ class TestCellCyclePhase:
         assert CellCyclePhase.UNKNOWN.value == "unknown"
 
 
-class TestMecillinamParams:
-    """Tests for MecillinamParams validation."""
-
-    @pytest.mark.unit
-    def test_times_concentrations_length_validation(self):
-        """Should raise if times and concentrations have different lengths."""
-        from uq.models import MecillinamParams
-
-        with pytest.raises(ValueError, match="same length"):
-            MecillinamParams(
-                times=[0.0, 100.0],
-                concentrations=[1.0],  # Wrong length
-            )
-
-    @pytest.mark.unit
-    def test_valid_creation(self):
-        """Should accept valid inputs."""
-        from uq.models import MecillinamParams
-
-        params = MecillinamParams(
-            times=[0.0, 100.0, 200.0],
-            concentrations=[0.0, 1.0, 2.0],
-            knockouts=["geneA"],
-        )
-
-        assert len(params.times) == 3
-        assert params.knockouts == ["geneA"]

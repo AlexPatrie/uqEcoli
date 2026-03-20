@@ -4,7 +4,7 @@ Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 Workflow:
       Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
 
-      1. Define Parameter Space — param_space = XSpaceVecoli(include_vio=True, include_mecillinam=True) → n parameters with bounds
+      1. Define Parameter Space — param_space = XSpaceVecoli() → n parameters with bounds (generic SimDataParameter specs)
       2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
       3. Aggregation Strategies 1-3 — aggregator runs 3 strategies → 3 × AggregatedOutput
         - 3a. Strategy 1: UNIFORM — mean, std across all cells/times
@@ -101,21 +101,9 @@ VarianceDecomposition = dict[str, np.ndarray[tuple[Any, ...], np.dtype[Any]]]
 # === Step 1: Define Parameter Space === #
 
 
-def define_parameter_space(
-    include_vio: bool = True,
-    include_mecillinam: bool = True,
-    vio_expression_bounds: tuple[float, float] = (0.0, 5.0),
-    vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0),
-    mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0),
-) -> XSpaceVecoli:
-    """Step 1: Create input parameter space Ξ for the pipeline."""
-    return XSpaceVecoli(
-        include_vio=include_vio,
-        include_mecillinam=include_mecillinam,
-        vio_expression_bounds=vio_expression_bounds,
-        vio_trl_eff_bounds=vio_trl_eff_bounds,
-        mecillinam_conc_bounds=mecillinam_conc_bounds,
-    )
+def define_parameter_space() -> XSpaceVecoli:
+    """Step 1: Create input parameter space Ξ for the pipeline (generic SimDataParameter specs)."""
+    return XSpaceVecoli()
 
 
 # === Step 3: Aggregate Timeseries === #
@@ -168,8 +156,8 @@ def aggregate_timeseries(
     gen_aggs.append(polars.len().alias("n"))
 
     by_gen = timeseries.group_by("generation").agg(gen_aggs).sort("generation")
-    gen_means = np.column_stack([by_gen[f"{c}__mean"].to_numpy() for c in observable_columns])
-    gen_stds = np.column_stack([by_gen[f"{c}__std"].to_numpy() for c in observable_columns])
+    gen_means = np.nan_to_num(np.column_stack([by_gen[f"{c}__mean"].to_numpy() for c in observable_columns]), nan=0.0)
+    gen_stds = np.nan_to_num(np.column_stack([by_gen[f"{c}__std"].to_numpy() for c in observable_columns]), nan=0.0)
     agg_by_gen = AggregatedOutput(
         mean=gen_means,
         std=gen_stds,
@@ -187,8 +175,8 @@ def aggregate_timeseries(
     seed_aggs.append(polars.len().alias("n"))
 
     by_seed = timeseries.group_by("lineage_seed").agg(seed_aggs).sort("lineage_seed")
-    seed_means = np.column_stack([by_seed[f"{c}__mean"].to_numpy() for c in observable_columns])
-    seed_stds = np.column_stack([by_seed[f"{c}__std"].to_numpy() for c in observable_columns])
+    seed_means = np.nan_to_num(np.column_stack([by_seed[f"{c}__mean"].to_numpy() for c in observable_columns]), nan=0.0)
+    seed_stds = np.nan_to_num(np.column_stack([by_seed[f"{c}__std"].to_numpy() for c in observable_columns]), nan=0.0)
     agg_by_seed = AggregatedOutput(
         mean=seed_means,
         std=seed_stds,
@@ -338,23 +326,47 @@ def compute_strategy4_sobol(
     return per_stage_sobol, surrogate
 
 
-def _split_multi_output_sobol(sobol: SobolIndices) -> list[SobolIndices]:
-    """Split a multi-output SobolIndices into a list of per-output SobolIndices."""
+def _split_multi_output_sobol(
+    sobol: SobolIndices,
+    n_bins: int | None = None,
+    n_obs: int | None = None,
+) -> list[SobolIndices]:
+    """Split a multi-output SobolIndices into per-stage SobolIndices.
+
+    When *n_bins* and *n_obs* are given, the outputs are assumed to be
+    ordered as ``[stage_0_obs_0, stage_0_obs_1, ..., stage_K_obs_M]``
+    and each stage's Sobol is the mean across its observables.
+    """
     fo = sobol.first_order
     to = sobol.total_order
 
     if fo.ndim > 1:
         n_outputs = fo.shape[0]
-        per_output = []
-        for i in range(n_outputs):
-            stage_sobol = SobolIndices(
+
+        if n_bins is not None and n_obs is not None and n_outputs == n_bins * n_obs:
+            # Reshape (n_bins*n_obs, n_params) → (n_bins, n_obs, n_params) → mean over obs
+            fo_stages = fo.reshape(n_bins, n_obs, -1).mean(axis=1)
+            to_stages = to.reshape(n_bins, n_obs, -1).mean(axis=1)
+            return [
+                SobolIndices(
+                    first_order=fo_stages[s],
+                    total_order=to_stages[s],
+                    parameter_names=sobol.parameter_names,
+                    output_names=[f"stage_{s}"],
+                )
+                for s in range(n_bins)
+            ]
+
+        # Fallback: one SobolIndices per output column
+        return [
+            SobolIndices(
                 first_order=fo[i],
                 total_order=to[i],
                 parameter_names=sobol.parameter_names,
                 output_names=[f"stage_{i}"],
             )
-            per_output.append(stage_sobol)
-        return per_output
+            for i in range(n_outputs)
+        ]
     else:
         return [sobol]
 
@@ -540,8 +552,9 @@ def run_phase2(
         sobol_multi, surrogate = analyzer.analyze_with_pce(
             polynomial_order=polynomial_order,
             n_samples=n_samples,
+            per_output=True,
         )
-        per_stage_sobol = _split_multi_output_sobol(sobol_multi)
+        per_stage_sobol = _split_multi_output_sobol(sobol_multi, n_bins=n_bins, n_obs=n_obs)
     else:
         if simulation_func is None:
             raise ValueError("Either simulation_func or precomputed data is required")
