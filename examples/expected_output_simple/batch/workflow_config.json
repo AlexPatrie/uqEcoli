@@ -1,0 +1,47 @@
+{
+  "sim_data_path": "/Users/alexanderpatrie/sms/uqEcoli/examples/expected_output_simple/batch/kb/simData.cPickle",
+  "experiment_id": "uq_batch",
+  "emitter": "parquet",
+  "emitter_arg": {
+    "out_dir": "/Users/alexanderpatrie/sms/uqEcoli/examples/expected_output_simple/batch/output",
+    "batch_size": 200
+  },
+  "max_duration": 200.0,
+  "n_init_sims": 1,
+  "generations": 1,
+  "single_daughters": true,
+  "suffix_time": false,
+  "variants": {
+    "sim_data_setattr": {
+      "mutations": {
+        "value": [
+          {
+            "process.transcription.fraction_active_rnap_free": 0.2599459338635376,
+            "process.transcription.fraction_active_rnap_bound": 0.15122243120495896,
+            "mass.cell_dry_mass_fraction": 0.3328280416017723
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.307315806721388,
+            "process.transcription.fraction_active_rnap_bound": 0.21811645304224703,
+            "mass.cell_dry_mass_fraction": 0.3104875529672649
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.3925098531124245,
+            "process.transcription.fraction_active_rnap_bound": 0.12427871389446092,
+            "mass.cell_dry_mass_fraction": 0.30743772734648905
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.45018301873259503,
+            "process.transcription.fraction_active_rnap_bound": 0.17258403951534837,
+            "mass.cell_dry_mass_fraction": 0.27146470022302793
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.35366993471645075,
+            "process.transcription.fraction_active_rnap_bound": 0.1835447677345834,
+            "mass.cell_dry_mass_fraction": 0.26113171602345336
+          }
+        ]
+      }
+    }
+  }
+}
