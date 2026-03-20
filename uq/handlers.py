@@ -33,6 +33,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from uq.api.models import SystemConfig
 from uq.common import get_repo_root
 from uq.models import PipelineConfig
 from uq.pce.models import PCEParameterSelectionConfig
@@ -230,7 +231,8 @@ def generate_samples(
     include_vio: bool | None = None,
     include_mecillinam: bool | None = None,
     params_file: str | None = None,
-    batch_dir: Path | None = None
+    batch_dir: Path | None = None,
+    system_config: SystemConfig | None = None
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
@@ -264,6 +266,7 @@ def generate_samples(
         params_file: Path to a JSON file with a list of
             ``SimDataParameter`` specs for custom parameter selection.
         batch_dir: Destination for batch output artifacts.
+        system_config: helper request DTO to parameterize this function
     """
     import json as _json
 
@@ -274,6 +277,13 @@ def generate_samples(
     from uq.wrappers import DataDrivenWrapper
 
     # Default observables to avoid DuckDB OOM on wide tables
+    if system_config is not None:
+        observables = system_config.observables
+        if observables is not None:
+            observable_columns = [
+                obs.name.replace(".", "__")
+                for obs in observables
+            ]
     if observable_columns is None:
         observable_columns = [
             "listeners__mass__dry_mass",
@@ -294,10 +304,16 @@ def generate_samples(
         )
 
     # Load custom parameter specs from JSON file if provided
-    sim_data_parameters = None
+    raw = None
+    if all(list(map(lambda fp: fp is not None, [params_file, system_config]))):
+        raise ValueError("You can only pass either a params_file filepath or SystemConfig JSON body.")
     if params_file is not None:
         raw = _json.loads(Path(params_file).read_text())
-        sim_data_parameters = [SimDataParameter.from_dict(p) for p in raw]
+    if system_config is not None:
+        raw = [param.model_dump() for param in system_config.parameters]
+    if raw is None or not raw:
+        raise ValueError("Could not get parameters from your input!")
+    sim_data_parameters = [SimDataParameter.from_dict(p) for p in raw]
 
     # Build parameter space
     param_space = ds.x[0].to_parameter_space(
@@ -498,3 +514,9 @@ def readme(rfc_id: str = "RFC006") -> None:
 """
     )
     print(txt)
+
+
+def verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
+    if not all([(Path(sim_base_path) / p).exists() for p in experiment_ids]):
+        raise ValueError(
+            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}")

@@ -80,7 +80,7 @@ from rich.text import Text
 
 from uq import handlers
 from uq.common import get_repo_root, PARAM_CONFIG_DEMO
-from uq.handlers import generate_samples
+from uq.handlers import generate_samples, verify_out_dirs
 from uq.models import PipelineConfig, SamplingConfig
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import Pipeline, execute_pipeline
@@ -148,12 +148,6 @@ def dashboard(
         run_tk_dashboard(data_path=results_path)
 
 
-def _verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
-    if not all([(Path(sim_base_path) / p).exists() for p in experiment_ids]):
-        raise ValueError(
-            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}")
-
-
 @app.command(
     name="sample",
     help=(""" \
@@ -187,7 +181,7 @@ def sample(
     Pass --include-vio / --include-mecillinam for legacy mode.
     Pass --live to run real vEcoli simulations as subprocesses.
     """
-    _verify_out_dirs(sim_base_path, experiment_ids)
+    verify_out_dirs(sim_base_path, experiment_ids)
 
     if batch_dir is not None:
         batch_dir = Path(batch_dir)

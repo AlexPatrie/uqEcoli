@@ -51,6 +51,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
+api = [
+    "fastapi>=0.135.1",
+]
 app = [
     "altair>=6.0.0",
     "marimo[recommended]>=0.21.0",
@@ -80,8 +83,9 @@ music = [
 [tool.uv]
 default-groups = [
     "app",
-    "dev",
-    "docs"
+    "api",
+    # "dev",
+    # "docs",
 ]
 
 [tool.uv.sources]
