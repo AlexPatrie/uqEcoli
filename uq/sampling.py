@@ -104,6 +104,23 @@ def generate_lhs_samples(
 ) -> np.ndarray:
     """Generate LHS samples scaled to parameter bounds.
 
+    Latin Hypercube Samples — a space-filling sampling strategy for exploring
+    a multi-dimensional parameter space.
+
+    Instead of pure random sampling (which can leave gaps and clusters), LHS
+    divides each parameter's range into n equal strata and ensures exactly one
+     sample falls in each stratum per dimension. This guarantees better
+    coverage of the parameter space with fewer samples than Monte Carlo.
+
+    In this codebase, generate_lhs_samples() in uq/sampling.py:100 uses
+    scipy.stats.qmc.LatinHypercube to generate unit-cube samples, then scales
+    them to the physical parameter bounds (e.g., vio_expression in [0, 5],
+    mecillinam_concentration in [0, 10]).
+
+    The result is an (n_samples, n_params) array where each row is a parameter
+     vector x that gets fed to the simulation function f(x) -> y for PCE
+    surrogate fitting.
+
     Args:
         parameter_space: Input parameter space with bounds.
         n_samples: Number of samples to generate.

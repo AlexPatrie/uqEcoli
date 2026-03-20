@@ -72,6 +72,86 @@ class InvalidParamDefinition(Exception):
 
 
 @dataclass
+class SimDataParameter:
+    """A single scalar sim_data parameter for UQ sensitivity analysis.
+
+    Specifies a mutable attribute in ``SimulationDataEcoli`` by dot-path,
+    enabling arbitrary parameter sweeps without vEcoli variant functions.
+
+    Attributes:
+        name: Human-readable label (used in Sobol index labeling).
+        attr_path: Dot-separated path into the sim_data object tree
+            (e.g. ``"process.metabolism.kinetic_objective_weight"``).
+        bounds: ``(lower, upper)`` bounds for LHS sampling.
+        index: For array-valued attributes, which element to perturb.
+            If None, the attribute must be a scalar.
+        description: Optional human-readable description.
+    """
+
+    name: str
+    attr_path: str
+    bounds: tuple[float, float]
+    index: int | None = None
+    description: str = ""
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "attr_path": self.attr_path,
+            "bounds": list(self.bounds),
+            "index": self.index,
+            "description": self.description,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "SimDataParameter":
+        return cls(
+            name=d["name"],
+            attr_path=d["attr_path"],
+            bounds=tuple(d["bounds"]),
+            index=d.get("index"),
+            description=d.get("description", ""),
+        )
+
+
+@dataclass
+class GenericSimDataParams:
+    """Container for generic sim_data parameter values.
+
+    Maps ``SimDataParameter`` specs to concrete float values from an
+    LHS sample.  Used by the direct-mutation path (no variant functions).
+    """
+
+    parameter_specs: list[SimDataParameter]
+    values: dict[str, float]  # name -> value
+    seed: int = 0
+    generations: int = 8
+
+    def to_simulation_config(self) -> dict[str, Any]:
+        """Convert to a config dict with direct sim_data mutations.
+
+        Returns:
+            Dict with ``"sim_data_mutations"`` mapping attr_paths to values.
+        """
+        config: dict[str, Any] = {
+            "seed": self.seed,
+            "generations": self.generations,
+        }
+        mutations: dict[str, Any] = {}
+        for spec in self.parameter_specs:
+            val = self.values[spec.name]
+            if spec.index is not None:
+                mutations[spec.attr_path] = {
+                    "__index__": spec.index,
+                    "__value__": float(val),
+                }
+            else:
+                mutations[spec.attr_path] = float(val)
+        config["sim_data_mutations"] = mutations
+        return config
+
+
+@dataclass
 class Param(BaseClass):
     """
     Input parameter for UQ pipeline extracted from sim_data.

@@ -157,14 +157,15 @@ class TimeseriesLoaderParquet:
             config_sql: SQL subquery for configuration data
             sim_data: Optional SimulationDataEcoli for metadata lookup
         """
-        store = ""
-        if storage_mode == "s3":
-            store = bucket_uri or get_s3_uri()
+        # store = ""
+        # if storage_mode == "s3":
+        #     store = bucket_uri or get_s3_uri()
 
         history_sql, config_sql, _ = dataset_sql(str(sim_base_path), experiment_ids)
         self.history_sql = history_sql
         self.config_sql = config_sql
-        self.conn = create_duckdb_conn(object_store=store)
+        # self.conn = create_duckdb_conn(object_store=store)
+        self.conn = create_duckdb_conn()
 
         self.sim_data = sim_data
 

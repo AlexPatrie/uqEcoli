@@ -1,20 +1,22 @@
 """
 Input parameter definitions for uncertainty quantification.
 
-This module defines the scientifically most relevant input variables for UQ:
-- Violacein (vio) pathway presence
-- Mecillinam condition
-- Gene knockouts
+This module defines the parameter space for UQ sensitivity analysis.
+Parameters can be specified in two ways:
 
-These inputs are parametrized for use with UQPy/PyTUQ sensitivity analysis libraries.
+1. **Generic (default):** A list of ``SimDataParameter`` specs, each
+   identifying a scalar attribute in ``SimulationDataEcoli`` by dot-path.
+   No vEcoli variant functions required — sim_data attributes are set
+   directly via ``setattr``.
+
+2. **Legacy (vio/mecillinam):** The ``include_vio`` / ``include_mecillinam``
+   flags, which route through the ``UQInputParametersVecoli`` -> variant
+   function chain.  Kept for backward compatibility.
 """
 
 import abc
-import pprint
-from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, override
+from typing import Any, Literal, Optional, override
 
 import numpy as np
 import polars
@@ -25,11 +27,12 @@ from rich.table import Table
 from rich.text import Text
 
 from uq.pce.models import Parameter
-from uq.pipeline.models import UQInputParameters, UQInputParametersVecoli
-
-if TYPE_CHECKING:
-    pass
-
+from uq.pipeline.models import (
+    GenericSimDataParams,
+    SimDataParameter,
+    UQInputParameters,
+    UQInputParametersVecoli,
+)
 
 console = Console()
 
@@ -37,36 +40,16 @@ console = Console()
 class XSpaceInterface(abc.ABC):
     """
     Interface whose implementations fulfill:
-        - sample_to_params() -> UQInputParameters: Convert a sample from the model/simulation/function-specific parameter space to UQInputParameters.
-        - params_to_sample() -> np.ndarray[ParameterValue]: Convert domain-specific input space-mapped UQInputParameters to an array of sample(perturbation) values
-            when N sample values (sample size) == N perturbations.
+        - sample_to_params() -> UQInputParameters | GenericSimDataParams
+        - params_to_sample() -> np.ndarray
     """
 
     @abc.abstractmethod
-    def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParameters:
-        """
-        Convert a sample from the parameter space to UQInputParameters.
-
-        Args:
-            sample: Array of parameter values in the same order as parameter_names
-            **kwargs: implementation-specific
-
-        Returns:
-            UQInputParameters instance
-        """
+    def sample_to_params(self, sample: np.ndarray, **kwargs):
         pass
 
     @abc.abstractmethod
-    def params_to_sample(self, params: UQInputParameters) -> np.ndarray:
-        """
-        Convert UQInputParameters to a sample array.
-
-        Args:
-            params: UQInputParameters instance
-
-        Returns:
-            Array of parameter values
-        """
+    def params_to_sample(self, params) -> np.ndarray:
         pass
 
 
@@ -77,9 +60,6 @@ class XSpace(XSpaceInterface):
     experiment_id: str | None
     """
     Defines the parameter space for UQ sensitivity analysis.
-
-    This class provides methods to sample input parameters and to convert
-    between the UQ library format (numpy arrays) and UQInputParameters.
 
     Attributes:
         parameter_names: Names of the parameters being varied
@@ -104,7 +84,6 @@ class XSpace(XSpaceInterface):
         self.implementation_init(*args, **kwargs)
 
     def implementation_init(self, *args, **kwargs) -> None:
-        # self.define_parameters()
         return None
 
     @property
@@ -114,52 +93,18 @@ class XSpace(XSpaceInterface):
 
     @property
     def bounds_array(self) -> np.ndarray:
-        """
-        Parameter bounds as numpy array for UQPy.
-
-        Returns:
-            Array of shape (n_parameters, 2) with [lower, upper] bounds
-        """
+        """Parameter bounds as numpy array, shape (n_parameters, 2)."""
         return np.array(self.parameter_bounds)
 
-    # @abc.abstractmethod
-    # def define_parameters(self, *args, **kwargs) -> list[Parameter]:
-    #     pass
-
     @abc.abstractmethod
-    def sample_to_params(self, sample: np.ndarray, **kwargs) -> UQInputParameters:
-        """
-        Convert a sample from the parameter space to UQInputParameters.
-
-        Args:
-            sample: Array of parameter values in the same order as parameter_names
-            **kwargs: implementation-specific
-
-        Returns:
-            UQInputParameters instance
-        """
+    def sample_to_params(self, sample: np.ndarray, **kwargs):
         pass
 
     @abc.abstractmethod
-    def params_to_sample(self, params: UQInputParametersVecoli) -> np.ndarray:
-        """
-        Convert UQInputParameters to a sample array.
-
-        Args:
-            params: UQInputParameters instance
-
-        Returns:
-            Array of parameter values
-        """
+    def params_to_sample(self, params) -> np.ndarray:
         pass
 
     def get_uqpy_distributions(self) -> list[Any]:
-        """
-        Get UQPy distribution objects for this parameter space.
-
-        Returns:
-            List of UQPy Distribution objects (Uniform distributions)
-        """
         try:
             from UQpy.distributions import Uniform
         except ImportError:
@@ -171,19 +116,12 @@ class XSpace(XSpaceInterface):
         return distributions
 
     def get_pytuq_bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Get PyTUQ-compatible bounds arrays.
-
-        Returns:
-            Tuple of (lower_bounds, upper_bounds) arrays
-        """
         bounds = self.bounds_array
         return bounds[:, 0], bounds[:, 1]
 
     @property
     def parameters(self) -> dict[str, dict[list[float], str]]:
         params = {}
-        # TODO: enable ragged shape, for now symmetry required for construction
         if all(
             list(
                 map(
@@ -201,14 +139,11 @@ class XSpace(XSpaceInterface):
         return f"<ParameterSpace '{self.experiment_id}' n={self.n_parameters}>"
 
     def show(self):
-        # Neon 90s header
         title = Text()
-        title.append("⚡ ", style="bold yellow")
         title.append("INPUT PARAMETER SPACE", style="bold magenta")
         title.append("  //  ", style="dim cyan")
         title.append(self.experiment_id or "(no experiment)", style="bold cyan")
 
-        # Parameter table
         table = Table(
             box=box.SIMPLE_HEAVY,
             show_header=True,
@@ -217,11 +152,11 @@ class XSpace(XSpaceInterface):
             pad_edge=False,
         )
         table.add_column("PARAM", style="bold yellow", no_wrap=True)
-        table.add_column("VALUE", style="bright_white")
+        table.add_column("BOUNDS", style="bright_white")
         table.add_column("TYPE", style="dim cyan")
 
         for name, val in self.parameters.items():
-            table.add_row(name, str(val), type(val).__name__)
+            table.add_row(name, str(val.get("bounds", "")), val.get("type", ""))
 
         panel = Panel(
             table,
@@ -236,24 +171,30 @@ class XSpace(XSpaceInterface):
 
 
 class XSpaceVecoli(XSpace):
-    """
-    Defines the parameter space for UQ sensitivity analysis pipeline
-    on vEcoli datasets.
+    """Parameter space for UQ sensitivity analysis on vEcoli datasets.
 
-    This class provides methods to sample input parameters and to convert
-    between the UQ library format (numpy arrays) and UQInputParameters.
+    Supports two modes:
 
-    Kwargs:
-        `vio_expression_bounds: tuple[float, float] = (low, high)`
-        `vio_trl_eff_bounds: tuple[float, float] = (0.0, 2.0)`
-        `mecillinam_conc_bounds: tuple[float, float] = (0.0, 10.0)`
-        `include_vio: bool = True`
-        `include_mecillinam: bool = True`
-        `knockout_genes: Optional[list[str]] = None`
-    Attributes:
-        parameter_names: Names of the parameters being varied
-        parameter_bounds: Lower and upper bounds for each parameter
-        parameter_types: Type of each parameter ('continuous', 'discrete', 'categorical')
+    **Generic mode** (``parameters`` kwarg): accepts a list of
+    ``SimDataParameter`` specs. Each spec identifies a scalar attribute
+    in ``SimulationDataEcoli`` by dot-path. ``sample_to_params()``
+    returns ``GenericSimDataParams``, and mutations are applied directly
+    via ``setattr``.
+
+    **Legacy mode** (``include_vio`` / ``include_mecillinam`` kwargs):
+    hardcoded vio + mecillinam parameters routed through the
+    ``UQInputParametersVecoli`` -> variant function chain.
+
+    Kwargs (generic mode):
+        parameters: list[SimDataParameter]
+
+    Kwargs (legacy mode):
+        include_vio: bool
+        include_mecillinam: bool
+        vio_expression_bounds: tuple[float, float]
+        vio_trl_eff_bounds: tuple[float, float]
+        mecillinam_conc_bounds: tuple[float, float]
+        knockout_genes: list[str]
     """
 
     parameter_names: list[str]
@@ -261,6 +202,22 @@ class XSpaceVecoli(XSpace):
     parameter_types: list[Literal["continuous", "discrete", "categorical"]]
 
     def implementation_init(self, *args, **kwargs) -> None:
+        sim_data_parameters = kwargs.get("parameters")
+        if sim_data_parameters is not None:
+            # Generic mode: arbitrary sim_data parameters
+            self._sim_data_parameters: list[SimDataParameter] = sim_data_parameters
+            self._include_vio = False
+            self._include_mecillinam = False
+            self.knockout_genes = []
+            for p in sim_data_parameters:
+                self.parameter_names.append(p.name)
+                self.parameter_bounds.append(p.bounds)
+                self.parameter_types.append("continuous")
+            return
+
+        # Legacy mode: vio / mecillinam
+        self._sim_data_parameters = []
+
         if kwargs.get("include_vio"):
             self.parameter_names.extend(["vio_expression", "vio_trl_eff"])
             self.parameter_bounds.extend([
@@ -279,19 +236,9 @@ class XSpaceVecoli(XSpace):
         self._include_mecillinam = kwargs.get("include_mecillinam", False)
 
     @property
-    def n_parameters(self) -> int:
-        """Number of parameters in the space."""
-        return len(self.parameter_names)
-
-    @property
-    def bounds_array(self) -> np.ndarray:
-        """
-        Parameter bounds as numpy array for UQPy.
-
-        Returns:
-            Array of shape (n_parameters, 2) with [lower, upper] bounds
-        """
-        return np.array(self.parameter_bounds)
+    def is_generic(self) -> bool:
+        """True if using generic SimDataParameter specs."""
+        return bool(self._sim_data_parameters) and not self._include_vio and not self._include_mecillinam
 
     @override
     def sample_to_params(
@@ -300,19 +247,25 @@ class XSpaceVecoli(XSpace):
         seed: int = 0,
         generations: int = 8,
         knockouts: Optional[list[str]] = None,
-    ) -> UQInputParametersVecoli:
-        """
-        Convert a sample from the parameter space to UQInputParameters.
+    ) -> GenericSimDataParams | UQInputParametersVecoli:
+        """Convert a sample vector to parameter container.
 
-        Args:
-            sample: Array of parameter values in the same order as parameter_names
-            seed: Random seed for the simulation
-            generations: Number of generations to simulate
-            knockouts: List of genes to knock out (optional)
-
-        Returns:
-            UQInputParameters instance
+        Returns ``GenericSimDataParams`` in generic mode, or
+        ``UQInputParametersVecoli`` in legacy mode.
         """
+        if self.is_generic:
+            values = {
+                spec.name: float(sample[i])
+                for i, spec in enumerate(self._sim_data_parameters)
+            }
+            return GenericSimDataParams(
+                parameter_specs=self._sim_data_parameters,
+                values=values,
+                seed=seed,
+                generations=generations,
+            )
+
+        # Legacy vio/mecillinam path
         params = UQInputParametersVecoli(seed=seed, generations=generations)
 
         idx = 0
@@ -325,7 +278,6 @@ class XSpaceVecoli(XSpace):
             params.vio.enabled = False
 
         if self._include_mecillinam:
-            # Apply concentration at time 0
             params.mecillinam.times = [0.0]
             params.mecillinam.concentrations = [float(sample[idx])]
             idx += 1
@@ -336,36 +288,25 @@ class XSpaceVecoli(XSpace):
         return params
 
     @override
-    def params_to_sample(self, params: UQInputParametersVecoli) -> np.ndarray:
-        """
-        Convert UQInputParameters to a sample array.
+    def params_to_sample(self, params) -> np.ndarray:
+        """Convert parameter container back to a sample array."""
+        if isinstance(params, GenericSimDataParams):
+            return np.array([
+                params.values[spec.name]
+                for spec in params.parameter_specs
+            ])
 
-        Args:
-            params: UQInputParameters instance
-
-        Returns:
-            Array of parameter values
-        """
+        # Legacy path
         sample: list[float] = []
-
         if self._include_vio:
             sample.append(params.vio.expression)
             sample.append(params.vio.translation_efficiency)
-
         if self._include_mecillinam:
-            # Use the first concentration value
             conc = params.mecillinam.concentrations[0] if params.mecillinam.concentrations else 0.0
             sample.append(conc)
-
         return np.array(sample)
 
     def get_uqpy_distributions(self) -> list[Any]:
-        """
-        Get UQPy distribution objects for this parameter space.
-
-        Returns:
-            List of UQPy Distribution objects (Uniform distributions)
-        """
         try:
             from UQpy.distributions import Uniform
         except ImportError:
@@ -377,25 +318,19 @@ class XSpaceVecoli(XSpace):
         return distributions
 
     def get_pytuq_bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Get PyTUQ-compatible bounds arrays.
-
-        Returns:
-            Tuple of (lower_bounds, upper_bounds) arrays
-        """
         bounds = self.bounds_array
         return bounds[:, 0], bounds[:, 1]
 
 
+# -- Dataset loading helpers ------------------------------------------------
+
+
 def _get_repo_root() -> Path:
-    """Get the repository root directory."""
-    # Try to find repo root by looking for pyproject.toml
     current = Path(__file__).resolve().parent
-    for _ in range(10):  # Max 10 levels up
+    for _ in range(10):
         if (current / "pyproject.toml").exists():
             return current
         current = current.parent
-    # Fallback to cwd
     return Path.cwd()
 
 
@@ -405,35 +340,16 @@ def load_dataset(
     observables: list[str] | None = None,
     include_metadata: bool = True,
 ) -> polars.DataFrame:
-    """
-    Load simulation dataset from parquet files.
-
-    Args:
-        experiment_id: The experiment identifier (e.g., "api_simulation_default")
-        outdir_root: Root directory for simulation outputs. Defaults to
-                     {repo_root}/api_integration/sims
-        observables: Optional list of column names to select
-        include_metadata: If True, include hive partition columns (variant, lineage_seed,
-                         generation, agent_id) from the directory structure
-
-    Returns:
-        Polars DataFrame with the simulation data
-    """
     if outdir_root is None:
         outdir_root = _get_repo_root() / "api_integration" / "sims"
 
     base_path = Path(outdir_root) / experiment_id / "history" / f"experiment_id={experiment_id}"
-
-    # Scan nested parquet files with hive partitioning to extract metadata columns
-    # (variant, lineage_seed, generation, agent_id) from directory structure
     lf = polars.scan_parquet(str(base_path / "**/*.pq"), hive_partitioning=include_metadata)
 
     if observables is not None:
-        # Filter to only existing columns, but always include metadata if requested
         available = lf.collect_schema().names()
         valid_observables = [col for col in observables if col in available]
 
-        # Add metadata columns if they exist and include_metadata is True
         if include_metadata:
             metadata_cols = ["variant", "lineage_seed", "generation", "agent_id"]
             for col in metadata_cols:
@@ -450,17 +366,6 @@ def get_available_columns(
     experiment_id: str,
     outdir_root: Path | None = None,
 ) -> list[str]:
-    """
-    Get list of available columns in the dataset.
-
-    Args:
-        experiment_id: The experiment identifier
-        outdir_root: Root directory for simulation outputs. Defaults to
-                     {repo_root}/api_integration/sims
-
-    Returns:
-        List of column names
-    """
     if outdir_root is None:
         outdir_root = _get_repo_root() / "api_integration" / "sims"
 

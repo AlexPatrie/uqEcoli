@@ -142,6 +142,35 @@ def _apply_variants(
     return sim_data
 
 
+def _apply_sim_data_mutations(
+    sim_data: SimulationDataEcoli,
+    mutations: dict[str, Any],
+) -> None:
+    """Apply direct attribute mutations to sim_data via dot-path traversal.
+
+    This is the generic mutation mechanism for arbitrary scalar sim_data
+    parameters identified by ``SimDataParameter.attr_path``.  Unlike the
+    variant-based path (``_apply_variants``), no vEcoli variant functions
+    are invoked — attributes are set directly via ``setattr``.
+
+    Args:
+        sim_data: The sim_data object to mutate (already deep-copied).
+        mutations: Dict mapping dot-paths to values.
+            For scalar attrs: ``{"process.metabolism.kinetic_objective_weight": 0.7}``
+            For indexed array attrs: ``{"path": {"__index__": 3, "__value__": 0.5}}``
+    """
+    for attr_path, value in mutations.items():
+        parts = attr_path.split(".")
+        obj = sim_data
+        for part in parts[:-1]:
+            obj = getattr(obj, part)
+        if isinstance(value, dict) and "__index__" in value:
+            arr = getattr(obj, parts[-1])
+            arr[value["__index__"]] = value["__value__"]
+        else:
+            setattr(obj, parts[-1], value)
+
+
 # -- Parquet column mapping --------------------------------------------------
 
 # Map short observable names (used in output_keys) to Parquet column names
@@ -232,6 +261,19 @@ def _read_parquet_timeseries(
 
 # -- Subprocess simulation runner -------------------------------------------
 
+DEFAULT_OUTPUT_PATHS = [
+    ["listeners", "rna_counts", "mRNA_cistron_counts"],
+    ["listeners", "monomer_counts"],
+    ["listeners", "fba_results", "base_reaction_fluxes"],
+    ["listeners", "mass", "cell_mass"],
+    ["listeners", "mass", "dry_mass"],
+    ["listeners", "mass", "volume"],
+    ["listeners", "mass", "dna_mass"],
+    ["listeners", "mass", "rna_mass"],
+    ["listeners", "mass", "protein_mass"],
+    ["listeners", "mass", "growth"],
+]
+
 
 def _build_sim_config(
     sim_data_path: str,
@@ -241,12 +283,16 @@ def _build_sim_config(
     variant_index: int = 0,
     seed: int = 0,
     generations: int = 1,
+    observable_hive_cols: list[str] | None = None,
     base_config_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a vEcoli simulation config dict for subprocess execution."""
     config: dict[str, Any] = {}
     if base_config_path is not None:
         config = _json.loads(Path(base_config_path).read_text())
+
+    emit_paths = [col.split("__") for col in observable_hive_cols] \
+        if observable_hive_cols is not None else DEFAULT_OUTPUT_PATHS
 
     config.update({
         "sim_data_path": str(sim_data_path),
@@ -262,8 +308,28 @@ def _build_sim_config(
         "divide": False,
         "variants": {},  # variants already baked into sim_data
         "raw_output": True,
+        "emit_paths": emit_paths,
     })
     return config
+
+
+def _get_vecoli_repo_root() -> str | None:
+    """Find the vEcoli repo root directory.
+
+    vEcoli's ``configs`` package is a local package that must be
+    importable, which requires the subprocess to run from the vEcoli
+    repo root.  We detect this by finding the ``ecoli`` package
+    location and walking up to find the ``configs/__init__.py``.
+    """
+    try:
+        import ecoli
+        ecoli_dir = Path(ecoli.__file__).resolve().parent  # .../vEcoli/ecoli
+        repo_root = ecoli_dir.parent  # .../vEcoli
+        if (repo_root / "configs" / "__init__.py").exists():
+            return str(repo_root)
+    except (ImportError, AttributeError):
+        pass
+    return None
 
 
 def _run_sim_subprocess(
@@ -275,7 +341,8 @@ def _run_sim_subprocess(
 
     Args:
         config_path: Path to the JSON config file.
-        cwd: Working directory for the subprocess.
+        cwd: Working directory for the subprocess.  If None, auto-detects
+            the vEcoli repo root (required so ``configs`` is importable).
         timeout: Timeout in seconds (None = no timeout).
 
     Returns:
@@ -284,19 +351,29 @@ def _run_sim_subprocess(
     Raises:
         RuntimeError: If the subprocess exits with non-zero status.
     """
+    if cwd is None:
+        cwd = _get_vecoli_repo_root()
+
     cmd = [
         sys.executable,
         "-m", "ecoli.experiments.ecoli_master_sim",
         "--config", str(config_path),
     ]
 
-    logger.info("Running vEcoli simulation: %s", " ".join(cmd))
+    # Ensure the vEcoli repo root is on PYTHONPATH so `configs` is importable
+    env = os.environ.copy()
+    if cwd is not None:
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = cwd + (os.pathsep + existing if existing else "")
+
+    logger.info("Running vEcoli simulation: %s (cwd=%s)", " ".join(cmd), cwd)
 
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
         cwd=cwd,
+        env=env,
         timeout=timeout,
     )
 
@@ -416,6 +493,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
     sim_config_path: str | None = None
     max_duration: float = 10800.0
     output_keys: list[str] | None = None
+    observable_names: list[str] | None = None
     _obs_names: list[str] | None = field(default=None, init=False, repr=False)
 
     @property
@@ -431,21 +509,32 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         return self._obs_names
 
     def _apply_parameter_mutations(self, x: np.ndarray) -> SimulationDataEcoli:
-        """Deep-copy baseline sim_data and apply variant mutations from x.
+        """Deep-copy baseline sim_data and apply mutations from x.
 
-        Flow:
-            x (numpy array)
-            -> param_space.sample_to_params(x) -> UQInputParametersVecoli
-            -> .to_simulation_config() -> {"variants": {name: [params]}, ...}
-            -> _apply_variants(sim_data, variants) using real apply_variant()
+        Supports two mutation mechanisms:
+
+        1. **Direct mutations** (generic SimDataParameter specs): sets
+           sim_data attributes directly via dot-path traversal.  Used
+           when ``param_space.is_generic`` is True.
+
+        2. **Variant-based mutations** (legacy vio/mecillinam): calls
+           ``ecoli.variants.<name>.apply_variant(sim_data, params)``.
+
+        Both can coexist in a single config (e.g., generic params +
+        variant-based vio pathway).
         """
         sd = copy.deepcopy(self.baseline_sim_data)
 
-        # x -> UQInputParametersVecoli -> simulation config with variants
         uq_params = self.param_space.sample_to_params(x)
         sim_config = uq_params.to_simulation_config()
-        variants = sim_config.get("variants", {})
 
+        # Generic path: direct sim_data attribute mutations
+        mutations = sim_config.get("sim_data_mutations", {})
+        if mutations:
+            _apply_sim_data_mutations(sd, mutations)
+
+        # Legacy path: variant-based mutations
+        variants = sim_config.get("variants", {})
         if variants:
             sd = _apply_variants(sd, variants)
 
