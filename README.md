@@ -402,8 +402,8 @@ The dashboard loads export artifacts and provides interactive PCE surrogate expl
 
 | Resource | Location |
 |----------|----------|
-| Full RFC specification | [`readmes/RFC006.md`](readmes/RFC006.md) |
-| Extended technical context | [`readmes/CONTEXT.md`](readmes/CONTEXT.md) |
+| Full RFC specification | [`readmes/RFC006.md`](readmes/start/tools/RFC006.md) |
+| Extended technical context | [`readmes/CONTEXT.md`](readmes/start/tools/CONTEXT.md) |
 | Dashboard guide | [`app/README.md`](app/README.md) |
 | Sphinx docs | [`docs/`](docs/) |
 | End-to-end example | [`examples/uq_pipeline.py`](examples/uq_pipeline.py) |
