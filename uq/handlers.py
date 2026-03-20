@@ -23,6 +23,7 @@ all, because Phase 1 had no notion of "where in the cell cycle are we."
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import dotenv
@@ -232,7 +233,8 @@ def generate_samples(
     include_mecillinam: bool | None = None,
     params_file: str | None = None,
     batch_dir: Path | None = None,
-    system_config: SystemConfig | None = None
+    system_config: SystemConfig | None = None,
+    on_progress: Callable[[str, int], None] | None = None,
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
@@ -276,6 +278,10 @@ def generate_samples(
     from uq.sampling import run_and_cache
     from uq.wrappers import DataDrivenWrapper
 
+    def _tick(msg: str, advance: int = 0) -> None:
+        if on_progress is not None:
+            on_progress(msg, advance)
+
     # Default observables to avoid DuckDB OOM on wide tables
     if system_config is not None:
         observables = system_config.observables
@@ -292,6 +298,7 @@ def generate_samples(
             "listeners__mass__growth",
         ]
 
+    _tick("Loading baseline data")
     ds = initialize_data(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
@@ -303,6 +310,7 @@ def generate_samples(
             f"No ParameterDataset loaded. Ensure simData.cPickle exists under {sim_base_path}/*/parca/kb/"
         )
 
+    _tick("Resolving parameters", 15)
     # Load custom parameter specs from JSON file if provided
     raw = None
     if all(list(map(lambda fp: fp is not None, [params_file, system_config]))):
@@ -315,6 +323,7 @@ def generate_samples(
         raise ValueError("Could not get parameters from your input!")
     sim_data_parameters = [SimDataParameter.from_dict(p) for p in raw]
 
+    _tick("Building parameter space", 5)
     # Build parameter space
     param_space = ds.x[0].to_parameter_space(
         parameters=sim_data_parameters,
@@ -338,11 +347,13 @@ def generate_samples(
             max_duration=max_duration,
             output_keys=[c.split("__")[-1] for c in observable_columns],
         )
-        console.print(
-            f"[bold cyan]Live mode:[/bold cyan] subprocess execution "
-            f"(max_duration={max_duration:.0f}s, generations={generations}, "
-            f"params={param_space.parameter_names})"
-        )
+        if on_progress is None:
+            console.print(
+                f"[bold cyan]Live mode:[/bold cyan] subprocess execution "
+                f"(max_duration={max_duration:.0f}s, generations={generations}, "
+                f"params={param_space.parameter_names})"
+            )
+        _tick(f"Running {n_samples} simulations", 5)
 
         cache = run_batch_and_cache(
             parameter_space=param_space,
@@ -353,6 +364,7 @@ def generate_samples(
             max_workers=max_workers,
             batch_dir=batch_dir
         )
+        _tick("Complete", 70)
     else:
         # Synthetic response surface built from existing data statistics
         agg = aggregate_timeseries(ds.y, ds.observables)
@@ -361,7 +373,9 @@ def generate_samples(
             observable_means=agg.uniform.mean,
             observable_stds=agg.uniform.std,
         )
-        console.print("[bold yellow]Synthetic mode:[/bold yellow] DataDrivenWrapper")
+        if on_progress is None:
+            console.print("[bold yellow]Synthetic mode:[/bold yellow] DataDrivenWrapper")
+        _tick(f"Evaluating {n_samples} samples", 5)
 
         cache = run_and_cache(
             parameter_space=param_space,
@@ -371,14 +385,17 @@ def generate_samples(
             seed=seed,
             max_workers=max_workers,
         )
+        _tick("Complete", 70)
 
-    console.print(
-        f"[bold green]Cached {cache.X.shape[0]} samples[/bold green] "
-        f"({cache.X.shape[1]} params, {cache.Y.shape[1]} outputs) "
-        f"to {cache_dir}"
-    )
-    if cache.Y_timeseries is not None:
-        console.print(f"  Timeseries cached: {len(cache.Y_timeseries)} samples")
+    _tick("Done", 5)
+    if on_progress is None:
+        console.print(
+            f"[bold green]Cached {cache.X.shape[0]} samples[/bold green] "
+            f"({cache.X.shape[1]} params, {cache.Y.shape[1]} outputs) "
+            f"to {cache_dir}"
+        )
+        if cache.Y_timeseries is not None:
+            console.print(f"  Timeseries cached: {len(cache.Y_timeseries)} samples")
     return cache
 
 
