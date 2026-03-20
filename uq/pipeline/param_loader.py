@@ -41,35 +41,26 @@ _DEFAULT_PICKLE = (get_repo_root() / "sim_data" / "baseline" / "kb" / "simData.c
 # ── Default generic sim_data parameters for UQ ────────────────────────────
 
 DEFAULT_SIM_DATA_PARAMETERS: list[SimDataParameter] = [
-    SimDataParameter(
-        name="kinetic_objective_weight",
-        attr_path="process.metabolism.kinetic_objective_weight",
-        bounds=(0.0, 1.0),
-        description="FBA kinetic vs homeostatic objective weight (0=homeostatic, 1=kinetic)",
-    ),
-    SimDataParameter(
-        name="secretion_penalty_coeff",
-        attr_path="process.metabolism.secretion_penalty_coeff",
-        bounds=(0.0, 2.0),
-        description="Penalty coefficient on secretion fluxes in FBA",
-    ),
+    # Bounds are ±30% around typical baseline values to avoid crashing
+    # the simulation. Baseline values: rnap_free~0.36, rnap_bound~0.17,
+    # dry_mass_fraction~0.30.
     SimDataParameter(
         name="fraction_active_rnap_free",
         attr_path="process.transcription.fraction_active_rnap_free",
-        bounds=(0.1, 1.0),
-        description="Fraction of RNAP that is active when ppGpp-free",
+        bounds=(0.25, 0.47),
+        description="Fraction of RNAP that is active when ppGpp-free (baseline ~0.36)",
     ),
     SimDataParameter(
         name="fraction_active_rnap_bound",
         attr_path="process.transcription.fraction_active_rnap_bound",
-        bounds=(0.0, 0.5),
-        description="Fraction of RNAP that is active when ppGpp-bound",
+        bounds=(0.12, 0.22),
+        description="Fraction of RNAP that is active when ppGpp-bound (baseline ~0.17)",
     ),
     SimDataParameter(
         name="cell_dry_mass_fraction",
         attr_path="mass.cell_dry_mass_fraction",
-        bounds=(0.2, 0.4),
-        description="Fraction of total cell mass that is dry mass",
+        bounds=(0.25, 0.35),
+        description="Fraction of total cell mass that is dry mass (baseline ~0.30)",
     ),
 ]
 
