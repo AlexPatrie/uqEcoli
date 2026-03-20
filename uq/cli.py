@@ -314,173 +314,214 @@ def configure_pipeline(name: str, dest: str | None = None):
 
 @app.command()
 def flow_chart(rfc_id: str = "RFC006") -> None:
-    txt = (
-        None
-        if not rfc_id == "RFC006"
-        else """
- ⏺ ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │                          RFC006 FULL UQ WORKFLOW                                    │
-    │                                                                                     │
-    │  Inputs:  experiment_id: str                                                        │
-    │           hpc_sim_base_path: Path                                                   │
-    │           param_space: InputParameterSpaceVecoli                                    │
-    │           f: Callable[[np.ndarray], np.ndarray]   (simulation or precomputed)       │
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-                                            │
-                                            ▼
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │  STEP 1: Define Parameter Space                                                     │
-    │                                                                                     │
-    │  param_space = InputParameterSpaceVecoli(                                           │
-    │      include_vio=True, include_mecillinam=True                                      │
-    │  )                                                                                  │
-    │  → n parameters with bounds                                                         │
-    │  X = {x_1, ..., x_n} with bounds [a_i, b_i]                                        │
-    │  • Vio pathway (expression, translation efficiency)                                 │
-    │  • Mecillinam concentration • Gene knockouts                                        │
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-                                            │
-                                            ▼
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │  STEP 2: Load Simulation Data                                                       │
-    │                                                                                     │
-    │  df = load_dataset(experiment_id, hpc_sim_base_path)                                │
-    │  → Polars DataFrame from hive-partitioned Parquet                                   │
-    │  Y(t) = f(X) + ε  (stochastic timeseries)                                          │
-    │  Outputs: transcriptome, proteome, metabolic fluxes, mass/volume/growth             │
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-                                            │
-                                            ▼
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │  STEP 3: Aggregation Strategies 1-3 (RFC006 §1)                                    │
-    │                                                                                     │
-    │  ┌──────────────────┐ ┌──────────────────────┐ ┌─────────────────────┐              │
-    │  │  S1: UNIFORM     │ │  S2: BY GENERATION   │ │  S3: BY LINEAGE     │              │
-    │  │  Ȳ = (1/N)∑Y_i   │ │  Ȳ_g (convergence    │ │  Ȳ_s (exogenous    │              │
-    │  │                  │ │  ctrl)               │ │  var ctrl)          │              │
-    │  └──────────────────┘ └──────────────────────┘ └─────────────────────┘              │
-    │  Temporal aggregation of subsampled trajectories (RFC006 §4, Step B)                │
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-                                            │
-                                            ▼
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │  STEP 4: Variance Decomposition                                                     │
-    │                                                                                     │
-    │  Var(Y) = Var_gen + Var_seed + Var_resid                                            │
-    │  ANOVA-style decomposition per observable:                                          │
-    │  • gen_frac = Var_between_gen / Var_total                                           │
-    │  • residual = cell cycle + param sensitivity                                        │
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-                                            │
-                          ┌─────────────────┴─────────────────┐
-                          │                                   │
-             Bulk population analysis              Cell cycle conditioned analysis
-                          │                                   │
-                          ▼                                   ▼
-    ╔═══════════════════════════════════╗   ╔═══════════════════════════════════════════╗
-    ║  GSA PHASE 1: Population (Bulk)  ║   ║  GSA PHASE 2: Cell Cycle (Phenotypic)    ║
-    ║  "Across all cells, all times —  ║   ║  "Within each cell cycle stage —         ║
-    ║   which parameters drive output  ║   ║   which parameters matter?"              ║
-    ║   variance?"                     ║   ║                                          ║
-    ╠══════════════════════════════════╣   ╠══════════════════════════════════════════╣
-    ║                                  ║   ║                                          ║
-    ║  STEP 5a: Morris Prescreening    ║   ║  STEP 5b: GSA-Informed Observable       ║
-    ║  ──────────────────────────────  ║   ║  Selection                               ║
-    ║  EE_i = [f(x+Δe_i) − f(x)] / Δ ║   ║  ────────────────────────────────────    ║
-    ║  • μ* = mean(|EE_i|) — robust   ║   ║  resid_i = 1 − gen_frac_i − seed_frac_i ║             
-    ║    importance measure            ║   ║  Rank observables by residual variance.  ║           
-    ║  • σ = std(EE_i) — high →       ║   ║  High residual → variance NOT from       ║            
-    ║    nonlinear or interactive      ║   ║  gen/seed → likely cell-cycle-driven     ║           
-    ║  Cost: O(r×(n+1)) evaluations   ║   ║  → CellCycleRelevanceResult (top-K obs)  ║            
-    ║  n params → K params (K ≪ n)    ║   ║                                          ║            
-    ║  → MorrisIndices, selected      ║   ║                    │                      ║           
-    ║              │                   ║   ║                    ▼                      ║          
-    ║              ▼                   ║   ║  STEP 6b: Koopman DMD → Cell Cycle θ    ║            
-    ║  STEP 6a: PCE Surrogate         ║   ║  ────────────────────────────────────    ║            
-    ║  (Strategies 1-3)               ║   ║  DMD on selected observables:            ║            
-    ║  ──────────────────────────────  ║   ║  λ = |λ|e^(iω),  θ(x) = arg(φ(x))/2π  ║              
-    ║  f(x) ≈ ∑ c_α Ψ_α(x)           ║   ║  • Identify mode at ω ≈ 1/T_cycle       ║              
-    ║  • Ψ_α(x) = ∏ P_{α_i}(x_i)    ║   ║  • Extract eigenfunction phase → θ∈[0,1]║               
-    ║    tensor-product Legendre polys ║   ║  • Data-driven, no mechanistic          ║            
-    ║  • c_α fit via least-squares on  ║   ║    assumptions                           ║           
-    ║    LHS samples (N points)        ║   ║                    │                      ║          
-    ║  • |α| ≤ p (order, typically 2-3)║   ║                    ▼                      ║          
-    ║  → PCESurrogate (instant         ║   ║  STEP 6c/6d: Strategy 4 — Cell Cycle   ║             
-    ║    predict(x), no simulation)    ║   ║  Stratification (RFC006 §1)              ║           
-    ║              │                   ║   ║  ────────────────────────────────────    ║           
-    ║              ▼                   ║   ║  Bin timepoints into n_bins stages by θ: ║           
-    ║  STEP 7a: Sobol Indices from     ║   ║  Stage k: θ ∈ [k/n, (k+1)/n)            ║            
-    ║  PCE Coefficients                ║   ║  → Ȳ_k = mean(Y | θ ∈ stage k)          ║            
-    ║  ──────────────────────────────  ║   ║  • θ≈0.0–0.15: B-period (birth→init)    ║            
-    ║  Variance-based sensitivity      ║   ║  • θ≈0.2–0.7:  C-period (DNA repl)      ║            
-    ║  (no additional sampling):       ║   ║  • θ≈0.7–1.0:  D-period (→division)     ║            
-    ║  S_i  = ∑{α:α_i>0,α_j=0∀j≠i}   ║   ║  Strategy4Wrapper: f_s4(x) =            ║              
-    ║         c_α² / ∑{α≠0} c_α²      ║   ║    bin(θ(f(x))) → per-stage means       ║             
-    ║  • S_i  = first-order (main)     ║   ║                    │                      ║          
-    ║  • S_Ti = total-order (w/ inter) ║   ║                    ▼                      ║          
-    ║  → SobolIndices, variance-       ║   ║  STEP 7b: Per-Stage PCE + Sobol         ║            
-    ║    weighted across outputs       ║   ║  (Phenotypic GSA)                        ║           
-    ║                                  ║   ║  ────────────────────────────────────    ║           
-    ╠══════════════════════════════════╣   ║  For each stage k, fit independent PCE:  ║           
-    ║  Phase 1 Output:                 ║   ║  S_i^(k) = Var_i[E(Ȳ_k|X_i)] / Var(Ȳ_k)║             
-    ║  UqProfile(strat=POPULATION)     ║   ║  for k = 0, ..., n_bins−1               ║            
-    ║  ├ SobolIndices × 1 (bulk)       ║   ║  Phase 2 Sobol are NOT time-averages of  ║           
-    ║  ├ PCESurrogate (bulk)           ║   ║  Phase 1 — they are orthogonal           ║           
-    ║  ├ MorrisIndices (screening)     ║   ║  decompositions                          ║           
-    ║  ├ AggregatedOutput × 3          ║   ║  → list[SobolIndices] (n_bins sets)      ║           
-    ║  └ variance_decomposition        ║   ║    + PCESurrogate (phenotypic)            ║          
-    ║    (gen_frac, seed_frac,         ║   ╠══════════════════════════════════════════╣           
-    ║     residual_frac → Phase 2)     ║   ║  Phase 2 Output:                         ║           
-    ╚═══════════════════════════════════╝   ║  UqProfile(strat=CELL_CYCLE)             ║          
-                                            ║  ├ list[SobolIndices] × n_bins           ║          
-                                            ║  ├ PCESurrogate (phenotypic)              ║         
-                                            ║  ├ CellCycleRelevanceResult               ║         
-                                            ║  ├ cell_cycle_profile (per-stage means)   ║         
-                                            ║  └ Koopman spectrum (eigenvalues, modes)  ║         
-                                            ╚═══════════════════════════════════════════╝         
-                          │                                   │                                   
-                          └─────────────────┬─────────────────┘                                   
-                                            │                                                     
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐     
-    │  FEEDBACK LOOP (Phase 1 → Phase 2, RFC006 §3)                                      │        
-    │                                                                                     │       
-    │  Step 4: residual_frac per obs → Step 5b: rank by residual, select top-K            │       
-    │  → Step 6b: Koopman DMD on selected obs → Step 6c/6d: θ-binned aggregation          │       
-    │  → Step 7b: per-stage Sobol                                                         │       
-    └─────────────────────────────────────────────────────────────────────────────────────┘       
-                                            │                                                     
-                                            ▼                                                   
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐       
-    │  PipelineResult — Complete RFC006 Output                                            │     
-    │                                                                                     │       
-    │  Phase 1 (Population / Bulk):          │  Phase 2 (Cell Cycle / Phenotypic):        │       
-    │  ├ SobolIndices (1 set) — S_i, S_Ti   │  ├ list[SobolIndices] (n_bins sets)        │        
-    │  │   per parameter across all cells    │  │   S_i^(k), S_Ti^(k) per stage          │        
-    │  ├ PCESurrogate — cheap polynomial     │  ├ PCESurrogate (stage-conditioned)        │       
-    │  │   approximation of f(x)             │  ├ CellCycleRelevanceResult                │       
-    │  ├ MorrisIndices — μ*, σ per param     │  ├ cell_cycle_profile — per-stage means    │       
-    │  ├ variance_decomposition — gen_frac,  │  └ Koopman spectrum — eigenvalues,         │       
-    │  │   seed_frac, residual per obs       │      frequencies, mode shapes              │       
-    │  └ AggregatedOutput × 3 (per strat)   │                                            │        
-    │                                                                                     │       
-    │  Phase 1 & Phase 2 are orthogonal decompositions of the same total variance.        │       
-    │  Phase 1 collapses time; Phase 2 conditions on cell cycle stage.                    │       
-    └─────────────────────────────────────────────────────────────────────────────────────┘       
-                                            │                                                     
-                                            ▼                                                     
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐       
-    │  TWO-STAGE WORKFLOW (CLI)                                                           │       
-    │                                                                                     │     
-    │  Stage 1 (compute-intensive):                                                       │       
-    │  uv run uq generate-samples ... --n-samples 200 --live                              │       
-    │                         │                                                           │       
-    │                         ▼  PrecomputedCache                                         │       
-    │  Stage 2 (fast, repeatable):                                                        │       
-    │  uv run uq quantify ... --precomputed-path ./cache --export-path ./results          │       
-    └─────────────────────────────────────────────────────────────────────────────────────┘
-"""
+    if rfc_id != "RFC006":
+        console.print("[red]Only RFC006 is supported.[/red]")
+        return
+
+    from rich.text import Text as RichText
+
+    def _header(title: str) -> Panel:
+        return Panel(
+            RichText(title, style="bold white"),
+            border_style="bright_magenta",
+            box=box.DOUBLE_EDGE,
+            padding=(0, 2),
+        )
+
+    def _step(title: str, body: str, border: str = "cyan") -> Panel:
+        markup = f"[bold bright_yellow]{title}[/bold bright_yellow]\n{body}"
+        return Panel(markup, border_style=border, box=box.ROUNDED, padding=(0, 1))
+
+    def _phase(title: str, body: str, border: str = "green") -> Panel:
+        markup = f"[bold bright_green]{title}[/bold bright_green]\n{body}"
+        return Panel(markup, border_style=border, box=box.HEAVY, padding=(0, 1))
+
+    def _arrow() -> str:
+        return "[dim cyan]                                         |[/dim cyan]"
+
+    def _arrow_v() -> str:
+        return "[dim cyan]                                         v[/dim cyan]"
+
+    # ── Header ──
+    console.print()
+    console.print(_header("RFC006 FULL UQ WORKFLOW"))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── Step 1 ──
+    console.print(_step(
+        "STEP 1: Define Parameter Space",
+        "[bold magenta]Generic mode (default):[/bold magenta]\n"
+        "  params = [SimDataParameter(name, attr_path, bounds), ...]\n"
+        "  e.g. [cyan]\"process.transcription.fraction_active_rnap_free\"[/cyan] bounds=(0.25, 0.47)\n"
+        "  Any scalar [bold]SimulationDataEcoli[/bold] attribute by dot-path.\n"
+        "  Default: 3 params (see [cyan]DEFAULT_SIM_DATA_PARAMETERS[/cyan])\n"
+        "  Custom: [green]--params-file params.json[/green]\n\n"
+        "[bold magenta]Legacy mode:[/bold magenta] [green]--include-vio[/green] / [green]--include-mecillinam[/green]\n\n"
+        "[dim]-> XSpaceVecoli with n parameters and bounds [a_i, b_i][/dim]",
+    ))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── Step 2 ──
+    console.print(_step(
+        "STEP 2: Load Simulation Data",
+        "[cyan]initialize_data(experiment_ids, sim_base_path, observable_columns)[/cyan]\n"
+        "-> DatasetMultiExperiment:\n"
+        "   .x = list[ParameterDataset]  (baseline simData.cPickle per experiment)\n"
+        "   .y = Polars DataFrame from hive-partitioned Parquet\n"
+        "   .parameter_space = XSpaceVecoli\n"
+        "Outputs: transcriptome, proteome, metabolic fluxes, mass/volume/growth",
+    ))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── Step 3 ──
+    s1 = Panel("[bold yellow]S1: UNIFORM[/bold yellow]\nY = (1/N) sum Y_i", border_style="yellow", box=box.ROUNDED)
+    s2 = Panel("[bold yellow]S2: BY GEN[/bold yellow]\nY_g (convergence)", border_style="yellow", box=box.ROUNDED)
+    s3 = Panel("[bold yellow]S3: BY SEED[/bold yellow]\nY_s (exogenous)", border_style="yellow", box=box.ROUNDED)
+    console.print(_step("STEP 3: Aggregation Strategies 1-3", ""))
+    console.print(Columns([s1, s2, s3], equal=True, expand=True))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── Step 4 ──
+    console.print(_step(
+        "STEP 4: Variance Decomposition",
+        "Var(Y) = Var_gen + Var_seed + Var_resid\n"
+        "ANOVA-style decomposition per observable:\n"
+        "  gen_frac = Var_between_gen / Var_total\n"
+        "  residual = cell cycle + param sensitivity",
+        border="yellow",
+    ))
+
+    console.print()
+    console.print("[dim cyan]              Bulk population                          Cell cycle conditioned[/dim cyan]")
+    console.print("[dim cyan]                       |                                        |[/dim cyan]")
+    console.print("[dim cyan]                       v                                        v[/dim cyan]")
+
+    # ── Phase 1 ──
+    phase1 = _phase(
+        "GSA PHASE 1: Population (Bulk)",
+        "[bold bright_yellow]STEP 5a:[/bold bright_yellow] Morris Prescreening\n"
+        "  EE_i = [f(x+De_i) - f(x)] / D\n"
+        "  mu* = mean(|EE_i|),  sigma = std(EE_i)\n"
+        "  n params -> K params (K << n)\n"
+        "  -> [cyan]MorrisIndices[/cyan]\n\n"
+        "[bold bright_yellow]STEP 6a:[/bold bright_yellow] PCE Surrogate\n"
+        "  f(x) ~ sum c_a Psi_a(x)\n"
+        "  Legendre basis, least-squares on LHS samples\n"
+        "  -> [cyan]PCESurrogate[/cyan]\n\n"
+        "[bold bright_yellow]STEP 7a:[/bold bright_yellow] Sobol Indices from PCE\n"
+        "  S_i  = first-order (main effect)\n"
+        "  S_Ti = total-order (w/ interactions)\n"
+        "  -> [cyan]SobolIndices[/cyan]\n\n"
+        "[bold]Output:[/bold] [bright_green]UqProfile(strat=POPULATION)[/bright_green]\n"
+        "  SobolIndices x 1, PCESurrogate, MorrisIndices\n"
+        "  AggregatedOutput x 3, variance_decomposition",
+        border="bright_blue",
     )
-    show(txt)
+
+    # ── Phase 2 ──
+    phase2 = _phase(
+        "GSA PHASE 2: Cell Cycle (Phenotypic)",
+        "[bold bright_yellow]STEP 5b:[/bold bright_yellow] GSA-Informed Observable Selection\n"
+        "  resid_i = 1 - gen_frac_i - seed_frac_i\n"
+        "  Rank by residual -> top-K cell-cycle obs\n"
+        "  -> [cyan]CellCycleRelevanceResult[/cyan]\n\n"
+        "[bold bright_yellow]STEP 6b:[/bold bright_yellow] Koopman DMD -> Cell Cycle theta\n"
+        "  lambda = |lambda| e^(iw),  theta = arg(phi)/2pi\n"
+        "  Data-driven cell cycle coordinate in [0,1]\n\n"
+        "[bold bright_yellow]STEP 6c/6d:[/bold bright_yellow] Strategy 4 Stratification\n"
+        "  Bin timepoints by theta into n_bins stages\n"
+        "  B-period -> C-period -> D-period\n\n"
+        "[bold bright_yellow]STEP 7b:[/bold bright_yellow] Per-Stage PCE + Sobol\n"
+        "  S_i^(k) per stage, orthogonal to Phase 1\n"
+        "  -> [cyan]list[SobolIndices] (n_bins sets)[/cyan]\n\n"
+        "[bold]Output:[/bold] [bright_green]UqProfile(strat=CELL_CYCLE)[/bright_green]\n"
+        "  list[SobolIndices] x n_bins, PCESurrogate\n"
+        "  CellCycleRelevanceResult, Koopman spectrum",
+        border="bright_green",
+    )
+
+    console.print(Columns([phase1, phase2], equal=True, expand=True))
+
+    console.print()
+    console.print("[dim cyan]                       |                                        |[/dim cyan]")
+    console.print("[dim cyan]                       +--------------------+-------------------+[/dim cyan]")
+    console.print("[dim cyan]                                            |[/dim cyan]")
+    console.print("[dim cyan]                                            v[/dim cyan]")
+
+    # ── Feedback Loop ──
+    console.print(Panel(
+        "[bold bright_yellow]FEEDBACK LOOP[/bold bright_yellow] [dim](Phase 1 -> Phase 2, RFC006 S3)[/dim]\n\n"
+        "Step 4: residual_frac per obs -> Step 5b: rank by residual, select top-K\n"
+        "-> Step 6b: Koopman DMD on selected obs -> Step 6c/6d: theta-binned aggregation\n"
+        "-> Step 7b: per-stage Sobol",
+        border_style="bright_red",
+        box=box.ROUNDED,
+        padding=(0, 1),
+    ))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── PipelineResult ──
+    result_p1 = Panel(
+        "[bold]Phase 1 (Population / Bulk)[/bold]\n"
+        "[cyan]SobolIndices[/cyan] (1 set) -- S_i, S_Ti\n"
+        "[cyan]PCESurrogate[/cyan] -- polynomial f(x)\n"
+        "[cyan]MorrisIndices[/cyan] -- mu*, sigma\n"
+        "[cyan]variance_decomposition[/cyan]\n"
+        "[cyan]AggregatedOutput[/cyan] x 3",
+        border_style="bright_blue",
+        box=box.ROUNDED,
+    )
+    result_p2 = Panel(
+        "[bold]Phase 2 (Cell Cycle / Phenotypic)[/bold]\n"
+        "[cyan]list[SobolIndices][/cyan] x n_bins\n"
+        "[cyan]PCESurrogate[/cyan] (stage-conditioned)\n"
+        "[cyan]CellCycleRelevanceResult[/cyan]\n"
+        "[cyan]cell_cycle_profile[/cyan]\n"
+        "[cyan]Koopman spectrum[/cyan]",
+        border_style="bright_green",
+        box=box.ROUNDED,
+    )
+    console.print(Panel(
+        Columns([result_p1, result_p2], equal=True, expand=True),
+        title="[bold white on magenta] PipelineResult -- Complete RFC006 Output [/bold white on magenta]",
+        subtitle="[dim]Phase 1 & Phase 2 are orthogonal decompositions of the same total variance[/dim]",
+        border_style="magenta",
+        box=box.DOUBLE_EDGE,
+        padding=(0, 1),
+    ))
+    console.print(_arrow())
+    console.print(_arrow_v())
+
+    # ── CLI Workflow ──
+    console.print(Panel(
+        "[bold bright_yellow]TWO-STAGE WORKFLOW (CLI)[/bold bright_yellow]\n\n"
+        "[bold]Stage 1[/bold] [dim](compute-intensive, via vEcoli workflow.py + Nextflow):[/dim]\n"
+        "[green]uv run uq sample <experiment_ids>[/green] \\\n"
+        "    [green]--sim-base-path[/green] /path/to/sims \\\n"
+        "    [green]--cache-dir[/green] ./uq_cache [green]--n-samples[/green] 200 [green]--live[/green] \\\n"
+        "    [green]--params-file[/green] params.json [green]--batch-dir[/green] ./batch\n\n"
+        "[dim]Execution: LHS -> sim_data_setattr variant (op: \"zip\") ->[/dim]\n"
+        "[dim]           workflow.py -> Nextflow -> Parquet -> PrecomputedCache[/dim]\n"
+        "[dim]           No EcoliSim in UQ process memory.[/dim]\n\n"
+        "                         [bright_cyan]|[/bright_cyan]\n"
+        "                         [bright_cyan]v[/bright_cyan]  PrecomputedCache (X.npy, Y.npy, timeseries/)\n\n"
+        "[bold]Stage 2[/bold] [dim](fast, repeatable, no simulation):[/dim]\n"
+        "[green]uv run uq quantify <experiment_ids>[/green] \\\n"
+        "    [green]--sim-base-path[/green] /path/to/sims \\\n"
+        "    [green]--precomputed-path[/green] ./uq_cache [green]--export-path[/green] ./uq_results",
+        border_style="bright_cyan",
+        box=box.DOUBLE_EDGE,
+        padding=(0, 1),
+        title="[bold white on cyan] CLI [/bold white on cyan]",
+    ))
+    console.print()
+
+    pass  # all rendering done above via Rich
 
 
 def _pct(v: float) -> str:
