@@ -1,0 +1,37 @@
+{
+  "sim_data_path": "examples/uq_artifacts/kb/simData.cPickle",
+  "experiment_id": "uq_batch",
+  "emitter": "parquet",
+  "emitter_arg": {
+    "out_dir": "examples/uq_artifacts/output",
+    "batch_size": 22
+  },
+  "max_duration": 22.0,
+  "n_init_sims": 1,
+  "generations": 1,
+  "single_daughters": true,
+  "suffix_time": false,
+  "variants": {
+    "sim_data_setattr": {
+      "mutations": {
+        "value": [
+          {
+            "process.transcription.fraction_active_rnap_free": 0.40698141406719046,
+            "process.transcription.fraction_active_rnap_bound": 0.13144071209714536,
+            "mass.cell_dry_mass_fraction": 0.2672738355703167
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.2748385382356755,
+            "process.transcription.fraction_active_rnap_bound": 0.1688989022641968,
+            "mass.cell_dry_mass_fraction": 0.29506981645622277
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.3557977536621506,
+            "process.transcription.fraction_active_rnap_bound": 0.2181407705182592,
+            "mass.cell_dry_mass_fraction": 0.33639585122072746
+          }
+        ]
+      }
+    }
+  }
+}

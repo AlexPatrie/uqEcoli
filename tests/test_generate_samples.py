@@ -176,7 +176,7 @@ def test_generate_samples_handler(tmp_path):
         seed=42,
         max_duration=22.0,
         live=True,
-        params_file="examples/params_custom.json",
+        params_file="examples/uq_artifacts/params/params_demo.json",
     )
 
     assert cache.X.shape[0] == 2

@@ -229,6 +229,7 @@ def run_batch_and_cache(
     seed: int = 42,
     store_timeseries: bool = True,
     max_workers: int | None = None,
+    batch_dir: Path | None = None
 ) -> PrecomputedCache:
     """Generate LHS samples, run batch simulation via subprocesses, cache.
 
@@ -249,6 +250,7 @@ def run_batch_and_cache(
         seed: Random seed for LHS generation.
         store_timeseries: Whether to cache per-sample raw timeseries.
         max_workers: Max parallel subprocesses. None = sequential.
+        batch_dir: Destination in which batch artifacts will be saved.
 
     Returns:
         PrecomputedCache with X, Y, and optionally Y_timeseries.
@@ -256,7 +258,7 @@ def run_batch_and_cache(
     X = generate_lhs_samples(parameter_space, n_samples, seed=seed)
 
     Y, Y_timeseries = simulation_func._run_batch(
-        X, max_workers=max_workers,
+        X, max_workers=max_workers, batch_dir=batch_dir
     )
 
     if not store_timeseries:

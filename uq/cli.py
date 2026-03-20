@@ -79,7 +79,7 @@ from rich.table import Table
 from rich.text import Text
 
 from uq import handlers
-from uq.common import get_repo_root
+from uq.common import get_repo_root, PARAM_CONFIG_DEMO
 from uq.handlers import generate_samples
 from uq.models import PipelineConfig, SamplingConfig
 from uq.pce.models import PCEParameterSelectionConfig
@@ -164,7 +164,7 @@ def _verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
         Use --include-vio / --include-mecillinam for legacy vio/mecillinam mode.
     """)
 )
-def generate_samples(
+def sample(
         experiment_ids: list[str],
         sim_base_path: str | None = None,
         cache_dir: str | None = None,
@@ -178,6 +178,7 @@ def generate_samples(
         include_vio: bool | None = None,
         include_mecillinam: bool | None = None,
         params_file: str | None = None,
+        batch_dir: str | None = None
 ) -> None:
     """Generate LHS samples, evaluate simulation function, cache (X, Y).
 
@@ -187,6 +188,9 @@ def generate_samples(
     Pass --live to run real vEcoli simulations as subprocesses.
     """
     _verify_out_dirs(sim_base_path, experiment_ids)
+
+    if batch_dir is not None:
+        batch_dir = Path(batch_dir)
 
     samples = handlers.generate_samples(
         experiment_ids=experiment_ids,
@@ -202,6 +206,7 @@ def generate_samples(
         include_vio=include_vio,
         include_mecillinam=include_mecillinam,
         params_file=params_file,
+        batch_dir=batch_dir
     )
     print(samples)
 
@@ -217,6 +222,7 @@ def demo_sampling() -> None:
     sim_base_path = Path("/Users/alexanderpatrie/sms/vecoli_data/outputs")
     experiment_ids = [p.name for p in sim_base_path.iterdir()]
     cache_dir = "examples/uq_artifacts/demos"
+    batch_dir = Path("examples/uq_artifacts/batch")
     n_samples = 3
     seed = 1111
     samples = handlers.generate_samples(
@@ -232,7 +238,8 @@ def demo_sampling() -> None:
         live=True,
         include_vio=False,
         include_mecillinam=False,
-        params_file="examples/params_custom.json"
+        params_file=PARAM_CONFIG_DEMO.__str__(),
+        batch_dir=batch_dir,
     )
     print(samples)
 

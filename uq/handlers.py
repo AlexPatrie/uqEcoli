@@ -230,6 +230,7 @@ def generate_samples(
     include_vio: bool | None = None,
     include_mecillinam: bool | None = None,
     params_file: str | None = None,
+    batch_dir: Path | None = None
 ) -> PrecomputedCache:
     """Stage 1: Generate LHS samples, evaluate simulation, cache (X, Y).
 
@@ -262,6 +263,7 @@ def generate_samples(
         include_mecillinam: Include mecillinam concentration (legacy mode).
         params_file: Path to a JSON file with a list of
             ``SimDataParameter`` specs for custom parameter selection.
+        batch_dir: Destination for batch output artifacts.
     """
     import json as _json
 
@@ -333,6 +335,7 @@ def generate_samples(
             cache_dir=Path(cache_dir),
             seed=seed,
             max_workers=max_workers,
+            batch_dir=batch_dir
         )
     else:
         # Synthetic response surface built from existing data statistics
