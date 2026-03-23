@@ -7,7 +7,6 @@ well-established, biologically grounded methods:
 - **LHS sampling** (scipy) for space-filling parameter exploration
 - **PCE surrogates** (PyTUQ / Legendre polynomials) for efficient sensitivity analysis
 - **Sobol indices** (analytical from PCE coefficients) for variance attribution
-- **ANOVA variance decomposition** for generation / seed / within-group effects
 - **Growth-stratified sensitivity** (normalized log dry mass) to reveal
   how parameter importance changes as cells grow — no claim about
   cell cycle phases, no spectral decomposition, no assumed cycle time

@@ -141,7 +141,7 @@ def quantify(
     console.print("[bold cyan]Loading cached samples...[/bold cyan]")
     cache = PrecomputedCache.load(precomputed_path)
 
-    console.print("[bold cyan]Loading baseline timeseries...[/bold cyan]")
+    console.print("[bold cyan]Loading parameter space...[/bold cyan]")
     ds = initialize_data(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
@@ -156,7 +156,6 @@ def quantify(
     result = run_pipeline(
         cache=cache,
         param_space=ds.parameter_space,
-        timeseries_df=ds.y if ds.y.height > 0 else None,
         observable_names=obs,
         polynomial_order=polynomial_order,
         n_bins=n_bins,
@@ -195,40 +194,6 @@ def _print_report(result) -> None:
         "[dim]  Refs: Macklin et al. Science 2020; Ahn-Horst et al. npj Syst Biol Appl 2022[/dim]"
     )
     console.print()
-
-    # Variance decomposition
-    vd = result.variance_decomposition
-    if vd:
-        vd_table = Table(
-            box=box.SIMPLE_HEAVY, show_header=True,
-            header_style="bold magenta", border_style="yellow",
-            title="VARIANCE DECOMPOSITION (one-way ANOVA)",
-            title_style="bold yellow",
-        )
-        vd_table.add_column("SOURCE", style="bold yellow")
-        vd_table.add_column("MEAN FRACTION", style="bright_white", justify="right")
-        vd_table.add_column("INTERPRETATION", style="dim")
-
-        for label, key, interp in [
-            ("Generation", "generation_fraction",
-             "Convergence to steady-state growth (transient effects)"),
-            ("Lineage seed", "seed_fraction",
-             "Stochastic gene expression (cell-to-cell heterogeneity)"),
-        ]:
-            arr = vd.get(key)
-            if arr is not None:
-                arr = np.asarray(arr)
-                vd_table.add_row(label, _pct(float(np.nanmean(arr))), interp)
-
-        gen = np.asarray(vd.get("generation_fraction", [0.0]))
-        seed = np.asarray(vd.get("seed_fraction", [0.0]))
-        resid = np.clip(1.0 - gen - seed, 0.0, 1.0)
-        vd_table.add_row(
-            "Within-group", _pct(float(np.nanmean(resid))),
-            "Growth dynamics + parameter sensitivity",
-        )
-
-        console.print(Panel(vd_table, border_style="yellow", box=box.ROUNDED, padding=(0, 1)))
 
     # Phase 1
     _print_sobol_table(

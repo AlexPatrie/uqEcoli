@@ -48,7 +48,7 @@ def _(exp_id):
     wrapper = SimulationWrapper(
         parameter_space=param_space,
         config=WrapperConfig(
-            sim_data_path="/Users/alexanderpatrie/sms/vEcoli-private/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle"
+            sim_data_path="/Users/alexanderpatrie/sms/vEcoli/api_integration/sims/api_simulation_default/parca/kb/simData.cPickle"
         ),
     )
     analyzer = SensitivityAnalyzer(param_space, wrapper=wrapper)
