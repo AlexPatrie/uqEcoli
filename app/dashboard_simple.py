@@ -255,29 +255,6 @@ def _(COLORS, DAW, data, go, make_subplots, np, current_x_norm, current_y_hat, s
 
 
 @app.cell
-def _(COLORS, DAW, data, go, np):
-    _vd = data.get("variance_decomposition", {})
-    _gen = np.nanmean(_vd.get("generation_fraction", [0]))
-    _seed = np.nanmean(_vd.get("seed_fraction", [0]))
-    _within = max(0, 1 - _gen - _seed)
-
-    fig_variance = go.Figure(go.Bar(
-        x=["Generation\n(convergence)", "Lineage seed\n(stochasticity)", "Within-group\n(growth dynamics)"],
-        y=[_gen, _seed, _within],
-        marker_color=[COLORS["accent1"], COLORS["accent2"], COLORS["accent3"]],
-        text=[f"{_v:.1%}" for _v in [_gen, _seed, _within]],
-        textposition="outside", textfont=dict(color=COLORS["text"], size=12),
-        hovertemplate="%{x}<br>Fraction: %{y:.3f}<extra></extra>",
-    ))
-    fig_variance.update_layout(
-        **DAW, height=250,
-        title=dict(text="VARIANCE DECOMPOSITION (ANOVA)", font=dict(size=13, color=COLORS["accent4"])),
-        yaxis_title="Fraction of total variance", yaxis_range=[0, 1.05],
-    )
-    return (fig_variance,)
-
-
-@app.cell
 def _(data, mo):
     _params_info = data["parameters"]
     _sobol = data["phase1_population"]["sobol_total_order"]
@@ -298,7 +275,7 @@ def _(data, mo):
 
 
 @app.cell
-def _(data, fig_response, fig_spectrogram, fig_variance, file_input, mo, param_sliders, param_table):
+def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_table):
     _methods = data.get("methods", {}) if data else {}
     _refs = data.get("references", []) if data else []
     _params = list(data["parameters"].keys()) if data else []
@@ -328,7 +305,6 @@ def _(data, fig_response, fig_spectrogram, fig_variance, file_input, mo, param_s
     _plot_panel = mo.vstack([
         mo.ui.plotly(fig_response),
         mo.ui.plotly(fig_spectrogram),
-        mo.ui.plotly(fig_variance),
     ])
 
     _methods_md = mo.md(
@@ -337,7 +313,6 @@ def _(data, fig_response, fig_spectrogram, fig_variance, file_input, mo, param_s
         f"- **Surrogate:** {_methods.get('surrogate', 'PCE')}\n"
         f"- **Sensitivity:** {_methods.get('sensitivity', 'Sobol')}\n"
         f"- **Stratification:** {_methods.get('stratification', 'growth-based')}\n"
-        f"- **Variance decomp:** {_methods.get('variance_decomposition', 'ANOVA')}\n"
     )
 
     mo.output.replace(mo.vstack([

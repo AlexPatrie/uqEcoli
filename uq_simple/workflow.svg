@@ -16,10 +16,6 @@
       <stop offset="0%" style="stop-color:#27AE60"/>
       <stop offset="100%" style="stop-color:#1E8449"/>
     </linearGradient>
-    <linearGradient id="anovaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#F39C12"/>
-      <stop offset="100%" style="stop-color:#E67E22"/>
-    </linearGradient>
     <linearGradient id="exportGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" style="stop-color:#8E44AD"/>
       <stop offset="100%" style="stop-color:#6C3483"/>
@@ -120,25 +116,16 @@
   <text x="130" y="484" fill="#2471A3" font-size="15" font-weight="400">uv run uq-simple quantify</text>
   <text x="900" y="484" fill="#7F8C8D" font-size="12" font-style="italic">pipeline.py · cell_cycle.py</text>
 
-  <!-- ── ANOVA Box ── -->
-  <rect x="60" y="514" width="460" height="110" rx="10" fill="white" stroke="#F39C12" stroke-width="2" filter="url(#shadowLight)"/>
-  <rect x="60" y="514" width="460" height="28" rx="10" fill="url(#anovaGrad)"/>
-  <rect x="60" y="532" width="460" height="10" fill="url(#anovaGrad)"/>
-  <text x="290" y="533" text-anchor="middle" fill="white" font-size="12" font-weight="700">Variance Decomposition (ANOVA)</text>
-  <text x="75" y="558" fill="#2C3E50" font-size="11">Var(Y) = Var_generation + Var_seed + Var_within</text>
-  <text x="75" y="578" fill="#7F8C8D" font-size="10">Generation → convergence to steady-state (transient effects)</text>
-  <text x="75" y="594" fill="#7F8C8D" font-size="10">Seed → stochastic gene expression (cell-to-cell heterogeneity)</text>
-  <text x="75" y="610" fill="#7F8C8D" font-size="10">Within-group → growth dynamics + parameter sensitivity + cell cycle</text>
-
   <!-- ── Load Data Box ── -->
-  <rect x="555" y="514" width="490" height="110" rx="10" fill="white" stroke="#95A5A6" stroke-width="2" filter="url(#shadowLight)"/>
-  <rect x="555" y="514" width="490" height="28" rx="10" fill="#95A5A6"/>
-  <rect x="555" y="532" width="490" height="10" fill="#95A5A6"/>
-  <text x="800" y="533" text-anchor="middle" fill="white" font-size="12" font-weight="700">Load Data</text>
-  <text x="570" y="558" fill="#2C3E50" font-size="11">initialize_data(experiment_ids, sim_base_path)</text>
-  <text x="570" y="578" fill="#7F8C8D" font-size="10">Parquet → Polars DataFrame (hive partitioning)</text>
-  <text x="570" y="594" fill="#7F8C8D" font-size="10">simData.cPickle → ParameterDataset → XSpaceVecoli</text>
-  <text x="570" y="610" fill="#7F8C8D" font-size="10">PrecomputedCache.load(cache_dir) → X, Y, timeseries</text>
+  <rect x="60" y="514" width="990" height="110" rx="10" fill="white" stroke="#95A5A6" stroke-width="2" filter="url(#shadowLight)"/>
+  <rect x="60" y="514" width="990" height="28" rx="10" fill="#95A5A6"/>
+  <rect x="60" y="532" width="990" height="10" fill="#95A5A6"/>
+  <text x="550" y="533" text-anchor="middle" fill="white" font-size="12" font-weight="700">Load Data + Cache</text>
+  <text x="80" y="558" fill="#2C3E50" font-size="11">initialize_data(experiment_ids, sim_base_path)</text>
+  <text x="80" y="578" fill="#7F8C8D" font-size="10">simData.cPickle → ParameterDataset → XSpaceVecoli</text>
+  <text x="80" y="594" fill="#7F8C8D" font-size="10">PrecomputedCache.load(cache_dir) → X, Y, timeseries</text>
+  <text x="550" y="558" fill="#2C3E50" font-size="11">Outputs: param_space, cached (X, Y, Y_timeseries)</text>
+  <text x="550" y="578" fill="#7F8C8D" font-size="10">No baseline timeseries loading required</text>
 
   <!-- Arrow down -->
   <line x1="290" y1="624" x2="290" y2="666" stroke="#7F8C8D" stroke-width="2" marker-end="url(#arrowGray)"/>
@@ -220,17 +207,14 @@
   <text x="230" y="1022" fill="#6C3483" font-size="12" font-weight="700">uq_results.json</text>
   <text x="440" y="1022" fill="#5D6D7E" font-size="10">Full summary: methods, parameter roles, per-stage Sobol, citations</text>
 
-  <text x="230" y="1044" fill="#6C3483" font-size="12" font-weight="700">variance_decomposition.json</text>
-  <text x="470" y="1044" fill="#5D6D7E" font-size="10">ANOVA fractions: generation / seed / within-group</text>
+  <text x="230" y="1044" fill="#6C3483" font-size="12" font-weight="700">population_sobol/</text>
+  <text x="400" y="1044" fill="#5D6D7E" font-size="10">Phase 1 Sobol indices (.npy) + metadata</text>
 
-  <text x="230" y="1066" fill="#6C3483" font-size="12" font-weight="700">population_sobol/</text>
-  <text x="400" y="1066" fill="#5D6D7E" font-size="10">Phase 1 Sobol indices (.npy) + metadata</text>
+  <text x="230" y="1066" fill="#6C3483" font-size="12" font-weight="700">population_surrogate/</text>
+  <text x="420" y="1066" fill="#5D6D7E" font-size="10">PCE coefficients + multi-indices (.npy)</text>
 
-  <text x="230" y="1088" fill="#6C3483" font-size="12" font-weight="700">population_surrogate/</text>
-  <text x="420" y="1088" fill="#5D6D7E" font-size="10">PCE coefficients + multi-indices (.npy)</text>
-
-  <text x="230" y="1110" fill="#6C3483" font-size="12" font-weight="700">growth_stage_N_sobol/</text>
-  <text x="430" y="1110" fill="#5D6D7E" font-size="10">Per-stage Phase 2 Sobol indices (× n_bins)</text>
+  <text x="230" y="1088" fill="#6C3483" font-size="12" font-weight="700">growth_stage_N_sobol/</text>
+  <text x="430" y="1088" fill="#5D6D7E" font-size="10">Per-stage Phase 2 Sobol indices (× n_bins)</text>
 
   <!-- ═══════════════════ BIOLOGY PANEL ═══════════════════ -->
   <rect x="60" y="1160" width="490" height="170" rx="10" fill="#FEF9E7" stroke="#F9E79F" stroke-width="1.5" filter="url(#shadowLight)"/>
@@ -256,12 +240,9 @@
   <text x="600" y="1254" fill="#6C3483" font-size="11" font-weight="600">Sensitivity:</text>
   <text x="685" y="1254" fill="#5D6D7E" font-size="10">Sobol indices from PCE coefficients (Sudret 2008)</text>
 
-  <text x="600" y="1276" fill="#6C3483" font-size="11" font-weight="600">Variance:</text>
-  <text x="675" y="1276" fill="#5D6D7E" font-size="10">One-way ANOVA (generation × seed × within)</text>
-
-  <text x="600" y="1298" fill="#6C3483" font-size="11" font-weight="600">Stratification:</text>
-  <text x="700" y="1298" fill="#5D6D7E" font-size="10">θ = normalized log(dry_mass) — monotonic,</text>
-  <text x="700" y="1314" fill="#5D6D7E" font-size="10">no spectral decomposition, no assumed cycle time</text>
+  <text x="600" y="1276" fill="#6C3483" font-size="11" font-weight="600">Stratification:</text>
+  <text x="700" y="1276" fill="#5D6D7E" font-size="10">θ = normalized log(dry_mass) — monotonic,</text>
+  <text x="700" y="1292" fill="#5D6D7E" font-size="10">no spectral decomposition, no assumed cycle time</text>
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <rect x="30" y="1360" width="1040" height="140" rx="12" fill="#EAECEE" filter="url(#shadowLight)"/>

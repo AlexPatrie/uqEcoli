@@ -31,22 +31,17 @@ Methods used:
     - Latin Hypercube Sampling (scipy)
     - Polynomial Chaos Expansion via PyTUQ (Sandia National Labs)
     - Variance-based Sobol indices (Sudret, 2008)
-    - One-way ANOVA variance decomposition (generation / seed / within)
     - Dry-mass-based growth stratification (no spectral decomposition)
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
 import numpy as np
 
-from uq.aggregation import compute_variance_decomposition
 from uq.inputs import XSpace
-from uq.pipeline.workflow import aggregate_timeseries, AggregationResult
 from uq.sampling import PrecomputedCache
 from uq.sensitivity import PCESurrogate, SensitivityAnalyzer, SobolIndices
 
@@ -98,7 +93,6 @@ class SimplePipelineResult:
         population_surrogate: Phase 1 PCE surrogate.
         per_stage_sobol: Phase 2 Sobol indices (one per growth bin).
         growth_surrogate: Phase 2 PCE surrogate.
-        variance_decomposition: ANOVA-style variance fractions.
         n_bins: Number of growth-progress bins.
         observable_names: Output observable names.
     """
@@ -108,7 +102,6 @@ class SimplePipelineResult:
     population_surrogate: PCESurrogate
     per_stage_sobol: list[SobolIndices]
     growth_surrogate: PCESurrogate
-    variance_decomposition: dict[str, Any]
     n_bins: int
     observable_names: list[str]
 
@@ -152,22 +145,13 @@ class SimplePipelineResult:
         # Growth-stratified surrogate
         self.growth_surrogate.export(out / "growth_stratified_surrogate")
 
-        # Variance decomposition
-        _serialisable_vd = {
-            k: v.tolist() if isinstance(v, np.ndarray) else v
-            for k, v in self.variance_decomposition.items()
-        }
-        (out / "variance_decomposition.json").write_text(
-            json.dumps(_serialisable_vd, indent=2)
-        )
-
         # Summary JSON — the primary artifact for downstream consumers
-        summary = self._build_summary(_serialisable_vd)
+        summary = self._build_summary()
         (out / "uq_results.json").write_text(json.dumps(summary, indent=2))
 
         return out
 
-    def _build_summary(self, vd_serialisable: dict) -> dict:
+    def _build_summary(self) -> dict:
         """Build the comprehensive summary JSON."""
         return {
             # ── Metadata ──
@@ -185,7 +169,6 @@ class SimplePipelineResult:
                     "θ = 0 at birth, θ = 1 at division. "
                     "Monotonic, no spectral decomposition."
                 ),
-                "variance_decomposition": "One-way ANOVA (generation × seed × within-group)",
             },
 
             # ── Parameters ──
@@ -244,17 +227,6 @@ class SimplePipelineResult:
                 ],
             },
 
-            # ── Variance Decomposition ──
-            "variance_decomposition": {
-                "description": (
-                    "ANOVA-style decomposition of total output variance into "
-                    "generation effects (convergence to steady-state growth), "
-                    "lineage seed effects (stochastic gene expression), and "
-                    "within-group variance (includes growth dynamics and "
-                    "parameter sensitivity)."
-                ),
-                **vd_serialisable,
-            },
         }
 
 
@@ -369,7 +341,6 @@ def run_phase2(
 def run_pipeline(
     cache: PrecomputedCache,
     param_space: XSpace,
-    timeseries_df: Any | None = None,
     observable_names: list[str] | None = None,
     polynomial_order: int = 1,
     n_bins: int = 10,
@@ -381,8 +352,6 @@ def run_pipeline(
     Args:
         cache: Cached (X, Y, Y_timeseries) from ``uq sample``.
         param_space: Parameter space (from ParameterDataset).
-        timeseries_df: Polars DataFrame of baseline timeseries for
-            variance decomposition.  If None, decomposition is skipped.
         observable_names: Observable column names.
         polynomial_order: PCE polynomial order.
         n_bins: Number of growth-progress bins.
@@ -413,21 +382,12 @@ def run_pipeline(
         mass_col_index=mass_col_index,
     )
 
-    # Variance decomposition (if baseline data provided)
-    vd: dict[str, Any] = {}
-    if timeseries_df is not None:
-        agg = aggregate_timeseries(timeseries_df, obs_names)
-        vd = compute_variance_decomposition(
-            agg.generation, agg.seed, agg.uniform,
-        )
-
     result = SimplePipelineResult(
         parameter_names=param_space.parameter_names,
         population_sobol=sobol_bulk,
         population_surrogate=surrogate_bulk,
         per_stage_sobol=per_stage_sobol,
         growth_surrogate=surrogate_cc,
-        variance_decomposition=vd,
         n_bins=n_bins,
         observable_names=obs_names,
     )
