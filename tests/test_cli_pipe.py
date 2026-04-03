@@ -100,9 +100,9 @@ class TestInitializeData:
     """Tests for initialize_data — real sim data loading."""
 
     def test_loads_multi_experiment(self, _skip_if_no_data):
-        from uq.pipe import initialize_data
+        from uq.pipe import initialize_datasets
 
-        ds = initialize_data(
+        ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
             sim_base_path=str(SIM_BASE_PATH),
             observable_columns=OBSERVABLE_COLUMNS,
@@ -115,9 +115,9 @@ class TestInitializeData:
         assert len(ds.x) == len(EXPERIMENT_IDS)
 
     def test_loads_single_experiment(self, _skip_if_no_data):
-        from uq.pipe import initialize_data
+        from uq.pipe import initialize_datasets
 
-        ds = initialize_data(
+        ds = initialize_datasets(
             experiment_ids="mecillinam",
             sim_base_path=str(SIM_BASE_PATH),
             observable_columns=OBSERVABLE_COLUMNS,
@@ -136,10 +136,10 @@ class TestInitializeData:
 @pytest.mark.execute_pipeline
 class TestAggregation:
     def test_aggregation_strategies(self, _skip_if_no_data):
-        from uq.pipe import initialize_data
+        from uq.pipe import initialize_datasets
         from uq.pipeline.workflow import aggregate_timeseries, get_variance_decomposition
 
-        ds = initialize_data(
+        ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
             sim_base_path=str(SIM_BASE_PATH),
             observable_columns=OBSERVABLE_COLUMNS,

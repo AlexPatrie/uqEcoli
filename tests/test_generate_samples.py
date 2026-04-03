@@ -3,6 +3,7 @@
 These tests verify the full chain:
   LHS samples -> workflow config -> workflow.py -> Parquet -> PrecomputedCache
 """
+
 import json
 import os
 from pathlib import Path
@@ -154,7 +155,7 @@ def test_run_batch_workflow(tmp_path):
     )
 
     X = np.array([[0.33], [0.39]])
-    Y_agg, Y_ts = sim_func._run_batch(X, batch_dir=tmp_path / "batch")
+    Y_agg, Y_ts, _Y_meta = sim_func._run_batch(X, batch_dir=tmp_path / "batch")
 
     assert Y_agg.shape == (2, 4)  # 2 samples, 4 default observables
     assert Y_ts is not None

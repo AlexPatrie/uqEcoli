@@ -77,7 +77,7 @@ def _():
 
 @app.cell
 def _():
-    from uq.pipe import Pipeline, initialize_data
+    from uq.pipe import Pipeline, initialize_datasets
     from uq.pipeline.workflow import (
         AggregationResult,
         aggregate_timeseries,
@@ -118,7 +118,7 @@ def _():
         UqProfile,
         aggregate_timeseries,
         get_variance_decomposition,
-        initialize_data,
+        initialize_datasets,
         plot_koopman_spectrum,
         run_phase1,
         run_phase2,

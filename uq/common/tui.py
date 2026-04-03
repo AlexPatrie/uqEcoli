@@ -522,18 +522,18 @@ class UQPCApp(App[None]):
             f"[ansi_bright_black]  Output: {output_dir}[/]",
         )
 
-        # Total expected sims = (n_variants+1) * n_init_sims * generations
-        # But we track variant completion (each variant has n_init_sims * generations sims)
-        total_variants = n_samples + 1  # +1 for baseline
-        self.call_from_thread(self._set_progress, 0, total_variants, "vEcoli running")
+        import re
+        import time as _time
 
-        # Find history base path (where Parquet lands)
+        # Total sims = (n_variants + baseline) * n_init_sims * generations
+        total_sims = (n_samples + 1) * n_init_sims * generations
+        self.call_from_thread(
+            self._set_progress, 0, total_sims, "Launching Nextflow"
+        )
+
         history_base = output_dir / experiment_id / "history"
 
-        # Launch workflow.py as Popen with live stdout
         vecoli_root = _get_vecoli_root()
-
-        # Clean stale nextflow_temp from previous runs
         nf_temp = Path(vecoli_root) / "nextflow_temp" / experiment_id
         if nf_temp.exists():
             shutil.rmtree(nf_temp)
@@ -543,70 +543,140 @@ class UQPCApp(App[None]):
         env = os.environ.copy()
         existing = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = vecoli_root + (os.pathsep + existing if existing else "")
+        env["PYTHONUNBUFFERED"] = "1"
 
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
             cwd=vecoli_root,
             env=env,
-            bufsize=1,
         )
 
-        # Poll for completed variants in a background thread
-        completed_variants: list[int] = []
+        # Shared state for progress
         poll_stop = threading.Event()
+        start_time = _time.monotonic()
+        phase = ["launching"]  # mutable for cross-thread sharing
+        pq_count = [0]
 
+        # ── Background: poll output directory for .pq files ──
         def _poll_outputs() -> None:
             while not poll_stop.is_set():
-                n = _count_completed_variants(history_base, n_samples)
-                if n != len(completed_variants):
-                    completed_variants.clear()
-                    completed_variants.extend(range(n))
+                n = _count_completed_variants(history_base)
+                if n != pq_count[0]:
+                    pq_count[0] = n
+                    elapsed = int(_time.monotonic() - start_time)
                     self.call_from_thread(
-                        self._set_progress, n, total_variants, "vEcoli running"
+                        self._set_progress,
+                        n,
+                        total_sims,
+                        f"Simulating  {n}/{total_sims} done  [{elapsed}s]",
                     )
-                poll_stop.wait(3.0)
+                elif phase[0] == "simulating":
+                    # Update elapsed time even when count hasn't changed
+                    elapsed = int(_time.monotonic() - start_time)
+                    self.call_from_thread(
+                        self._set_progress,
+                        pq_count[0],
+                        total_sims,
+                        f"Simulating  {pq_count[0]}/{total_sims} done  [{elapsed}s]",
+                    )
+                poll_stop.wait(2.0)
 
         poll_thread = threading.Thread(target=_poll_outputs, daemon=True)
         poll_thread.start()
 
-        # Stream stdout to log
-        try:
+        # ── Background: read stdout chunks ──
+        def _read_stdout() -> None:
             if proc.stdout is None:
-                proc.wait()
-                self.call_from_thread(
-                    self.write_log, "[ansi_yellow]No stdout from workflow.py[/]"
-                )
-                poll_stop.set()
-                poll_thread.join(timeout=5)
                 return
-            for line in iter(proc.stdout.readline, ""):
+            buf = b""
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                while b"\n" in buf or b"\r" in buf:
+                    idx_n = buf.find(b"\n")
+                    idx_r = buf.find(b"\r")
+                    if idx_n == -1:
+                        idx = idx_r
+                    elif idx_r == -1:
+                        idx = idx_n
+                    else:
+                        idx = min(idx_n, idx_r)
+                    raw = buf[:idx].decode("utf-8", errors="replace").strip()
+                    buf = buf[idx + 1 :]
+                    if not raw:
+                        continue
+                    clean = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw).strip()
+                    if not clean:
+                        continue
+
+                    low = clean.lower()
+
+                    # Detect phase transitions from Nextflow output
+                    if "createvariants" in low and phase[0] == "launching":
+                        phase[0] = "variants"
+                        self.call_from_thread(
+                            self.write_log,
+                            "[ansi_cyan]  Phase: creating variant sim_data pickles...[/]",
+                        )
+                    elif "sim" in low and ("gen" in low or "agent" in low) and phase[0] != "simulating":
+                        phase[0] = "simulating"
+                        self.call_from_thread(
+                            self.write_log,
+                            f"[ansi_cyan]  Phase: simulating {total_sims} cells...[/]",
+                        )
+
+                    # Log significant lines
+                    if any(kw in low for kw in ["error", "fail", "exception", "traceback"]):
+                        self.call_from_thread(
+                            self.write_log, f"[ansi_red]  {clean}[/]"
+                        )
+                    elif any(kw in low for kw in ["completed at", "duration", "succeeded"]):
+                        self.call_from_thread(
+                            self.write_log, f"[ansi_green]  {clean}[/]"
+                        )
+                    elif "of" in low and ("sim" in low or "createvariant" in low):
+                        # Nextflow progress like "sim... | 2 of 3 ✔"
+                        self.call_from_thread(
+                            self.write_log, f"[ansi_bright_black]  {clean}[/]"
+                        )
+                    elif any(kw in low for kw in ["warn", "note"]):
+                        self.call_from_thread(
+                            self.write_log, f"[ansi_yellow]  {clean}[/]"
+                        )
+
+        stdout_thread = threading.Thread(target=_read_stdout, daemon=True)
+        stdout_thread.start()
+
+        # ── Main: wait for process, update progress bar each second ──
+        try:
+            while proc.poll() is None:
                 if self._sampling_cancel.is_set():
                     proc.terminate()
+                    proc.wait(timeout=10)
                     self.call_from_thread(
-                        self.write_log, "[ansi_yellow]Sampling cancelled by user[/]"
+                        self.write_log, "[ansi_yellow]Sampling cancelled[/]"
                     )
                     poll_stop.set()
                     self.call_from_thread(self._hide_progress)
                     return
 
-                line = line.rstrip()
-                if line:
-                    # Show key Nextflow lines, dim the rest
-                    if any(kw in line.lower() for kw in ["error", "fail", "exception"]):
-                        self.call_from_thread(self.write_log, f"[ansi_red]  {line}[/]")
-                    elif any(kw in line.lower() for kw in ["complet", "finish", "succeed"]):
-                        self.call_from_thread(self.write_log, f"[ansi_green]  {line}[/]")
-                    elif any(kw in line.lower() for kw in ["submit", "running", "process"]):
-                        self.call_from_thread(
-                            self.write_log, f"[ansi_bright_black]  {line}[/]"
-                        )
-
-            proc.wait()
+                # Keep the progress bar alive with elapsed time
+                elapsed = int(_time.monotonic() - start_time)
+                label = phase[0].capitalize()
+                self.call_from_thread(
+                    self._set_progress,
+                    pq_count[0],
+                    total_sims,
+                    f"{label}  {pq_count[0]}/{total_sims}  [{elapsed}s]",
+                )
+                threading.Event().wait(1.0)
         finally:
             poll_stop.set()
+            stdout_thread.join(timeout=10)
             poll_thread.join(timeout=5)
 
         exit_code = proc.returncode
@@ -619,7 +689,7 @@ class UQPCApp(App[None]):
 
         # ── Step 4: Collect + preprocess ──
         self.call_from_thread(
-            self._set_progress, total_variants, total_variants, "Collecting outputs"
+            self._set_progress, total_sims, total_sims, "Collecting outputs"
         )
         self.call_from_thread(
             self.write_log, "[ansi_bright_black]Collecting Parquet outputs...[/]"

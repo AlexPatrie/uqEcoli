@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from uq.pipeline.models import SimDataParameter
+
 
 class BaseDatamodel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -13,12 +15,12 @@ class BaseDatamodel(BaseModel):
 class SystemComponent(BaseDatamodel):
     name: str
     attr_path: str
-    bounds: tuple[float | int | complex | Any, float | int | complex | Any]
     description: str
+    bounds: tuple[float | int | complex | Any, float | int | complex | Any] | None = None
 
     @classmethod
     def from_config(cls, p: PathLike) -> list["SystemComponent"]:
-        with open(str(p), "r") as f:
+        with open(str(p)) as f:
             d: list[dict] = json.load(f)
         return [cls.from_dict(conf) for conf in d]
 
@@ -49,10 +51,31 @@ class Parameter(SystemComponent):
         from_dict(:param d(dict):)
         from_config(:param p(PathLike):)
     """
+
     pass
+
+    def to_sim_data(self):
+        return SimDataParameter.from_dict(self.model_dump())
 
 
 class Observable(SystemComponent):
+    """
+    Attributes:
+        name: str
+        attr_path: str
+        description: str
+    """
+
+    name: str
+    attr_path: str
+    description: str
+
+    @property
+    def hive_name(self) -> str:
+        return self.attr_path.replace(".", "__")
+
+
+class Obs_(SystemComponent):
     """Uq pipeline timeseries observable
 
     Attributes:
@@ -63,13 +86,20 @@ class Observable(SystemComponent):
     Methods:
         from_dict(:param d(dict):)
         from_config(:param p(PathLike):)
-        """
+    """
+
     pass
 
 
 class SystemConfig(BaseDatamodel):
     parameters: list[Parameter] = []
     observables: list[Observable] | None = None
+
+    def observable_column_names(self):
+        return [obs.hive_name for obs in self.observables] if self.observables is not None else None
+
+    def sim_data_parameters(self):
+        return [param.to_sim_data() for param in self.parameters]
 
 
 class UqConfig(BaseDatamodel):

@@ -388,11 +388,25 @@ class TestRealDataSensitivity:
 
         log_header("PARAMETER SPACE VALIDATION - REAL DATA")
 
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="vio_expression",
+                    attr_path="process.transcription.new_gene_expression_baselines",
+                    bounds=(0.0, 5.0),
+                ),
+                SimDataParameter(
+                    name="vio_trl_eff",
+                    attr_path="process.transcription.translation_efficiencies_by_gene",
+                    bounds=(0.0, 2.0),
+                ),
+                SimDataParameter(
+                    name="mecillinam_concentration",
+                    attr_path="process.metabolism.secretion_penalty_coeff",
+                    bounds=(0.0, 10.0),
+                ),
+            ]
+        )
 
         # Should be able to generate samples
         lb, ub = space.get_pytuq_bounds()
@@ -466,11 +480,26 @@ class TestRealDataE2E:
         # 1. Define parameter space
         log_section("Step 1: Define Parameter Space")
         from uq.pipeline.models import SimDataParameter
-        param_space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
-        ])
+
+        param_space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="vio_expression",
+                    attr_path="process.transcription.new_gene_expression_baselines",
+                    bounds=(0.0, 5.0),
+                ),
+                SimDataParameter(
+                    name="vio_trl_eff",
+                    attr_path="process.transcription.translation_efficiencies_by_gene",
+                    bounds=(0.0, 2.0),
+                ),
+                SimDataParameter(
+                    name="mecillinam_concentration",
+                    attr_path="process.metabolism.secretion_penalty_coeff",
+                    bounds=(0.0, 10.0),
+                ),
+            ]
+        )
         assert param_space.n_parameters == 3
         log_success(f"Parameter space defined: {param_space.n_parameters} parameters")
         for name in param_space.parameter_names:
@@ -662,11 +691,25 @@ class TestRFC006FullWorkflow:
         from uq.pipeline.models import SimDataParameter
 
         # Create the full parameter space using generic SimDataParameter specs
-        param_space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-            SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-            SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
-        ])
+        param_space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="vio_expression",
+                    attr_path="process.transcription.new_gene_expression_baselines",
+                    bounds=(0.0, 5.0),
+                ),
+                SimDataParameter(
+                    name="vio_trl_eff",
+                    attr_path="process.transcription.translation_efficiencies_by_gene",
+                    bounds=(0.0, 2.0),
+                ),
+                SimDataParameter(
+                    name="mecillinam_concentration",
+                    attr_path="process.metabolism.secretion_penalty_coeff",
+                    bounds=(0.0, 10.0),
+                ),
+            ]
+        )
 
         assert param_space.n_parameters >= 3, "Should have at least 3 parameters"
         log_success(f"Parameter space defined: {param_space.n_parameters} parameters")

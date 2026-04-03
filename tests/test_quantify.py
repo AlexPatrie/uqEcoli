@@ -345,9 +345,9 @@ class TestSamplePipelineCompatibility:
         """Cache parameter_names must match what initialize_data produces."""
         import json
 
-        from uq.pipe import initialize_data
+        from uq.pipe import initialize_datasets
 
-        ds = initialize_data(
+        ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
             sim_base_path=str(SIM_BASE_PATH),
             observable_columns=OBSERVABLE_COLUMNS,

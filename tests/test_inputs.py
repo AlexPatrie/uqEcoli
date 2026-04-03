@@ -37,10 +37,12 @@ class TestGenericSimDataParams:
         from uq.inputs import XSpaceVecoli
         from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
-            SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
+                SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
+            ]
+        )
         sample = np.array([0.5, 1.0])
         params = space.sample_to_params(sample)
         assert isinstance(params, GenericSimDataParams)
@@ -96,10 +98,12 @@ class TestInputParameterSpace:
         from uq.inputs import XSpaceVecoli
         from uq.pipeline.models import SimDataParameter
 
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
-            SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(name="param_a", attr_path="a.b", bounds=(0.0, 1.0)),
+                SimDataParameter(name="param_b", attr_path="c.d", bounds=(0.0, 2.0)),
+            ]
+        )
         assert space.n_parameters == 2
         assert space.parameter_names == ["param_a", "param_b"]
 
@@ -109,11 +113,13 @@ class TestInputParameterSpace:
         from uq.inputs import XSpaceVecoli
         from uq.pipeline.models import SimDataParameter
 
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="p1", attr_path="a.b", bounds=(1.0, 3.0)),
-            SimDataParameter(name="p2", attr_path="c.d", bounds=(0.5, 1.5)),
-            SimDataParameter(name="p3", attr_path="e.f", bounds=(0.0, 5.0)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(name="p1", attr_path="a.b", bounds=(1.0, 3.0)),
+                SimDataParameter(name="p2", attr_path="c.d", bounds=(0.5, 1.5)),
+                SimDataParameter(name="p3", attr_path="e.f", bounds=(0.0, 5.0)),
+            ]
+        )
 
         bounds = space.parameter_bounds
         assert bounds[0] == (1.0, 3.0)

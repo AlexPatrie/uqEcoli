@@ -224,6 +224,58 @@ Choosing a Strategy
    * - Decompose variance sources
      - All strategies + ``compute_variance_decomposition``
 
+``uq_simple`` Implementation
+----------------------------
+
+The ``uq_simple`` package implements all four strategies using
+`PyTUQ's UQPC workflow <https://sandialabs.github.io/pytuq/apps/uqpc.html>`_
+(Sandia National Labs).  PCE surrogates are fitted directly via
+``pytuq.surrogates.pce.PCE`` with configurable regression backends:
+
+- **lsq** — Least squares (default, standard overdetermined solve)
+- **bcs** — Bayesian Compressed Sensing (sparse PCE, fewer terms)
+- **anl** — Analytical regression (posterior predictive with uncertainty)
+
+Sobol indices are computed analytically from PCE coefficients via
+``PCRV.computeSens()`` / ``computeTotSens()``.
+
+Generation and lineage seed metadata is cached alongside each sample's
+timeseries in ``PrecomputedCache`` for strategies 2-3.
+
+.. code-block:: python
+
+   from uq.sampling import PrecomputedCache
+   from uq.pipe import initialize_datasets
+   from uq_simple.pipeline import run_pipeline, run_by_generation, run_by_seed
+
+   cache = PrecomputedCache.load("./uq_cache")
+   ds = initialize_datasets(experiment_ids=["exp1"], sim_base_path="/path/to/sims")
+   result = run_pipeline(
+       cache=cache,
+       param_space=ds.parameter_space,
+       regression="lsq",  # or "bcs", "anl"
+   )
+
+   # Strategy 1: Population-averaged Sobol indices
+   result.population_sobol.total_order  # (n_params,)
+
+   # Strategy 2: Per-generation Sobol indices
+   for gen, sobol in result.per_generation_sobol.items():
+       print(f"Generation {gen}: {sobol.total_order}")
+
+   # Strategy 3: Per-seed Sobol indices
+   for seed, sobol in result.per_seed_sobol.items():
+       print(f"Seed {seed}: {sobol.total_order}")
+
+   # Strategy 4: Growth-stratified Sobol indices
+   for i, sobol in enumerate(result.per_stage_sobol):
+       print(f"Stage {i}: {sobol.total_order}")
+
+Strategies 2 and 3 require generation/lineage seed metadata in the cache.
+This is automatically extracted from hive-partitioned Parquet output when
+sampling with ``uv run uq-simple sample --generations N``.  Old caches
+without metadata gracefully skip strategies 2-3.
+
 See Also
 --------
 

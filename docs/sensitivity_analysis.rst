@@ -418,10 +418,43 @@ Best Practices
 5. **Filter transients**: Use ``generation_lower_bound`` to skip initial behavior
 6. **Consider interactions**: If :math:`S_{Ti} >> S_i`, explore interaction effects
 
+``uq_simple`` — Direct PyTUQ PCE Integration
+----------------------------------------------
+
+The ``uq_simple`` package bypasses ``SensitivityAnalyzer`` and uses
+`PyTUQ's PCE class <https://sandialabs.github.io/pytuq/autoapi/pytuq/surrogates/pce/index.html>`_
+directly, following the `UQPC workflow <https://sandialabs.github.io/pytuq/apps/uqpc.html>`_:
+
+.. code-block:: python
+
+   from uq_simple.pipeline import run_pipeline
+   from uq.sampling import PrecomputedCache
+   from uq.pipe import initialize_datasets
+
+   cache = PrecomputedCache.load("./uq_cache")
+   ds = initialize_datasets(experiment_ids=["exp1"], sim_base_path="/path/to/sims")
+
+   # lsq (default), bcs (sparse), or anl (analytical)
+   result = run_pipeline(cache=cache, param_space=ds.parameter_space, regression="bcs")
+
+Internally, ``_fit_pce_and_sobol()`` performs:
+
+1. Scale X to germ space [-1, 1]
+2. Per-output: ``PCE(dim, order, 'LU')`` → ``set_training_data()`` → ``build(regression=...)``
+3. Sync coefficients: ``pce.pcrv.setCfs([pce.lreg.cf])``
+4. Extract Sobol: ``pce.pcrv.computeSens()`` / ``computeTotSens()``
+
+This supports three PyTUQ regression backends:
+
+* **lsq** — Standard least squares (overdetermined system)
+* **bcs** — Bayesian Compressed Sensing (sparse PCE with automatic term selection)
+* **anl** — Analytical regression (posterior predictive with uncertainty estimates)
+
 See Also
 --------
 
 * :doc:`api/sensitivity` - Full API reference
 * :doc:`tutorials/basic_sensitivity` - Step-by-step tutorial
-* `UQPy Documentation <https://uqpyproject.readthedocs.io/>`_
+* :doc:`aggregation_strategies` - All four RFC006 strategies
+* `PyTUQ UQPC Workflow <https://sandialabs.github.io/pytuq/apps/uqpc.html>`_
 * `PyTUQ Documentation <https://sandialabs.github.io/pytuq/>`_

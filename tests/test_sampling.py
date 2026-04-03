@@ -63,11 +63,25 @@ class ScalarWrapper:
 
 @pytest.fixture
 def param_space():
-    return XSpaceVecoli(parameters=[
-        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
-    ])
+    return XSpaceVecoli(
+        parameters=[
+            SimDataParameter(
+                name="vio_expression",
+                attr_path="process.transcription.new_gene_expression_baselines",
+                bounds=(0.0, 5.0),
+            ),
+            SimDataParameter(
+                name="vio_trl_eff",
+                attr_path="process.transcription.translation_efficiencies_by_gene",
+                bounds=(0.0, 2.0),
+            ),
+            SimDataParameter(
+                name="mecillinam_concentration",
+                attr_path="process.metabolism.secretion_penalty_coeff",
+                bounds=(0.0, 10.0),
+            ),
+        ]
+    )
 
 
 class TestRunAndCacheSingleEvaluation:

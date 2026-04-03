@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 # Re-export PCE and pipeline models so tests/consumers can import from uq.models
-from uq.pce.models import (  # noqa: F401
+from uq.pce.models import (
     Parameter,
     PCEConfig,
     PCEFitResult,
@@ -12,7 +12,7 @@ from uq.pce.models import (  # noqa: F401
     PCESolverConfig,
     PCESurrogateConfig,
 )
-from uq.pipeline.models import (  # noqa: F401
+from uq.pipeline.models import (
     CellCyclePhase,
     CellCycleVariable,
     MediaCondition,

@@ -317,9 +317,15 @@ def sim_data_params():
     from uq.pipeline.models import SimDataParameter
 
     return [
-        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
+        SimDataParameter(
+            name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)
+        ),
+        SimDataParameter(
+            name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)
+        ),
+        SimDataParameter(
+            name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)
+        ),
     ]
 
 
@@ -329,11 +335,25 @@ def input_parameter_space():
     from uq.inputs import XSpaceVecoli
     from uq.pipeline.models import SimDataParameter
 
-    return XSpaceVecoli(parameters=[
-        SimDataParameter(name="vio_expression", attr_path="process.transcription.new_gene_expression_baselines", bounds=(0.0, 5.0)),
-        SimDataParameter(name="vio_trl_eff", attr_path="process.transcription.translation_efficiencies_by_gene", bounds=(0.0, 2.0)),
-        SimDataParameter(name="mecillinam_concentration", attr_path="process.metabolism.secretion_penalty_coeff", bounds=(0.0, 10.0)),
-    ])
+    return XSpaceVecoli(
+        parameters=[
+            SimDataParameter(
+                name="vio_expression",
+                attr_path="process.transcription.new_gene_expression_baselines",
+                bounds=(0.0, 5.0),
+            ),
+            SimDataParameter(
+                name="vio_trl_eff",
+                attr_path="process.transcription.translation_efficiencies_by_gene",
+                bounds=(0.0, 2.0),
+            ),
+            SimDataParameter(
+                name="mecillinam_concentration",
+                attr_path="process.metabolism.secretion_penalty_coeff",
+                bounds=(0.0, 10.0),
+            ),
+        ]
+    )
 
 
 # =============================================================================

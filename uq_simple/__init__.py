@@ -1,24 +1,29 @@
 """
 uq_simple — Scientifically transparent UQ for vEcoli.
 
-A focused subset of the full ``uq`` package that uses only
-well-established, biologically grounded methods:
+Follows the `UQPC workflow <https://sandialabs.github.io/pytuq/apps/uqpc.html>`_
+from PyTUQ (Sandia National Labs) with all four RFC006 aggregation strategies:
 
 - **LHS sampling** (scipy) for space-filling parameter exploration
-- **PCE surrogates** (PyTUQ / Legendre polynomials) for efficient sensitivity analysis
-- **Sobol indices** (analytical from PCE coefficients) for variance attribution
-- **Growth-stratified sensitivity** (normalized log dry mass) to reveal
-  how parameter importance changes as cells grow — no claim about
-  cell cycle phases, no spectral decomposition, no assumed cycle time
+- **PCE surrogates** via ``pytuq.surrogates.pce.PCE`` (Legendre basis, lsq/bcs/anl)
+- **Sobol indices** from PCRV coefficients (Sudret, 2008)
+- **Four aggregation strategies** per RFC006:
+  1. Uniform across all cells/times (baseline bulk)
+  2. Stratified by generation (convergence control)
+  3. Stratified by lineage seed (stochastic variance control)
+  4. Growth-stratified (normalized log dry mass) — how parameter
+     importance changes as cells grow, no spectral decomposition
 
 Every computation has a direct biological or statistical interpretation
 that a domain scientist can audit.
 """
 
 from uq_simple.growth import compute_growth_fraction
-from uq_simple.pipeline import run_pipeline
+from uq_simple.pipeline import run_by_generation, run_by_seed, run_pipeline
 
 __all__ = [
     "compute_growth_fraction",
+    "run_by_generation",
+    "run_by_seed",
     "run_pipeline",
 ]

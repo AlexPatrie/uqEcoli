@@ -4,7 +4,7 @@ from pathlib import Path
 
 import fastapi
 import uvicorn
-from fastapi import FastAPI, APIRouter
+from fastapi import APIRouter, FastAPI
 
 from uq import handlers
 from uq.api.models import SystemConfig
@@ -27,13 +27,15 @@ api_router = APIRouter(prefix="/api")
 @api_router.post(
     "/pipeline/samples",
     operation_id="generate-samples",
-    description=(""" \
+    description=(
+        """ \
         Generate Latin Hypercube Samples for UQ sensitivity analysis.
 
         By default, varies 5 physiologically relevant sim_data parameters.
         Use --params-file to specify custom parameters via a JSON file.
         Use --include-vio / --include-mecillinam for legacy vio/mecillinam mode.
-    """)
+    """
+    ),
 )
 def generate_samples(
     experiment_ids: list[str],
@@ -46,7 +48,7 @@ def generate_samples(
     max_duration: float = 10800.0,
     generations: int = 1,
     live: bool = True,
-    batch_dir: str | None = None
+    batch_dir: str | None = None,
 ) -> None:
     """Generate LHS samples, evaluate simulation function, cache (X, Y).
 
@@ -71,7 +73,7 @@ def generate_samples(
         max_duration=max_duration,
         generations=generations,
         live=live,
-        batch_dir=batch_dir
+        batch_dir=batch_dir,
     )
     print(samples)
 
