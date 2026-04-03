@@ -289,7 +289,7 @@ def generate_samples(
     """
     import json as _json
 
-    from uq.pipe import initialize_data
+    from uq.pipe import initialize_datasets
     from uq.pipeline.models import SimDataParameter
     from uq.pipeline.workflow import aggregate_timeseries
     from uq.sampling import run_and_cache
@@ -303,10 +303,7 @@ def generate_samples(
     if system_config is not None:
         observables = system_config.observables
         if observables is not None:
-            observable_columns = [
-                obs.name.replace(".", "__")
-                for obs in observables
-            ]
+            observable_columns = [obs.name.replace(".", "__") for obs in observables]
     if observable_columns is None:
         observable_columns = [
             "listeners__mass__dry_mass",
@@ -316,7 +313,7 @@ def generate_samples(
         ]
 
     _tick("Loading baseline data")
-    ds = initialize_data(
+    ds = initialize_datasets(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
         observable_columns=observable_columns,
@@ -346,9 +343,7 @@ def generate_samples(
         parameters=sim_data_parameters,
     )
     if param_space.n_parameters == 0:
-        raise RuntimeError(
-            "Parameter space is empty. Provide --params-file with SimDataParameter specs."
-        )
+        raise RuntimeError("Parameter space is empty. Provide --params-file with SimDataParameter specs.")
 
     if live:
         # Real vEcoli simulation via subprocesses (no in-process EcoliSim)
@@ -378,7 +373,7 @@ def generate_samples(
             cache_dir=Path(cache_dir),
             seed=seed,
             max_workers=max_workers,
-            batch_dir=batch_dir
+            batch_dir=batch_dir,
         )
         _tick("Complete", 70)
     else:
@@ -441,7 +436,9 @@ def export_configs(
     param_space = ds.to_parameter_space()
 
     if param_space.n_parameters == 0:
-        raise ValueError("Parameter space is empty. DEFAULT_SIM_DATA_PARAMETERS may not match available sim_data attributes.")
+        raise ValueError(
+            "Parameter space is empty. DEFAULT_SIM_DATA_PARAMETERS may not match available sim_data attributes."
+        )
 
     sim_func = TimeseriesGeneratorVecoli(
         baseline_sim_data=ds.sim_data,
@@ -547,4 +544,5 @@ def readme(rfc_id: str = "RFC006") -> None:
 def verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
     if not all([(Path(sim_base_path) / p).exists() for p in experiment_ids]):
         raise ValueError(
-            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}")
+            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}"
+        )

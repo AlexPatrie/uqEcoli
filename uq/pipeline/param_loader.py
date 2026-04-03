@@ -36,25 +36,78 @@ _DEFAULT_PICKLE = (get_repo_root() / "sim_data" / "baseline" / "kb" / "simData.c
 
 DEFAULT_SIM_DATA_PARAMETERS: list[SimDataParameter] = [
     # Bounds are ±30% around typical baseline values to avoid crashing
-    # the simulation. Baseline values: rnap_free~0.36, rnap_bound~0.17,
-    # dry_mass_fraction~0.30.
+    # the simulation.  These span the three axes of the growth rate
+    # control loop: transcription (RNAP), translation (ribosome speed),
+    # and metabolism (FBA tuning + mass).
+    #
+    # -- Transcription: ppGpp-mediated RNAP regulation --
+    # (Ahn-Horst et al. 2022, Fig. 1b)
     SimDataParameter(
         name="fraction_active_rnap_free",
         attr_path="process.transcription.fraction_active_rnap_free",
         bounds=(0.25, 0.47),
-        description="Fraction of RNAP that is active when ppGpp-free (baseline ~0.36)",
+        description=(
+            "Fraction of RNAP actively transcribing when ppGpp-free. "
+            "Controls rRNA/mRNA/tRNA synthesis rates. Experimentally "
+            "tunable via ppGpp circuit mutations (relA/spoT). Baseline ~0.36."
+        ),
     ),
     SimDataParameter(
         name="fraction_active_rnap_bound",
         attr_path="process.transcription.fraction_active_rnap_bound",
         bounds=(0.12, 0.22),
-        description="Fraction of RNAP that is active when ppGpp-bound (baseline ~0.17)",
+        description=(
+            "Fraction of RNAP actively transcribing when ppGpp-bound. "
+            "ppGpp destabilizes open complex formation, reducing this "
+            "fraction. Tunable via relA/spoT knockouts. Baseline ~0.17."
+        ),
     ),
+    # -- Translation: ribosome elongation speed --
+    # (experimentally affected by antibiotics, temperature, nutrient quality)
+    SimDataParameter(
+        name="basal_elongation_rate",
+        attr_path="process.translation.basal_elongation_rate",
+        bounds=(15.0, 28.0),
+        description=(
+            "Ribosome elongation rate for non-ribosomal proteins (aa/s). "
+            "Experimentally tunable via sub-inhibitory chloramphenicol, "
+            "fusidic acid, or growth temperature. Baseline ~22 aa/s."
+        ),
+    ),
+    # -- Metabolism: FBA solver parameters --
+    # (control metabolic flux distribution; secretion_penalty_coeff
+    #  affects acetate overflow, experimentally observable via media)
+    SimDataParameter(
+        name="kinetic_objective_weight",
+        attr_path="process.metabolism.kinetic_objective_weight",
+        bounds=(5e-8, 5e-7),
+        description=(
+            "Weight on kinetic vs homeostatic objective in FBA. Controls "
+            "balance between matching enzyme kinetics and maintaining "
+            "metabolite homeostasis. Baseline 1e-7 (linear solver)."
+        ),
+    ),
+    SimDataParameter(
+        name="secretion_penalty_coeff",
+        attr_path="process.metabolism.secretion_penalty_coeff",
+        bounds=(5e-4, 5e-3),
+        description=(
+            "Penalty on metabolite secretion fluxes in FBA. Higher values "
+            "force the cell to retain metabolites. Controls acetate overflow "
+            "metabolism, experimentally tunable via media composition. "
+            "Baseline 0.001."
+        ),
+    ),
+    # -- Cell composition --
     SimDataParameter(
         name="cell_dry_mass_fraction",
         attr_path="mass.cell_dry_mass_fraction",
         bounds=(0.25, 0.35),
-        description="Fraction of total cell mass that is dry mass (baseline ~0.30)",
+        description=(
+            "Fraction of total cell mass that is dry mass. Determines "
+            "relationship between cell volume and biosynthetic capacity. "
+            "Constrained by buoyant density measurements. Baseline ~0.30."
+        ),
     ),
 ]
 

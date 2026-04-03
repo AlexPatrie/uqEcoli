@@ -35,6 +35,11 @@ class PrecomputedCache:
         metadata: Additional metadata (bounds, polynomial_order, etc.).
         Y_timeseries: Per-sample raw timeseries for Phase 2.
             List of arrays, each (n_timesteps, n_obs). None if not cached.
+        Y_timeseries_meta: Per-sample row-level metadata for aggregation
+            strategies 2 (by generation) and 3 (by lineage seed).
+            List of dicts, each ``{"generation": array, "lineage_seed": array}``
+            matching the rows of the corresponding ``Y_timeseries[i]``.
+            None if not available (e.g. old caches or synthetic data).
     """
 
     cache_dir: Path
@@ -43,6 +48,7 @@ class PrecomputedCache:
     parameter_names: list[str]
     metadata: dict[str, Any] = field(default_factory=dict)
     Y_timeseries: list[np.ndarray] | None = None
+    Y_timeseries_meta: list[dict[str, np.ndarray]] | None = None
 
     def save(self) -> None:
         """Save X.npy, Y.npy, metadata.json (and optional timeseries) to cache_dir."""
@@ -67,6 +73,16 @@ class PrecomputedCache:
             for i, ts in enumerate(self.Y_timeseries):
                 np.save(ts_dir / f"sample_{i:04d}.npy", ts)
 
+        # Save per-sample metadata (generation/seed labels) if available
+        if self.Y_timeseries_meta is not None:
+            ts_dir = self.cache_dir / "timeseries"
+            ts_dir.mkdir(exist_ok=True)
+            for i, meta_dict in enumerate(self.Y_timeseries_meta):
+                np.savez(
+                    ts_dir / f"sample_{i:04d}_meta.npz",
+                    **meta_dict,
+                )
+
     @classmethod
     def load(cls, cache_dir: str | Path) -> PrecomputedCache:
         """Load from cache_dir."""
@@ -79,13 +95,21 @@ class PrecomputedCache:
         # Load timeseries if available
         ts_dir = cache_dir / "timeseries"
         Y_timeseries = None
+        Y_timeseries_meta = None
         if ts_dir.exists():
             n_samples = X.shape[0]
             Y_timeseries = []
+            has_meta = (ts_dir / "sample_0000_meta.npz").exists()
+            if has_meta:
+                Y_timeseries_meta = []
             for i in range(n_samples):
                 ts_path = ts_dir / f"sample_{i:04d}.npy"
                 if ts_path.exists():
                     Y_timeseries.append(np.load(ts_path))
+                meta_path = ts_dir / f"sample_{i:04d}_meta.npz"
+                if has_meta and meta_path.exists():
+                    npz = np.load(meta_path)
+                    Y_timeseries_meta.append({k: npz[k] for k in npz.files})
 
         return cls(
             cache_dir=cache_dir,
@@ -94,6 +118,7 @@ class PrecomputedCache:
             parameter_names=parameter_names,
             metadata=meta,
             Y_timeseries=Y_timeseries,
+            Y_timeseries_meta=Y_timeseries_meta,
         )
 
 
@@ -229,7 +254,7 @@ def run_batch_and_cache(
     seed: int = 42,
     store_timeseries: bool = True,
     max_workers: int | None = None,
-    batch_dir: Path | None = None
+    batch_dir: Path | None = None,
 ) -> PrecomputedCache:
     """Generate LHS samples, run batch simulation via subprocesses, cache.
 
@@ -257,12 +282,11 @@ def run_batch_and_cache(
     """
     X = generate_lhs_samples(parameter_space, n_samples, seed=seed)
 
-    Y, Y_timeseries = simulation_func._run_batch(
-        X, max_workers=max_workers, batch_dir=batch_dir
-    )
+    Y, Y_timeseries, Y_timeseries_meta = simulation_func._run_batch(X, max_workers=max_workers, batch_dir=batch_dir)
 
     if not store_timeseries:
         Y_timeseries = None
+        Y_timeseries_meta = None
 
     bounds = np.array(parameter_space.parameter_bounds)
     cache = PrecomputedCache(
@@ -275,6 +299,7 @@ def run_batch_and_cache(
             "seed": seed,
         },
         Y_timeseries=Y_timeseries,
+        Y_timeseries_meta=Y_timeseries_meta,
     )
     cache.save()
     return cache

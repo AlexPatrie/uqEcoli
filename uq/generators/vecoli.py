@@ -16,6 +16,7 @@ For generic sim_data parameters (arbitrary dot-path attributes), we use
 the ``ecoli.variants.sim_data_setattr`` variant function with ``op: "zip"``
 to encode N LHS samples as N variant parameter dicts.
 """
+
 import abc
 import copy
 import importlib
@@ -161,8 +162,7 @@ def _read_parquet_timeseries(
         pq_files = list(history_base.rglob("*.parquet"))
     if not pq_files:
         raise FileNotFoundError(
-            f"No Parquet files found under {history_base}. "
-            f"Check that the simulation completed successfully."
+            f"No Parquet files found under {history_base}. Check that the simulation completed successfully."
         )
 
     df = pl.read_parquet(
@@ -172,10 +172,7 @@ def _read_parquet_timeseries(
 
     available = [c for c in observable_columns if c in df.columns]
     if not available:
-        raise ValueError(
-            f"None of {observable_columns} found in Parquet columns: "
-            f"{df.columns[:20]}..."
-        )
+        raise ValueError(f"None of {observable_columns} found in Parquet columns: {df.columns[:20]}...")
 
     if "time" in df.columns:
         df = df.sort("time")
@@ -200,6 +197,7 @@ def _get_vecoli_repo_root() -> str:
     """
     try:
         import ecoli
+
         ecoli_dir = Path(ecoli.__file__).resolve().parent
         repo_root = ecoli_dir.parent
         if (repo_root / "configs" / "__init__.py").exists():
@@ -298,7 +296,6 @@ def _build_variants_section_generic(
     }
 
 
-
 def _run_workflow(
     config_path: Path,
     timeout: float | None = None,
@@ -321,7 +318,8 @@ def _run_workflow(
     cmd = [
         sys.executable,
         workflow_script,
-        "--config", str(config_path),
+        "--config",
+        str(config_path),
     ]
 
     env = os.environ.copy()
@@ -364,7 +362,7 @@ class ITimeseriesBatchProcessor(BaseClass, abc.ABC):
         X: np.ndarray,
         max_workers: int | None = None,
         batch_dir: Path | None = None,
-    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+    ) -> tuple[np.ndarray, list[np.ndarray] | None, list[dict[str, np.ndarray]] | None]:
         pass
 
 
@@ -383,11 +381,11 @@ class TimeseriesGenerator(ITimeseriesBatchProcessor):
         X: np.ndarray,
         max_workers: int | None = None,
         batch_dir: Path | None = None,
-    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+    ) -> tuple[np.ndarray, list[np.ndarray] | None, list[dict[str, np.ndarray]] | None]:
         raise NotImplementedError
 
     def evaluate_batch(self, X: np.ndarray, max_workers: int | None = None) -> np.ndarray:
-        Y_agg, _ = self._run_batch(X, max_workers=max_workers)
+        Y_agg, _, _ = self._run_batch(X, max_workers=max_workers)
         return Y_agg
 
 
@@ -437,6 +435,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         # Check if param_space or the loader has a path
         # For now, we write to a stable temp location
         from uq.common import get_repo_root
+
         cache_dir = get_repo_root() / ".uq_cache"
         cache_dir.mkdir(exist_ok=True)
         pickle_path = cache_dir / "baseline_sim_data.cPickle"
@@ -467,7 +466,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         Returns raw timeseries of shape ``(n_timesteps, n_obs)``.
         """
         X = x.reshape(1, -1)
-        Y_agg, Y_ts = self._run_batch(X)
+        Y_agg, Y_ts, _ = self._run_batch(X)
         if Y_ts and len(Y_ts) > 0:
             return Y_ts[0]
         return Y_agg
@@ -477,14 +476,14 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         X: np.ndarray,
         max_workers: int | None = None,
         batch_dir: Path | None = None,
-    ) -> tuple[np.ndarray, list[np.ndarray] | None]:
+    ) -> tuple[np.ndarray, list[np.ndarray] | None, list[dict[str, np.ndarray]] | None]:
         """Run simulations via a single ``workflow.py`` invocation.
 
         1. Build a workflow config with variants section encoding all
            N LHS samples via ``sim_data_setattr`` + ``op: "zip"``
         2. Run ``runscripts/workflow.py --config <config>``
         3. Collect Parquet outputs from hive-partitioned directory
-        4. Return aggregated + per-sample timeseries arrays
+        4. Return aggregated + per-sample timeseries arrays + metadata
 
         Args:
             X: Parameter array of shape ``(n_samples, n_params)``.
@@ -492,7 +491,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
             batch_dir: Working directory. If None, creates temp dir.
 
         Returns:
-            Tuple of (Y_aggregated, Y_timeseries).
+            Tuple of (Y_aggregated, Y_timeseries, Y_timeseries_meta).
         """
         cleanup = batch_dir is None
         if batch_dir is None:
@@ -520,7 +519,8 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
 
             # --- Step 2: Build variants section ---
             variants_section = _build_variants_section_generic(
-                X, self.param_space._sim_data_parameters,
+                X,
+                self.param_space._sim_data_parameters,
             )
 
             # --- Step 3: Build workflow config ---
@@ -539,7 +539,8 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
 
             logger.info(
                 "Running vEcoli workflow with %d variants (samples) in %s",
-                n_samples, batch_dir,
+                n_samples,
+                batch_dir,
             )
 
             # --- Step 4: Run workflow.py ---
@@ -572,8 +573,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 pq_files = list(history_base.rglob("*.parquet"))
             if not pq_files:
                 raise FileNotFoundError(
-                    f"No Parquet files found under {history_base}. "
-                    f"Workflow stderr may have details."
+                    f"No Parquet files found under {history_base}. Workflow stderr may have details."
                 )
 
             df = pl.read_parquet(
@@ -583,10 +583,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
 
             available = [c for c in parquet_cols if c in df.columns]
             if not available:
-                raise ValueError(
-                    f"None of {parquet_cols} found in columns: "
-                    f"{df.columns[:20]}..."
-                )
+                raise ValueError(f"None of {parquet_cols} found in columns: {df.columns[:20]}...")
 
             parquet_to_short = {v: k for k, v in _SHORT_TO_PARQUET.items()}
             obs_names = [parquet_to_short.get(c, c) for c in available]
@@ -606,6 +603,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
 
             Y_list: list[np.ndarray] = []
             Y_timeseries: list[np.ndarray] = []
+            Y_meta: list[dict[str, np.ndarray]] = []
 
             # Use baseline (variant=0) as fallback for failed variants
             baseline_df = None
@@ -621,8 +619,8 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                         sample_df = df.filter(pl.col("variant") == i)
                     if sample_df.height == 0 and baseline_df is not None:
                         logger.warning(
-                            "Variant %d has no data (sim may have crashed). "
-                            "Using baseline data as fallback.", variant_idx,
+                            "Variant %d has no data (sim may have crashed). Using baseline data as fallback.",
+                            variant_idx,
                         )
                         sample_df = baseline_df
                 else:
@@ -633,6 +631,14 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 Y_timeseries.append(ts_array)
                 Y_list.append(ts_array.mean(axis=0))
 
+                # Extract generation/seed metadata for strategies 2-3
+                sample_meta: dict[str, np.ndarray] = {}
+                if "generation" in sample_df.columns:
+                    sample_meta["generation"] = sample_df["generation"].fill_null(0).to_numpy().astype(np.int64)
+                if "lineage_seed" in sample_df.columns:
+                    sample_meta["lineage_seed"] = sample_df["lineage_seed"].fill_null(0).to_numpy().astype(np.int64)
+                Y_meta.append(sample_meta)
+
             Y_aggregated = np.vstack(Y_list)
 
             meta = {
@@ -642,15 +648,13 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
                 "observable_columns": available,
                 "obs_names": obs_names,
                 "bounds": np.array(self.param_space.parameter_bounds).tolist(),
-                "samples": {
-                    str(i): {"x": X[i].tolist()} for i in range(n_samples)
-                },
+                "samples": {str(i): {"x": X[i].tolist()} for i in range(n_samples)},
             }
-            (batch_dir / "metadata.json").write_text(
-                _json.dumps(meta, indent=2)
-            )
+            (batch_dir / "metadata.json").write_text(_json.dumps(meta, indent=2))
 
-            return Y_aggregated, Y_timeseries
+            # Return metadata only if any sample had generation/seed labels
+            has_meta = Y_meta and any(m for m in Y_meta)
+            return Y_aggregated, Y_timeseries, Y_meta if has_meta else None
 
         finally:
             if cleanup:
@@ -662,7 +666,7 @@ class TimeseriesGeneratorVecoli(ITimeseriesBatchProcessor):
         max_workers: int | None = None,
     ) -> np.ndarray:
         """Evaluate simulation for a batch of parameter vectors."""
-        Y_agg, _ = self._run_batch(X, max_workers=max_workers)
+        Y_agg, _, _ = self._run_batch(X, max_workers=max_workers)
         return Y_agg
 
 
@@ -762,9 +766,7 @@ def collect_batch_results(
         history_dir = output_dir / experiment_id / "history"
 
         if not history_dir.exists():
-            raise FileNotFoundError(
-                f"No output found for sample {i} at {history_dir}."
-            )
+            raise FileNotFoundError(f"No output found for sample {i} at {history_dir}.")
 
         pq_files = list(history_dir.rglob("*.pq"))
         if not pq_files:
