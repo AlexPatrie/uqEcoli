@@ -268,24 +268,20 @@ class UQPCApp(App[None]):
 
     CSS = """
     #sidebar {
-        width: 32; border-right: solid ansi_bright_black; padding: 1;
+        width: 38; border-right: solid ansi_bright_black; padding: 1;
     }
     #sidebar Button { width: 100%; }
+    #sidebar Input { width: 100%; margin: 0 0 1 0; }
+    #sidebar Select { width: 100%; margin: 0 0 1 0; }
     .nav-section {
         text-style: bold; color: ansi_cyan; margin: 1 0 0 0;
+    }
+    .cfg-label {
+        color: ansi_yellow; margin: 0;
     }
     #main-content { padding: 1 2; }
     #result-log { height: 1fr; border: round ansi_bright_black; }
     DataTable { height: 1fr; border: round ansi_bright_black; }
-
-    #config-bar {
-        dock: bottom; height: auto; max-height: 8;
-        padding: 0 2; border-top: solid ansi_bright_black;
-    }
-    .config-row { height: 3; }
-    .config-row Label { width: 22; color: ansi_yellow; padding-top: 1; }
-    .config-row Input { width: 1fr; }
-    .config-row Select { width: 1fr; }
 
     #progress-bar { margin: 0 2; }
     #progress-status { color: ansi_cyan; text-style: bold; padding: 0 2; }
@@ -301,6 +297,27 @@ class UQPCApp(App[None]):
         yield Header()
         with Horizontal():
             with VerticalScroll(id="sidebar"):
+                yield Label("CONFIG", classes="nav-section")
+                yield Label("simData", classes="cfg-label")
+                yield Input(
+                    value="/Users/alexanderpatrie/sms/uqEcoli/sim_data/baseline/kb/simData.cPickle",
+                    id="cfg-simdata",
+                )
+                yield Label("Cache dir", classes="cfg-label")
+                yield Input(value="./uq_cache", id="cfg-cache")
+                yield Label("Samples", classes="cfg-label")
+                yield Input(value="20", id="cfg-n-samples", type="integer")
+                yield Label("Generations", classes="cfg-label")
+                yield Input(value="1", id="cfg-gens", type="integer")
+                yield Label("Seeds", classes="cfg-label")
+                yield Input(value="1", id="cfg-seeds", type="integer")
+                yield Label("PCE order", classes="cfg-label")
+                yield Input(value="2", id="cfg-order", type="integer")
+                yield Label("Growth bins", classes="cfg-label")
+                yield Input(value="10", id="cfg-bins", type="integer")
+                yield Label("Regression", classes="cfg-label")
+                yield Select(REGRESSION_OPTIONS, value="lsq", id="cfg-reg")
+
                 yield Label("SAMPLE (Steps 1-3)", classes="nav-section")
                 yield Button("Run Sampling", id="run-sample", variant="success")
                 yield Button("Cancel Sampling", id="cancel-sample", variant="error")
@@ -321,24 +338,6 @@ class UQPCApp(App[None]):
                 yield Static("", id="progress-status")
                 yield ProgressBar(total=100, show_eta=True, id="progress-bar")
                 yield self._build_tabs()
-
-        with Vertical(id="config-bar"):
-            with Horizontal(classes="config-row"):
-                yield Label("simData path")
-                yield Input(placeholder="/path/to/simData.cPickle", id="cfg-simdata")
-            with Horizontal(classes="config-row"):
-                yield Label("Cache dir")
-                yield Input(value="./uq_cache", id="cfg-cache")
-            with Horizontal(classes="config-row"):
-                yield Label("Samples / Gens / Seeds")
-                yield Input(value="20", id="cfg-n-samples", type="integer")
-                yield Input(value="1", id="cfg-gens", type="integer")
-                yield Input(value="1", id="cfg-seeds", type="integer")
-            with Horizontal(classes="config-row"):
-                yield Label("Order / Bins / Regr")
-                yield Input(value="2", id="cfg-order", type="integer")
-                yield Input(value="10", id="cfg-bins", type="integer")
-                yield Select(REGRESSION_OPTIONS, value="lsq", id="cfg-reg")
 
         yield Footer()
 
@@ -482,18 +481,13 @@ class UQPCApp(App[None]):
         output_dir.mkdir(exist_ok=True)
         experiment_id = "uqpc_batch"
 
-        # Write baseline sim_data pickle
-        kb_dir = batch_dir / "kb"
-        kb_dir.mkdir(exist_ok=True)
-        sd_path = str(kb_dir / "simData.cPickle")
-        with open(sd_path, "wb") as f:
-            pickle.dump(ds.sim_data, f)
-
-        # Build variants section from PCRV samples
+        # Use the user-provided simData path directly in the config.
+        # This tells workflow.py to skip parca — it already has the
+        # pre-computed simData pickle.
         variants = _build_variants_from_samples(X_train, param_space._sim_data_parameters)
 
         config = _build_config(
-            sim_data_path=sd_path,
+            sim_data_path=sim_path,
             output_dir=str(output_dir),
             variants_section=variants,
             experiment_id=experiment_id,
@@ -541,11 +535,17 @@ class UQPCApp(App[None]):
             env=env,
         )
 
-        # Shared state for progress
+        # Shared state — daemon threads write, main loop reads + updates UI
         poll_stop = threading.Event()
         start_time = _time.monotonic()
-        phase = ["launching"]  # mutable for cross-thread sharing
+        phase = ["launching"]
         pq_count = [0]
+        log_queue: list[tuple[str, str]] = []  # (message, style) pairs
+        log_lock = threading.Lock()
+
+        def _enqueue_log(msg: str, style: str = "") -> None:
+            with log_lock:
+                log_queue.append((msg, style))
 
         # ── Background: poll output directory for .pq files ──
         def _poll_outputs() -> None:
@@ -553,34 +553,28 @@ class UQPCApp(App[None]):
                 n = _count_completed_variants(history_base)
                 if n != pq_count[0]:
                     pq_count[0] = n
-                    elapsed = int(_time.monotonic() - start_time)
-                    self.call_from_thread(
-                        self._set_progress,
-                        n,
-                        total_sims,
-                        f"Simulating  {n}/{total_sims} done  [{elapsed}s]",
-                    )
-                elif phase[0] == "simulating":
-                    # Update elapsed time even when count hasn't changed
-                    elapsed = int(_time.monotonic() - start_time)
-                    self.call_from_thread(
-                        self._set_progress,
-                        pq_count[0],
-                        total_sims,
-                        f"Simulating  {pq_count[0]}/{total_sims} done  [{elapsed}s]",
-                    )
                 poll_stop.wait(2.0)
 
         poll_thread = threading.Thread(target=_poll_outputs, daemon=True)
         poll_thread.start()
 
-        # ── Background: read stdout chunks ──
+        # ── Background: read stdout chunks, enqueue log lines ──
+        # Regex to strip ALL ANSI escape sequences (cursor movement,
+        # colors, bold/reset, 256-color, truecolor, erase-line, etc.)
+        _ansi_re = re.compile(r"\x1b\[[\d;]*[A-Za-z]|\x1b\[\d*[A-GJK]|\x07")
+
         def _read_stdout() -> None:
             if proc.stdout is None:
                 return
+            fd = proc.stdout.fileno()
             buf = b""
             while True:
-                chunk = proc.stdout.read(4096)
+                # os.read returns as soon as ANY bytes are available
+                # (unlike file.read(N) which blocks until N bytes or EOF)
+                try:
+                    chunk = os.read(fd, 4096)
+                except OSError:
+                    break
                 if not chunk:
                     break
                 buf += chunk
@@ -597,41 +591,35 @@ class UQPCApp(App[None]):
                     buf = buf[idx + 1 :]
                     if not raw:
                         continue
-                    clean = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw).strip()
+                    clean = _ansi_re.sub("", raw).strip()
                     if not clean:
                         continue
 
                     low = clean.lower()
 
-                    # Detect phase transitions from Nextflow output
+                    # Detect phase transitions
                     if "createvariants" in low and phase[0] == "launching":
                         phase[0] = "variants"
-                        self.call_from_thread(
-                            self.write_log,
-                            "[ansi_cyan]  Phase: creating variant sim_data pickles...[/]",
-                        )
+                        _enqueue_log("Phase: creating variant sim_data pickles...", "ansi_cyan")
                     elif "sim" in low and ("gen" in low or "agent" in low) and phase[0] != "simulating":
                         phase[0] = "simulating"
-                        self.call_from_thread(
-                            self.write_log,
-                            f"[ansi_cyan]  Phase: simulating {total_sims} cells...[/]",
-                        )
+                        _enqueue_log(f"Phase: simulating {total_sims} cells...", "ansi_cyan")
 
-                    # Log significant lines
+                    # Classify and enqueue — ALL lines shown, color by type
                     if any(kw in low for kw in ["error", "fail", "exception", "traceback"]):
-                        self.call_from_thread(self.write_log, f"[ansi_red]  {clean}[/]")
+                        _enqueue_log(clean, "ansi_red")
                     elif any(kw in low for kw in ["completed at", "duration", "succeeded"]):
-                        self.call_from_thread(self.write_log, f"[ansi_green]  {clean}[/]")
-                    elif "of" in low and ("sim" in low or "createvariant" in low):
-                        # Nextflow progress like "sim... | 2 of 3 ✔"
-                        self.call_from_thread(self.write_log, f"[ansi_bright_black]  {clean}[/]")
+                        _enqueue_log(clean, "ansi_green")
                     elif any(kw in low for kw in ["warn", "note"]):
-                        self.call_from_thread(self.write_log, f"[ansi_yellow]  {clean}[/]")
+                        _enqueue_log(clean, "ansi_yellow")
+                    else:
+                        # Show ALL other lines (Nextflow progress, executor, etc.)
+                        _enqueue_log(clean, "ansi_bright_black")
 
         stdout_thread = threading.Thread(target=_read_stdout, daemon=True)
         stdout_thread.start()
 
-        # ── Main: wait for process, update progress bar each second ──
+        # ── Main @work loop: drain queues, update UI every second ──
         try:
             while proc.poll() is None:
                 if self._sampling_cancel.is_set():
@@ -642,7 +630,17 @@ class UQPCApp(App[None]):
                     self.call_from_thread(self._hide_progress)
                     return
 
-                # Keep the progress bar alive with elapsed time
+                # Drain log queue
+                with log_lock:
+                    pending = list(log_queue)
+                    log_queue.clear()
+                for msg, style in pending:
+                    if style:
+                        self.call_from_thread(self.write_log, f"[{style}]  {msg}[/{style}]")
+                    else:
+                        self.call_from_thread(self.write_log, f"  {msg}")
+
+                # Update progress bar
                 elapsed = int(_time.monotonic() - start_time)
                 label = phase[0].capitalize()
                 self.call_from_thread(
@@ -652,6 +650,16 @@ class UQPCApp(App[None]):
                     f"{label}  {pq_count[0]}/{total_sims}  [{elapsed}s]",
                 )
                 threading.Event().wait(1.0)
+
+            # Process finished — drain remaining logs
+            with log_lock:
+                pending = list(log_queue)
+                log_queue.clear()
+            for msg, style in pending:
+                if style:
+                    self.call_from_thread(self.write_log, f"[{style}]  {msg}[/{style}]")
+                else:
+                    self.call_from_thread(self.write_log, f"  {msg}")
         finally:
             poll_stop.set()
             stdout_thread.join(timeout=10)
