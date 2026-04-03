@@ -1,0 +1,1494 @@
+"""
+RFC006 PCE-based UQ workflow — adapted from PyTUQ's ``apps/uqpc/uq_pc.py``.
+
+Self-contained implementation of the five-step UQPC workflow
+(https://sandialabs.github.io/pytuq/apps/uqpc.html) for the vEcoli
+whole-cell model, as specified in RFC006 (MS-08.4.2).
+
+Two-stage public API:
+
+    sample()   → Steps 1-3: setup inputs, generate samples via PCRV,
+                 evaluate vEcoli (runscripts/workflow.py), cache to disk.
+    quantify() → Steps 4-5: build PC surrogate, compute Sobol indices,
+                 run all 4 RFC006 aggregation strategies.
+
+The five UQPC steps map as follows:
+
+  UQPC step                    This module
+  ─────────────────────────    ─────────────────────────────────────────
+  1. Setup inputs              _setup_input_pc(): bounds → PCRV (LU)
+  2. Generate samples          PCRV.sampleGerm() → evalPC() (PyTUQ-native)
+  3. Evaluate model            TimeseriesGeneratorVecoli._run_batch()
+                               (vEcoli subprocess via workflow.py)
+  4. Build PC surrogate        _fit_surrogate(): PCRV + lsq/bcs/anl
+  5. Post-process              _compute_sobol(), _compute_relative_errors()
+
+No mock data, no synthetic wrappers — vEcoli only.
+
+References:
+  [1] PyTUQ UQPC: https://sandialabs.github.io/pytuq/apps/uqpc.html
+  [2] Sudret (2008). Global sensitivity analysis using polynomial chaos
+      expansions. Reliability Engineering & System Safety.
+  [3] RFC006: readmes/start/tools/RFC006.md
+"""
+
+from __future__ import annotations
+
+import json as _json
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from pytuq.lreg.anl import anl
+from pytuq.lreg.bcs import bcs
+from pytuq.lreg.lreg import lsq
+from pytuq.rv.pcrv import PCRV
+from pytuq.utils.mindex import get_mi
+
+from uq.generators.vecoli import TimeseriesGeneratorVecoli
+from uq.inputs import XSpace
+from uq.pipeline.models import SimDataParameter
+from uq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS, ParameterDataset
+from uq.sampling import PrecomputedCache
+from uq.sensitivity import PCESurrogate, SobolIndices
+
+logger = logging.getLogger(__name__)
+
+
+# ── Result container ────────────────────────────────────────────────
+
+
+@dataclass
+class UQPCResult:
+    """Complete output of the UQPC workflow for one aggregation strategy.
+
+    Mirrors the ``results.pk`` dict from ``uq_pc.py``, but uses RFC006
+    domain types and stores per-strategy diagnostics.
+
+    Attributes:
+        sobol: Sobol sensitivity indices (main, total, joint).
+        surrogate: Exportable PCE surrogate with coefficients.
+        pcrv: The fitted ``PCRV`` object (PyTUQ internal repr).
+        linregs: Per-output linear regression objects from ``pc_fit``.
+        germ_train: Training samples in germ space [-1, 1].
+        X_train: Training samples in physical space.
+        Y_train: Training outputs.
+        Y_train_pc: PCE predictions at training points.
+        Y_train_pc_std: Prediction std dev at training points.
+        relerr_train: Per-output relative error at training points.
+        germ_test: Test samples in germ space (None if no test set).
+        X_test: Test samples in physical space (None if no test set).
+        Y_test: Test outputs (None if no test set).
+        Y_test_pc: PCE predictions at test points (None if no test set).
+        Y_test_pc_std: Prediction std dev at test points.
+        relerr_test: Per-output relative error at test points.
+    """
+
+    sobol: SobolIndices
+    surrogate: PCESurrogate
+    pcrv: PCRV
+    linregs: list[Any]
+    germ_train: np.ndarray
+    X_train: np.ndarray
+    Y_train: np.ndarray
+    Y_train_pc: np.ndarray
+    Y_train_pc_std: np.ndarray
+    relerr_train: np.ndarray
+    germ_test: np.ndarray | None = None
+    X_test: np.ndarray | None = None
+    Y_test: np.ndarray | None = None
+    Y_test_pc: np.ndarray | None = None
+    Y_test_pc_std: np.ndarray | None = None
+    relerr_test: np.ndarray | None = None
+
+
+# ── Step 1: Input PC setup ──────────────────────────────────────────
+
+
+def _setup_input_pc(
+    bounds: np.ndarray,
+) -> tuple[PCRV, np.ndarray, int]:
+    """Set up the input PC object from parameter bounds.
+
+    Equivalent to ``uq_pc.py`` lines that handle ``--pdom``:
+    uniform parameters → Legendre (LU) basis, order 1.
+
+    The PC coefficients encode the affine map from germ space [-1, 1]
+    to the physical domain [lb, ub]:
+
+        x_phys = midpoint + half_range * xi
+
+    where xi ∈ [-1, 1] is the germ variable.
+
+    Args:
+        bounds: Parameter bounds, shape (n_params, 2).
+
+    Returns:
+        Tuple of (PCRV object, PC coefficient matrix, stochastic dim).
+    """
+    n_params = bounds.shape[0]
+    in_pcdim = n_params
+    in_pcord = 1
+    pc_type = "LU"  # Legendre — uniform priors (RFC006 §4)
+
+    # Build PC coefficients: row 0 = midpoints, rows 1..n = diag(half_ranges)
+    midpoints = 0.5 * (bounds[:, 1] + bounds[:, 0])
+    half_ranges = 0.5 * (bounds[:, 1] - bounds[:, 0])
+    pcf_all = np.vstack((midpoints, np.diag(half_ranges)))
+
+    # Construct PCRV
+    mi = get_mi(in_pcord, in_pcdim)
+    pc = PCRV(in_pcdim, n_params, pc_type, mi=mi, cfs=pcf_all.T)
+
+    return pc, pcf_all, in_pcdim
+
+
+# ── Step 2: Generate / load training samples ────────────────────────
+
+
+def _generate_training_samples(
+    pc: PCRV,
+    n_samples: int,
+    in_pcdim: int,
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate LHS training samples in germ and physical spaces.
+
+    Equivalent to ``uq_pc.py`` random sampling path (``--sampl rand``).
+    RFC006 uses LHS exclusively — no quadrature.
+
+    Args:
+        pc: Input PCRV object.
+        n_samples: Number of training points.
+        in_pcdim: Stochastic dimensionality.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Tuple of (germ_train, X_train) — germ space and physical space.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    germ_train = pc.sampleGerm(n_samples)
+    X_train = pc.evalPC(germ_train)
+
+    logger.info(
+        "Generated %d training samples (%d germ dims, %d physical params)",
+        n_samples, in_pcdim, X_train.shape[1],
+    )
+    return germ_train, X_train
+
+
+def _generate_test_samples(
+    pc: PCRV,
+    n_test: int,
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate random test samples for surrogate validation.
+
+    Args:
+        pc: Input PCRV object.
+        n_test: Number of test points.
+        seed: Random seed.
+
+    Returns:
+        Tuple of (germ_test, X_test).
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    germ_test = pc.sampleGerm(n_test)
+    X_test = pc.evalPC(germ_test)
+    return germ_test, X_test
+
+
+def _physical_to_germ(
+    X: np.ndarray,
+    bounds: np.ndarray,
+) -> np.ndarray:
+    """Scale physical-space samples to germ space [-1, 1].
+
+    Used when loading precomputed samples from ``PrecomputedCache``
+    (offline regime), which are stored in physical space.
+
+    Args:
+        X: Samples in physical space, shape (n, d).
+        bounds: Parameter bounds, shape (d, 2).
+
+    Returns:
+        Samples in germ space [-1, 1], shape (n, d).
+    """
+    lb, ub = bounds[:, 0], bounds[:, 1]
+    span = ub - lb
+    span = np.where(span > 0, span, 1.0)
+    return 2.0 * (X - lb) / span - 1.0
+
+
+# ── Step 3: Evaluate / load forward model ───────────────────────────
+
+
+def _evaluate_model_online(
+    simulation_func: TimeseriesGeneratorVecoli,
+    X_train: np.ndarray,
+    X_test: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    """Evaluate the simulation function at training (and optionally test) points.
+
+    Equivalent to ``uq_pc.py`` ``online_bb`` regime, but uses vEcoli's
+    ``TimeseriesGeneratorVecoli.evaluate_batch()`` instead of an
+    external ``model.x`` executable.
+
+    Args:
+        simulation_func: vEcoli simulation wrapper (workflow.py subprocess).
+        X_train: Training inputs, shape (n_train, n_params).
+        X_test: Optional test inputs, shape (n_test, n_params).
+
+    Returns:
+        Tuple of (Y_train, Y_test). Y_test is None if X_test is None.
+    """
+    logger.info("Evaluating forward model at %d training points", X_train.shape[0])
+    Y_train = simulation_func.evaluate_batch(X_train)
+    if Y_train.ndim == 1:
+        Y_train = Y_train.reshape(-1, 1)
+
+    Y_test = None
+    if X_test is not None:
+        logger.info("Evaluating forward model at %d test points", X_test.shape[0])
+        Y_test = simulation_func.evaluate_batch(X_test)
+        if Y_test.ndim == 1:
+            Y_test = Y_test.reshape(-1, 1)
+
+    return Y_train, Y_test
+
+
+# ── Step 4: Construct PC surrogates ─────────────────────────────────
+
+
+def _fit_surrogate(
+    germ_train: np.ndarray,
+    Y_train: np.ndarray,
+    polynomial_order: int,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+) -> tuple[PCRV, list[Any]]:
+    """Fit PCE surrogate following the ``pc_fit`` workflow.
+
+    This is the core of the UQPC workflow (step 4 in ``uq_pc.py``).
+    We replicate ``pytuq.workflows.fits.pc_fit`` here so that we can
+    retain the per-output linear regression objects (``linregs``) for
+    prediction variance estimation — ``pc_fit`` itself only returns
+    the PCRV.
+
+    The workflow:
+      1. Build multi-index for the output polynomial order
+      2. Construct PCRV with Legendre (LU) basis
+      3. Evaluate basis matrix at training points
+      4. Per-output: instantiate regressor, fit coefficients
+      5. Sync multi-indices and coefficients into PCRV
+      6. Set PCRV evaluation function
+
+    Args:
+        germ_train: Training samples in germ space, shape (n_train, d).
+        Y_train: Training outputs, shape (n_train, n_out).
+        polynomial_order: Output PCE order.
+        regression: Fitting method — 'lsq', 'bcs', or 'anl'.
+        tolerance: BCS tolerance (only used when regression='bcs').
+
+    Returns:
+        Tuple of (output_pcrv, linregs) — the fitted PCRV and per-output
+        linear regression objects.
+    """
+    n_train, n_dim = germ_train.shape
+    n_out = Y_train.shape[1]
+
+    logger.info(
+        "Fitting PCE surrogate: order=%d, method=%s, "
+        "n_train=%d, n_outputs=%d",
+        polynomial_order, regression, n_train, n_out,
+    )
+
+    # Step 1-2: Multi-index + PCRV
+    mindex = get_mi(polynomial_order, n_dim)
+    pcrv = PCRV(n_out, n_dim, "LU", mi=mindex)
+
+    # Step 3: Basis matrix
+    Amat = pcrv.evalBases(germ_train, 0)
+
+    # Step 4: Per-output fitting
+    mindices_list: list[np.ndarray] = []
+    cfs_list: list[np.ndarray] = []
+    linregs: list[Any] = []
+
+    for j in range(n_out):
+        logger.debug("Fitting output %d / %d", j + 1, n_out)
+
+        if regression == "bcs":
+            lreg_obj = bcs(eta=tolerance)
+        elif regression == "anl":
+            lreg_obj = anl()
+        elif regression == "lsq":
+            lreg_obj = lsq()
+        else:
+            raise ValueError(
+                f"Unknown regression method: {regression!r}. "
+                f"Must be 'lsq', 'bcs', or 'anl'."
+            )
+
+        lreg_obj.fita(Amat, Y_train[:, j])
+        mindices_list.append(mindex[lreg_obj.used, :])
+        cfs_list.append(lreg_obj.cf)
+        linregs.append(lreg_obj)
+
+    # Step 5-6: Sync coefficients and set evaluation function
+    pcrv.setMiCfs(mindices_list, cfs_list)
+    pcrv.setFunction()
+
+    return pcrv, linregs
+
+
+def _predict_and_variance(
+    output_pcrv: PCRV,
+    linregs: list[Any],
+    germ: np.ndarray,
+    n_outputs: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Predict at given germ points and compute prediction variance.
+
+    Equivalent to ``uq_pc.py`` lines after ``pc_fit`` call.
+
+    Args:
+        output_pcrv: Fitted output PCRV.
+        linregs: Per-output linear regression objects.
+        germ: Germ-space samples, shape (n, d).
+        n_outputs: Number of output columns.
+
+    Returns:
+        Tuple of (Y_pc, Y_pc_std) — predictions and std deviations.
+    """
+    n = germ.shape[0]
+    Y_pc = output_pcrv.function(germ)
+
+    Y_pc_var = np.empty((n, n_outputs))
+    for j, lreg in enumerate(linregs):
+        basis_mat = output_pcrv.evalBases(germ, j)
+        Y_pc_var[:, j] = lreg.predicta(basis_mat, msc=1)[1]
+
+    return Y_pc, np.sqrt(Y_pc_var)
+
+
+# ── Step 5: Compute relative errors ────────────────────────────────
+
+
+def _compute_relative_errors(
+    Y_true: np.ndarray,
+    Y_pred: np.ndarray,
+) -> np.ndarray:
+    """Per-output relative L2 error between true and predicted values.
+
+    Equivalent to ``uq_pc.py`` step 5.
+
+    Args:
+        Y_true: Ground truth, shape (n, n_out).
+        Y_pred: PCE predictions, shape (n, n_out).
+
+    Returns:
+        Relative errors, shape (n_out,).
+    """
+    norms = np.linalg.norm(Y_true, axis=0)
+    norms = np.where(norms > 0, norms, 1.0)
+    return np.linalg.norm(Y_true - Y_pred, axis=0) / norms
+
+
+# ── Step 6: Compute Sobol indices ───────────────────────────────────
+
+
+def _compute_sobol(
+    output_pcrv: PCRV,
+    parameter_names: list[str],
+    Y_train: np.ndarray,
+) -> SobolIndices:
+    """Compute Sobol indices from the fitted PCE.
+
+    Equivalent to ``uq_pc.py`` step 6.  Uses PCRV's analytical Sobol
+    computation (Sudret 2008) — no additional model evaluations needed.
+
+    Main (first-order) indices measure each parameter's independent
+    contribution to output variance.  Total-order indices include all
+    interaction terms involving that parameter.
+
+    For multi-output models, Sobol indices are variance-weighted across
+    outputs to produce a single set of parameter importances.
+
+    Args:
+        output_pcrv: Fitted output PCRV with synced coefficients.
+        parameter_names: Parameter names for labeling.
+        Y_train: Training outputs (for variance weighting).
+
+    Returns:
+        SobolIndices with main, total, and joint indices.
+    """
+    allsens_main = output_pcrv.computeSens()       # (n_out, n_params)
+    allsens_total = output_pcrv.computeTotSens()    # (n_out, n_params)
+    allsens_joint = output_pcrv.computeJointSens()  # (n_out, n_params, n_params)
+
+    n_outputs = Y_train.shape[1]
+
+    logger.info(
+        "Sobol indices computed: sum(main)=%s, sum(total)=%s",
+        np.sum(allsens_main, axis=1),
+        np.sum(allsens_total, axis=1),
+    )
+
+    # Variance-weighted aggregation across outputs
+    if n_outputs == 1:
+        first_order = allsens_main[0]
+        total_order = allsens_total[0]
+        second_order = allsens_joint[0]
+    else:
+        output_vars = np.var(Y_train, axis=0)
+        total_var = output_vars.sum()
+        if total_var > 0:
+            weights = output_vars / total_var
+        else:
+            weights = np.ones(n_outputs) / n_outputs
+
+        first_order = np.zeros(allsens_main.shape[1])
+        total_order = np.zeros(allsens_total.shape[1])
+        second_order = np.zeros(allsens_joint.shape[1:])
+        for j in range(n_outputs):
+            first_order += weights[j] * allsens_main[j]
+            total_order += weights[j] * allsens_total[j]
+            second_order += weights[j] * allsens_joint[j]
+
+    return SobolIndices(
+        first_order=first_order,
+        total_order=total_order,
+        second_order=second_order,
+        parameter_names=parameter_names,
+    )
+
+
+def _build_surrogate(
+    output_pcrv: PCRV,
+    polynomial_order: int,
+    n_params: int,
+    n_outputs: int,
+    bounds: np.ndarray,
+) -> PCESurrogate:
+    """Build an exportable PCESurrogate from the fitted PCRV.
+
+    Args:
+        output_pcrv: Fitted output PCRV.
+        polynomial_order: PCE polynomial order.
+        n_params: Number of input parameters.
+        n_outputs: Number of outputs.
+        bounds: Parameter bounds, shape (n_params, 2).
+
+    Returns:
+        PCESurrogate ready for export / prediction.
+    """
+    coefficients = output_pcrv.coefs[0] if output_pcrv.coefs else np.zeros(1)
+    multi_indices = output_pcrv.mindices[0] if output_pcrv.mindices else np.zeros(
+        (1, n_params), dtype=int
+    )
+
+    return PCESurrogate(
+        coefficients=coefficients,
+        multi_indices=multi_indices,
+        basis_type="legendre",
+        polynomial_order=polynomial_order,
+        input_dim=n_params,
+        output_dim=n_outputs,
+        input_bounds=bounds,
+    )
+
+
+# ── Full UQPC workflow ──────────────────────────────────────────────
+
+
+def run_uqpc(
+    param_space: XSpace,
+    Y_train: np.ndarray,
+    X_train: np.ndarray | None = None,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    n_test: int = 0,
+    seed: int | None = 42,
+) -> UQPCResult:
+    """Execute the full UQPC workflow for a single aggregation strategy.
+
+    This is the RFC006-adapted equivalent of running ``uq_pc.py`` with
+    ``--regime offline --method <regression> --outord <polynomial_order>``.
+
+    The workflow proceeds through all 6 UQPC steps:
+      1. Input PC setup from parameter bounds
+      2. Map training samples to germ space (or generate new ones)
+      3. (Outputs already provided — offline regime)
+      4. Fit PCE surrogate via ``pc_fit``
+      5. Compute relative errors
+      6. Compute Sobol sensitivity indices
+
+    Args:
+        param_space: Parameter space with names and bounds.
+        Y_train: Training outputs, shape (n_samples, n_outputs).
+        X_train: Training inputs in physical space, shape (n_samples, n_params).
+            If None, generates new LHS samples (but this requires Y_train
+            to already correspond to those samples).
+        polynomial_order: Output PCE order (uq_pc.py ``--outord``).
+        regression: Fitting method — 'lsq', 'bcs', or 'anl'
+            (uq_pc.py ``--method``).
+        tolerance: BCS tolerance (uq_pc.py ``--tol``).
+        n_test: Number of test points for validation (uq_pc.py ``--ntst``).
+            Test points are sampled from the germ space; if the model is
+            not available (offline), test outputs cannot be computed and
+            test diagnostics will be skipped.
+        seed: Random seed (uq_pc.py ``--seed``).
+
+    Returns:
+        UQPCResult with surrogate, Sobol indices, and diagnostics.
+    """
+    bounds = np.array(param_space.parameter_bounds)
+    n_params = bounds.shape[0]
+    parameter_names = param_space.parameter_names
+
+    if Y_train.ndim == 1:
+        Y_train = Y_train.reshape(-1, 1)
+    n_samples, n_outputs = Y_train.shape
+
+    logger.info(
+        "UQPC workflow: %d samples, %d params, %d outputs, "
+        "order=%d, method=%s",
+        n_samples, n_params, n_outputs,
+        polynomial_order, regression,
+    )
+
+    # ── Step 1: Input PC setup ──
+    pc, _pcf_all, in_pcdim = _setup_input_pc(bounds)
+
+    # ── Step 2: Map / generate training samples ──
+    if X_train is not None:
+        germ_train = _physical_to_germ(X_train, bounds)
+    else:
+        germ_train, X_train = _generate_training_samples(
+            pc, n_samples, in_pcdim, seed=seed,
+        )
+
+    # ── Step 2b: Generate test samples (if requested) ──
+    germ_test, X_test = None, None
+    if n_test > 0:
+        germ_test, X_test = _generate_test_samples(pc, n_test, seed=seed)
+
+    # ── Step 3: Outputs already provided (offline) ──
+    #   (Y_train is passed in; Y_test requires model evaluation)
+
+    # ── Step 4: Construct PC surrogate ──
+    output_pcrv, linregs = _fit_surrogate(
+        germ_train, Y_train,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+    )
+
+    # Predict at training points
+    Y_train_pc, Y_train_pc_std = _predict_and_variance(
+        output_pcrv, linregs, germ_train, n_outputs,
+    )
+
+    # Predict at test points (if available — model eval not done here)
+    Y_test_pc, Y_test_pc_std, Y_test = None, None, None
+    if germ_test is not None:
+        Y_test_pc, Y_test_pc_std = _predict_and_variance(
+            output_pcrv, linregs, germ_test, n_outputs,
+        )
+
+    # ── Step 5: Relative errors ──
+    relerr_train = _compute_relative_errors(Y_train, Y_train_pc)
+    logger.info("Training relative errors: %s", relerr_train)
+
+    relerr_test = None
+    # Note: test errors can only be computed if Y_test is available
+    # (requires model evaluation at test points, not done in offline mode)
+
+    # ── Step 6: Sobol indices ──
+    sobol = _compute_sobol(output_pcrv, parameter_names, Y_train)
+
+    # ── Build exportable surrogate ──
+    surrogate = _build_surrogate(
+        output_pcrv, polynomial_order, n_params, n_outputs, bounds,
+    )
+
+    return UQPCResult(
+        sobol=sobol,
+        surrogate=surrogate,
+        pcrv=output_pcrv,
+        linregs=linregs,
+        germ_train=germ_train,
+        X_train=X_train,
+        Y_train=Y_train,
+        Y_train_pc=Y_train_pc,
+        Y_train_pc_std=Y_train_pc_std,
+        relerr_train=relerr_train,
+        germ_test=germ_test,
+        X_test=X_test,
+        Y_test=Y_test,
+        Y_test_pc=Y_test_pc,
+        Y_test_pc_std=Y_test_pc_std,
+        relerr_test=relerr_test,
+    )
+
+
+def run_uqpc_live(
+    param_space: XSpace,
+    simulation_func: TimeseriesGeneratorVecoli,
+    n_samples: int = 200,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    n_test: int = 0,
+    seed: int | None = 42,
+) -> UQPCResult:
+    """Execute the UQPC workflow with live model evaluation (online regime).
+
+    Equivalent to ``uq_pc.py --regime online_bb``, but the "black box"
+    is ``TimeseriesGeneratorVecoli.evaluate_batch()`` which runs vEcoli
+    as a subprocess via ``runscripts/workflow.py``.
+
+    Steps 1-2 generate LHS samples, step 3 evaluates the model, then
+    steps 4-6 proceed as in ``run_uqpc``.
+
+    Args:
+        param_space: Parameter space with names and bounds.
+        simulation_func: vEcoli simulation wrapper.
+        n_samples: Number of LHS training samples.
+        polynomial_order: Output PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        n_test: Number of validation test points.
+        seed: Random seed.
+
+    Returns:
+        UQPCResult with surrogate, Sobol indices, and full diagnostics
+        (including test errors if n_test > 0).
+    """
+    bounds = np.array(param_space.parameter_bounds)
+
+    # ── Step 1: Input PC setup ──
+    pc, _pcf_all, in_pcdim = _setup_input_pc(bounds)
+
+    # ── Step 2: Generate training samples ──
+    germ_train, X_train = _generate_training_samples(
+        pc, n_samples, in_pcdim, seed=seed,
+    )
+
+    # ── Step 2b: Generate test samples ──
+    germ_test, X_test = None, None
+    if n_test > 0:
+        germ_test, X_test = _generate_test_samples(pc, n_test, seed=seed)
+
+    # ── Step 3: Evaluate forward model ──
+    Y_train, Y_test = _evaluate_model_online(
+        simulation_func, X_train, X_test,
+    )
+
+    n_outputs = Y_train.shape[1]
+
+    # ── Step 4: Construct PC surrogate ──
+    output_pcrv, linregs = _fit_surrogate(
+        germ_train, Y_train,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+    )
+
+    Y_train_pc, Y_train_pc_std = _predict_and_variance(
+        output_pcrv, linregs, germ_train, n_outputs,
+    )
+
+    Y_test_pc, Y_test_pc_std = None, None
+    if germ_test is not None:
+        Y_test_pc, Y_test_pc_std = _predict_and_variance(
+            output_pcrv, linregs, germ_test, n_outputs,
+        )
+
+    # ── Step 5: Relative errors ──
+    relerr_train = _compute_relative_errors(Y_train, Y_train_pc)
+    logger.info("Training relative errors: %s", relerr_train)
+
+    relerr_test = None
+    if Y_test is not None and Y_test_pc is not None:
+        relerr_test = _compute_relative_errors(Y_test, Y_test_pc)
+        logger.info("Test relative errors: %s", relerr_test)
+
+    # ── Step 6: Sobol indices ──
+    parameter_names = param_space.parameter_names
+    sobol = _compute_sobol(output_pcrv, parameter_names, Y_train)
+
+    # ── Build exportable surrogate ──
+    n_params = bounds.shape[0]
+    surrogate = _build_surrogate(
+        output_pcrv, polynomial_order, n_params, n_outputs, bounds,
+    )
+
+    return UQPCResult(
+        sobol=sobol,
+        surrogate=surrogate,
+        pcrv=output_pcrv,
+        linregs=linregs,
+        germ_train=germ_train,
+        X_train=X_train,
+        Y_train=Y_train,
+        Y_train_pc=Y_train_pc,
+        Y_train_pc_std=Y_train_pc_std,
+        relerr_train=relerr_train,
+        germ_test=germ_test,
+        X_test=X_test,
+        Y_test=Y_test,
+        Y_test_pc=Y_test_pc,
+        Y_test_pc_std=Y_test_pc_std,
+        relerr_test=relerr_test,
+    )
+
+
+def run_uqpc_from_cache(
+    param_space: XSpace,
+    cache: PrecomputedCache,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    seed: int | None = 42,
+) -> UQPCResult:
+    """Execute the UQPC workflow from a PrecomputedCache (offline regime).
+
+    Convenience wrapper around ``run_uqpc`` that extracts (X, Y) from
+    the cache.  Equivalent to ``uq_pc.py --regime offline``.
+
+    Args:
+        param_space: Parameter space with names and bounds.
+        cache: Cached (X, Y) from a prior ``uq sample`` run.
+        polynomial_order: Output PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        seed: Random seed.
+
+    Returns:
+        UQPCResult.
+    """
+    return run_uqpc(
+        param_space=param_space,
+        Y_train=cache.Y,
+        X_train=cache.X,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+        seed=seed,
+    )
+
+
+# ── Per-strategy runners (RFC006 §3) ───────────────────────────────
+
+
+def run_strategy1_uniform(
+    param_space: XSpace,
+    X: np.ndarray,
+    Y: np.ndarray,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    seed: int | None = 42,
+) -> UQPCResult:
+    """Strategy 1: UQPC on uniformly aggregated (bulk) outputs.
+
+    RFC006 §3 aggregation strategy (1): "Uniformly across all simulated
+    cells and times (baseline)."
+
+    The time-averaged output Y (mean across timesteps per sample) is
+    the standard aggregation for bulk sensitivity analysis.
+
+    Args:
+        param_space: Parameter space.
+        X: Physical-space inputs, shape (n_samples, n_params).
+        Y: Time-averaged outputs, shape (n_samples, n_outputs).
+        polynomial_order: PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        seed: Random seed.
+
+    Returns:
+        UQPCResult for bulk sensitivity.
+    """
+    return run_uqpc(
+        param_space=param_space,
+        Y_train=Y,
+        X_train=X,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+        seed=seed,
+    )
+
+
+def run_strategy2_by_generation(
+    param_space: XSpace,
+    X: np.ndarray,
+    Y_timeseries: list[np.ndarray],
+    Y_timeseries_meta: list[dict[str, np.ndarray]],
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    seed: int | None = 42,
+) -> dict[int, UQPCResult]:
+    """Strategy 2: UQPC per generation.
+
+    RFC006 §3 aggregation strategy (2): "Stratified by generation
+    (control of convergence towards steady-state growth)."
+
+    Runs the full UQPC workflow independently for each generation,
+    using per-generation time-averaged outputs.
+
+    Args:
+        param_space: Parameter space.
+        X: Physical-space inputs, shape (n_samples, n_params).
+        Y_timeseries: Per-sample raw timeseries arrays.
+        Y_timeseries_meta: Per-sample metadata with 'generation' labels.
+        polynomial_order: PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        seed: Random seed.
+
+    Returns:
+        Dict mapping generation → UQPCResult.
+    """
+    grouped = _aggregate_by_group(Y_timeseries, Y_timeseries_meta, "generation")
+    results: dict[int, UQPCResult] = {}
+
+    for gen, Y_g in grouped.items():
+        logger.info("Strategy 2: fitting PCE for generation %d", gen)
+        results[gen] = run_uqpc(
+            param_space=param_space,
+            Y_train=Y_g,
+            X_train=X,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+
+    return results
+
+
+def run_strategy3_by_seed(
+    param_space: XSpace,
+    X: np.ndarray,
+    Y_timeseries: list[np.ndarray],
+    Y_timeseries_meta: list[dict[str, np.ndarray]],
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    seed: int | None = 42,
+) -> dict[int, UQPCResult]:
+    """Strategy 3: UQPC per lineage seed.
+
+    RFC006 §3 aggregation strategy (3): "Stratified by lineage seed
+    (control of exogenous variance)."
+
+    Runs the full UQPC workflow independently for each lineage seed.
+
+    Args:
+        param_space: Parameter space.
+        X: Physical-space inputs, shape (n_samples, n_params).
+        Y_timeseries: Per-sample raw timeseries arrays.
+        Y_timeseries_meta: Per-sample metadata with 'lineage_seed' labels.
+        polynomial_order: PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        seed: Random seed.
+
+    Returns:
+        Dict mapping lineage_seed → UQPCResult.
+    """
+    grouped = _aggregate_by_group(Y_timeseries, Y_timeseries_meta, "lineage_seed")
+    results: dict[int, UQPCResult] = {}
+
+    for lseed, Y_s in grouped.items():
+        logger.info("Strategy 3: fitting PCE for lineage seed %d", lseed)
+        results[lseed] = run_uqpc(
+            param_space=param_space,
+            Y_train=Y_s,
+            X_train=X,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+
+    return results
+
+
+def run_strategy4_growth_stratified(
+    param_space: XSpace,
+    X: np.ndarray,
+    Y_timeseries: list[np.ndarray],
+    n_bins: int = 10,
+    mass_col_index: int = 0,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    seed: int | None = 42,
+) -> tuple[list[UQPCResult], UQPCResult]:
+    """Strategy 4: UQPC stratified by cell cycle stage (growth progress).
+
+    RFC006 §3 aggregation strategy (4): "Stratified by cell cycle stage,
+    according to a physiological variable."
+
+    Uses normalized log(dry_mass) as the cell cycle variable θ:
+      θ = [log(mass) - log(mass_birth)] / [log(mass_div) - log(mass_birth)]
+
+    θ = 0 at birth, θ = 1 at division.  Timesteps are binned into
+    ``n_bins`` growth stages, and per-stage mean observables become
+    the PCE outputs.
+
+    A single PCE is fitted to the stacked (n_samples, n_bins * n_obs)
+    output, then Sobol indices are extracted per stage.
+
+    Additionally, individual UQPCResult objects are returned per stage
+    for full diagnostics (training errors, prediction variance, etc.).
+
+    Args:
+        param_space: Parameter space.
+        X: Physical-space inputs, shape (n_samples, n_params).
+        Y_timeseries: Per-sample raw timeseries, each (n_t, n_obs).
+        n_bins: Number of growth-progress bins.
+        mass_col_index: Column index of dry mass in timeseries.
+        polynomial_order: PCE order.
+        regression: Fitting method.
+        tolerance: BCS tolerance.
+        seed: Random seed.
+
+    Returns:
+        Tuple of (per_stage_results, combined_result):
+          - per_stage_results: list of UQPCResult, one per growth stage
+          - combined_result: UQPCResult from the stacked multi-stage fit
+    """
+    n_samples = len(Y_timeseries)
+    n_obs = Y_timeseries[0].shape[1]
+
+    # Compute per-stage mean observables
+    Y_stage_list: list[np.ndarray] = []
+    for ts in Y_timeseries:
+        theta = _compute_growth_fraction(ts, mass_col_index)
+        bins = _bin_by_growth_stage(theta, n_bins)
+
+        stage_means = np.zeros(n_bins * n_obs)
+        for s in range(n_bins):
+            mask = bins == s
+            if np.any(mask):
+                stage_means[s * n_obs : (s + 1) * n_obs] = ts[mask].mean(axis=0)
+        Y_stage_list.append(stage_means)
+
+    Y_stage = np.vstack(Y_stage_list)
+
+    # Fit combined PCE across all stages
+    combined_result = run_uqpc(
+        param_space=param_space,
+        Y_train=Y_stage,
+        X_train=X,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+        seed=seed,
+    )
+
+    # Also fit per-stage for individual diagnostics
+    per_stage_results: list[UQPCResult] = []
+    for s in range(n_bins):
+        Y_s = Y_stage[:, s * n_obs : (s + 1) * n_obs]
+        result = run_uqpc(
+            param_space=param_space,
+            Y_train=Y_s,
+            X_train=X,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+        per_stage_results.append(result)
+        logger.info(
+            "Stage %d/%d: relerr_train=%s, S_T=%s",
+            s + 1, n_bins,
+            result.relerr_train,
+            result.sobol.total_order,
+        )
+
+    return per_stage_results, combined_result
+
+
+# ── Aggregation helpers (shared with strategies 2-4) ────────────────
+
+
+def _aggregate_by_group(
+    Y_timeseries: list[np.ndarray],
+    Y_timeseries_meta: list[dict[str, np.ndarray]],
+    group_key: str,
+) -> dict[int, np.ndarray]:
+    """Aggregate timeseries by a metadata group key.
+
+    For each unique group value present across ALL samples, computes
+    per-sample mean observables and stacks into (n_samples, n_obs).
+
+    Args:
+        Y_timeseries: Per-sample raw timeseries arrays.
+        Y_timeseries_meta: Per-sample metadata dicts.
+        group_key: Metadata key to group by ('generation' or 'lineage_seed').
+
+    Returns:
+        Dict mapping group value → Y array of shape (n_samples, n_obs).
+    """
+    n_samples = len(Y_timeseries)
+
+    group_sets = []
+    for meta in Y_timeseries_meta:
+        if group_key not in meta:
+            return {}
+        group_sets.append(set(meta[group_key].tolist()))
+
+    common_groups = sorted(set.intersection(*group_sets)) if group_sets else []
+    if not common_groups:
+        return {}
+
+    n_obs = Y_timeseries[0].shape[1]
+    result: dict[int, np.ndarray] = {}
+    for g in common_groups:
+        Y_g = np.zeros((n_samples, n_obs))
+        for i in range(n_samples):
+            mask = Y_timeseries_meta[i][group_key] == g
+            if np.any(mask):
+                Y_g[i] = Y_timeseries[i][mask].mean(axis=0)
+        result[int(g)] = Y_g
+
+    return result
+
+
+def _compute_growth_fraction(
+    timeseries: np.ndarray,
+    mass_col_index: int = 0,
+) -> np.ndarray:
+    """Compute growth progress θ from a single-sample timeseries.
+
+    θ = [log(mass) - log(mass_birth)] / [log(mass_div) - log(mass_birth)]
+
+    This is a monotonic proxy for cell cycle progress that doesn't
+    require spectral decomposition (Koopman, DMD, etc.).
+
+    Args:
+        timeseries: Shape (n_timesteps, n_obs).
+        mass_col_index: Column index of dry mass.
+
+    Returns:
+        θ array, shape (n_timesteps,), values in [0, 1].
+    """
+    mass = timeseries[:, mass_col_index].astype(np.float64)
+    mass = np.maximum(mass, 1e-10)
+    log_mass = np.log(mass)
+    log_birth = log_mass[0]
+    log_div = log_mass[-1]
+    denom = log_div - log_birth
+    if denom <= 0:
+        return np.linspace(0, 1, len(mass))
+    return np.clip((log_mass - log_birth) / denom, 0, 1)
+
+
+def _bin_by_growth_stage(
+    theta: np.ndarray,
+    n_bins: int,
+) -> np.ndarray:
+    """Assign timesteps to growth-progress bins.
+
+    Args:
+        theta: Growth progress, shape (n_timesteps,), values in [0, 1].
+        n_bins: Number of bins.
+
+    Returns:
+        Bin indices, shape (n_timesteps,), values in [0, n_bins-1].
+    """
+    edges = np.linspace(0, 1, n_bins + 1)
+    return np.clip(np.digitize(theta, edges) - 1, 0, n_bins - 1)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Public two-stage API: sample() → cache → quantify()
+# ═══════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class QuantifyResult:
+    """Complete output of the RFC006 quantification workflow (all 4 strategies).
+
+    Attributes:
+        strategy1: UQPCResult — uniform / bulk.
+        strategy2: dict[int, UQPCResult] — per-generation (empty if no metadata).
+        strategy3: dict[int, UQPCResult] — per-lineage-seed (empty if no metadata).
+        strategy4_per_stage: list[UQPCResult] — per-growth-stage.
+        strategy4_combined: UQPCResult — combined growth-stratified fit.
+        parameter_names: Input parameter names.
+        observable_names: Output observable names.
+        cache: The PrecomputedCache that was analyzed.
+    """
+
+    strategy1: UQPCResult
+    strategy2: dict[int, UQPCResult]
+    strategy3: dict[int, UQPCResult]
+    strategy4_per_stage: list[UQPCResult]
+    strategy4_combined: UQPCResult
+    parameter_names: list[str]
+    observable_names: list[str]
+    cache: PrecomputedCache
+
+    def export(self, export_dir: str | Path) -> Path:
+        """Write all strategy artifacts to *export_dir*."""
+        import json
+
+        out = Path(export_dir)
+        out.mkdir(parents=True, exist_ok=True)
+
+        # Strategy 1
+        s1_dir = out / "strategy1_population"
+        s1_dir.mkdir(exist_ok=True)
+        np.save(s1_dir / "first_order.npy", self.strategy1.sobol.first_order)
+        np.save(s1_dir / "total_order.npy", self.strategy1.sobol.total_order)
+        np.save(s1_dir / "relerr_train.npy", self.strategy1.relerr_train)
+        self.strategy1.surrogate.export(s1_dir / "surrogate")
+
+        # Strategy 2
+        for gen, r in self.strategy2.items():
+            d = out / f"strategy2_generation_{gen}"
+            d.mkdir(exist_ok=True)
+            np.save(d / "first_order.npy", r.sobol.first_order)
+            np.save(d / "total_order.npy", r.sobol.total_order)
+
+        # Strategy 3
+        for seed, r in self.strategy3.items():
+            d = out / f"strategy3_seed_{seed}"
+            d.mkdir(exist_ok=True)
+            np.save(d / "first_order.npy", r.sobol.first_order)
+            np.save(d / "total_order.npy", r.sobol.total_order)
+
+        # Strategy 4
+        for i, r in enumerate(self.strategy4_per_stage):
+            d = out / f"strategy4_stage_{i}"
+            d.mkdir(exist_ok=True)
+            np.save(d / "first_order.npy", r.sobol.first_order)
+            np.save(d / "total_order.npy", r.sobol.total_order)
+        self.strategy4_combined.surrogate.export(out / "strategy4_surrogate")
+
+        # Summary JSON
+        summary = {
+            "parameter_names": self.parameter_names,
+            "observable_names": self.observable_names,
+            "strategy1_total_order": {
+                n: round(float(v), 6) for n, v in
+                zip(self.parameter_names, self.strategy1.sobol.total_order)
+            },
+            "strategy1_relerr_train": self.strategy1.relerr_train.tolist(),
+            "n_generations": len(self.strategy2),
+            "n_seeds": len(self.strategy3),
+            "n_growth_stages": len(self.strategy4_per_stage),
+        }
+        (out / "uq_results.json").write_text(json.dumps(summary, indent=2))
+
+        return out
+
+
+def sample(
+    sim_data_path: str | Path,
+    cache_dir: str | Path,
+    n_samples: int = 200,
+    seed: int = 42,
+    parameters: list[SimDataParameter] | None = None,
+    params_file: str | Path | None = None,
+    observable_columns: list[str] | None = None,
+    max_duration: float = 10800.0,
+    generations: int = 1,
+    n_init_sims: int = 1,
+    max_workers: int | None = None,
+) -> PrecomputedCache:
+    """UQPC Steps 1-3: setup inputs, generate samples, evaluate vEcoli.
+
+    Implements the first three steps of the PyTUQ UQPC workflow
+    (https://sandialabs.github.io/pytuq/apps/uqpc.html) with vEcoli
+    as the black-box model (``runscripts/workflow.py``).
+
+    Step 1 — Setup inputs:
+        Load ``simData.cPickle``, build parameter space from
+        ``SimDataParameter`` specs, construct input PCRV (Legendre
+        basis, order 1) encoding the affine map bounds → [-1, 1].
+
+    Step 2 — Generate samples:
+        Draw ``n_samples`` germ-space realizations via
+        ``PCRV.sampleGerm()``, map to physical parameter space via
+        ``PCRV.evalPC()``.  This is PyTUQ's native random sampling
+        (equivalent to ``uq_pc.py --sampl rand``).
+
+    Step 3 — Evaluate model:
+        Pass physical-space samples to
+        ``TimeseriesGeneratorVecoli._run_batch()``, which runs vEcoli
+        as subprocesses via ``runscripts/workflow.py`` and collects
+        Parquet outputs.  Returns aggregated Y + raw timeseries +
+        per-row generation/seed metadata.
+
+    Results are saved as a ``PrecomputedCache``:
+        ``X.npy``, ``Y.npy``, ``timeseries/``, ``metadata.json``.
+    Also saves ``germ_train.npy`` so ``quantify()`` can skip the
+    physical→germ inverse transform.
+
+    Args:
+        sim_data_path: Path to ``simData.cPickle``.
+        cache_dir: Directory to write cached data.
+        n_samples: Number of samples to draw from PCRV.
+        seed: Random seed for PCRV.sampleGerm().
+        parameters: List of ``SimDataParameter`` specs.
+            If None, uses ``DEFAULT_SIM_DATA_PARAMETERS`` (6 params).
+        params_file: Alternative: path to a JSON file containing
+            a list of ``SimDataParameter`` dicts.  Mutually exclusive
+            with ``parameters``.
+        observable_columns: Which Parquet columns to extract.
+            Defaults to dry_mass, cell_mass, volume, growth.
+        max_duration: vEcoli simulation wall-clock limit (seconds).
+        generations: Number of cell generations per simulation.
+            Use >= 2 to enable Strategy 2 (by-generation GSA).
+        n_init_sims: Number of initial seeds per variant.
+        max_workers: Max parallel subprocesses. None = sequential.
+
+    Returns:
+        PrecomputedCache with X, Y, Y_timeseries, Y_timeseries_meta,
+        and germ_train stored in metadata.
+    """
+    # ── Step 1: Setup inputs ──
+    logger.info("Step 1: loading sim_data and building parameter space")
+
+    # Load sim_data and build parameter space
+    ds = ParameterDataset(sim_data_path=str(sim_data_path))
+
+    # Resolve parameter specs
+    if parameters is not None and params_file is not None:
+        raise ValueError("Pass either `parameters` or `params_file`, not both.")
+    if params_file is not None:
+        raw = _json.loads(Path(params_file).read_text())
+        parameters = [SimDataParameter.from_dict(p) for p in raw]
+    param_space = ds.to_parameter_space(parameters=parameters)
+
+    if param_space.n_parameters == 0:
+        raise RuntimeError("Parameter space is empty.")
+
+    bounds = np.array(param_space.parameter_bounds)
+    n_params = bounds.shape[0]
+
+    # Build input PCRV from bounds (Legendre, order 1)
+    input_pc, _, _in_pcdim = _setup_input_pc(bounds)
+
+    logger.info(
+        "Parameter space: %d params, bounds shape %s",
+        n_params, bounds.shape,
+    )
+
+    # ── Step 2: Generate samples (PyTUQ-native) ──
+    logger.info("Step 2: generating %d samples via PCRV.sampleGerm()", n_samples)
+
+    if seed is not None:
+        np.random.seed(seed)
+    germ_train = input_pc.sampleGerm(n_samples)
+    X_train = input_pc.evalPC(germ_train)
+
+    logger.info(
+        "Germ samples: %s, physical samples: %s",
+        germ_train.shape, X_train.shape,
+    )
+
+    # ── Step 3: Evaluate model (vEcoli via workflow.py) ──
+    logger.info("Step 3: evaluating vEcoli at %d sample points", n_samples)
+
+    obs = observable_columns or [
+        "listeners__mass__dry_mass",
+        "listeners__mass__cell_mass",
+        "listeners__mass__volume",
+        "listeners__mass__growth",
+    ]
+    sim_func = TimeseriesGeneratorVecoli(
+        baseline_sim_data=ds.sim_data,
+        param_space=param_space,
+        max_duration=max_duration,
+        generations=generations,
+        n_init_sims=n_init_sims,
+        output_keys=[c.split("__")[-1] for c in obs],
+    )
+
+    Y_agg, Y_timeseries, Y_meta = sim_func._run_batch(
+        X_train, max_workers=max_workers,
+    )
+
+    logger.info(
+        "Model evaluation complete: Y_agg=%s, %d timeseries",
+        Y_agg.shape, len(Y_timeseries) if Y_timeseries else 0,
+    )
+
+    # ── Save to PrecomputedCache ──
+    cache = PrecomputedCache(
+        cache_dir=Path(cache_dir),
+        X=X_train,
+        Y=Y_agg,
+        parameter_names=param_space.parameter_names,
+        metadata={
+            "bounds": bounds.tolist(),
+            "seed": seed,
+            "germ_train": germ_train.tolist(),
+            "observable_columns": obs,
+        },
+        Y_timeseries=Y_timeseries,
+        Y_timeseries_meta=Y_meta,
+    )
+    cache.save()
+
+    # Also save germ samples as npy for direct reload in quantify()
+    np.save(Path(cache_dir) / "germ_train.npy", germ_train)
+
+    logger.info("Cache saved to %s", cache_dir)
+    return cache
+
+
+def quantify(
+    cache_dir: str | Path,
+    sim_data_path: str | Path,
+    polynomial_order: int = 3,
+    n_bins: int = 10,
+    regression: str = "lsq",
+    tolerance: float = 1e-3,
+    parameters: list[SimDataParameter] | None = None,
+    export_path: str | Path | None = None,
+    seed: int | None = 42,
+) -> QuantifyResult:
+    """UQPC Steps 4-5: build PC surrogates, compute Sobol indices.
+
+    Loads a ``PrecomputedCache`` produced by ``sample()`` and runs the
+    full UQPC workflow (Step 4: surrogate fitting, Step 5: sensitivity
+    analysis) for each of the four RFC006 aggregation strategies.
+
+    Germ-space samples are loaded directly from the cache (saved by
+    ``sample()``), ensuring exact consistency between the sampling
+    distribution and the PCE basis — no inverse transform needed.
+
+    Args:
+        cache_dir: Path to the cache from ``sample()``.
+        sim_data_path: Path to ``simData.cPickle`` (same as in ``sample()``).
+        polynomial_order: Output PCE order (uq_pc.py ``--outord``).
+        n_bins: Number of growth-progress bins for Strategy 4.
+        regression: PyTUQ fitting method — 'lsq', 'bcs', or 'anl'.
+        tolerance: BCS tolerance (only when regression='bcs').
+        parameters: Same ``SimDataParameter`` specs used in ``sample()``.
+            If None, uses ``DEFAULT_SIM_DATA_PARAMETERS``.
+        export_path: If given, write all artifacts here.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        QuantifyResult with all 4 strategy outputs.
+    """
+    cache_dir = Path(cache_dir)
+
+    # ── Load cache ──
+    cache = PrecomputedCache.load(cache_dir)
+    X = cache.X
+    Y = cache.Y
+
+    # ── Rebuild parameter space (same specs as sample()) ──
+    ds = ParameterDataset(sim_data_path=str(sim_data_path))
+    param_space = ds.to_parameter_space(parameters=parameters)
+
+    # ── Load germ samples (saved by sample()) ──
+    germ_path = cache_dir / "germ_train.npy"
+    if germ_path.exists():
+        germ_train = np.load(germ_path)
+        logger.info("Loaded germ samples from %s", germ_path)
+    else:
+        # Fallback: inverse-transform physical samples to germ space
+        bounds = np.array(param_space.parameter_bounds)
+        germ_train = _physical_to_germ(X, bounds)
+        logger.info("Computed germ samples from physical→germ transform")
+
+    obs = cache.metadata.get("observable_columns", [
+        "listeners__mass__dry_mass",
+        "listeners__mass__cell_mass",
+        "listeners__mass__volume",
+        "listeners__mass__growth",
+    ])
+
+    # ── Step 4-5 for each strategy ──
+
+    # Strategy 1: uniform / bulk
+    logger.info("Strategy 1: uniform (bulk)")
+    s1 = run_strategy1_uniform(
+        param_space, X, Y,
+        polynomial_order=polynomial_order,
+        regression=regression,
+        tolerance=tolerance,
+        seed=seed,
+    )
+
+    # Strategy 2: by generation
+    s2: dict[int, UQPCResult] = {}
+    if cache.Y_timeseries is not None and cache.Y_timeseries_meta is not None:
+        logger.info("Strategy 2: by generation")
+        s2 = run_strategy2_by_generation(
+            param_space, X,
+            cache.Y_timeseries, cache.Y_timeseries_meta,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+
+    # Strategy 3: by lineage seed
+    s3: dict[int, UQPCResult] = {}
+    if cache.Y_timeseries is not None and cache.Y_timeseries_meta is not None:
+        logger.info("Strategy 3: by lineage seed")
+        s3 = run_strategy3_by_seed(
+            param_space, X,
+            cache.Y_timeseries, cache.Y_timeseries_meta,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+
+    # Strategy 4: growth-stratified
+    s4_per_stage: list[UQPCResult] = []
+    s4_combined: UQPCResult | None = None
+    if cache.Y_timeseries is not None:
+        logger.info("Strategy 4: growth-stratified (%d bins)", n_bins)
+        s4_per_stage, s4_combined = run_strategy4_growth_stratified(
+            param_space, X,
+            cache.Y_timeseries,
+            n_bins=n_bins,
+            polynomial_order=polynomial_order,
+            regression=regression,
+            tolerance=tolerance,
+            seed=seed,
+        )
+    else:
+        s4_combined = s1
+        logger.warning("Strategy 4: no timeseries in cache, using bulk as fallback")
+
+    result = QuantifyResult(
+        strategy1=s1,
+        strategy2=s2,
+        strategy3=s3,
+        strategy4_per_stage=s4_per_stage,
+        strategy4_combined=s4_combined,
+        parameter_names=param_space.parameter_names,
+        observable_names=obs,
+        cache=cache,
+    )
+
+    if export_path is not None:
+        result.export(export_path)
+        logger.info("Artifacts exported to %s", export_path)
+
+    return result
