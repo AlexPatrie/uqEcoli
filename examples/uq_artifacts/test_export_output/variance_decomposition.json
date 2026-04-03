@@ -1,0 +1,30 @@
+{
+  "total_variance": [
+    0.086,
+    2e-06
+  ],
+  "generation_fraction": [
+    0.0001,
+    0.0
+  ],
+  "seed_fraction": [
+    5e-05,
+    0.0
+  ],
+  "residual_fraction": [
+    0.9999,
+    1.0
+  ],
+  "between_generation_variance": [
+    8.6e-06,
+    0.0
+  ],
+  "between_seed_variance": [
+    4.3e-06,
+    0.0
+  ],
+  "within_group_variance": [
+    0.0859,
+    2e-06
+  ]
+}

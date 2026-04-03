@@ -22,7 +22,6 @@ import pytest
 from uq.inputs import XSpaceVecoli
 from uq.pipeline.models import SimDataParameter
 from uq.sampling import PrecomputedCache
-
 from uq_simple.pipeline import (
     SimplePipelineResult,
     _aggregate_by_group,
@@ -32,24 +31,25 @@ from uq_simple.pipeline import (
     run_pipeline,
 )
 
-
 # ── Fixtures ────────────────────────────────────────────────────────
 
 
 @pytest.fixture
 def param_space():
-    return XSpaceVecoli(parameters=[
-        SimDataParameter(
-            name="rnap_free",
-            attr_path="process.transcription.fraction_active_rnap_free",
-            bounds=(0.25, 0.47),
-        ),
-        SimDataParameter(
-            name="dry_mass_frac",
-            attr_path="mass.cell_dry_mass_fraction",
-            bounds=(0.25, 0.35),
-        ),
-    ])
+    return XSpaceVecoli(
+        parameters=[
+            SimDataParameter(
+                name="rnap_free",
+                attr_path="process.transcription.fraction_active_rnap_free",
+                bounds=(0.25, 0.47),
+            ),
+            SimDataParameter(
+                name="dry_mass_frac",
+                attr_path="mass.cell_dry_mass_fraction",
+                bounds=(0.25, 0.35),
+            ),
+        ]
+    )
 
 
 def _make_synthetic_cache(
@@ -167,9 +167,7 @@ class TestAggregateByGroup:
     def test_group_by_generation(self, tmp_path):
         """Grouping by generation returns correct number of groups."""
         cache = _make_synthetic_cache(tmp_path, n_samples=10, n_generations=3)
-        grouped = _aggregate_by_group(
-            cache.Y_timeseries, cache.Y_timeseries_meta, "generation"
-        )
+        grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "generation")
         assert len(grouped) == 3
         for gen, Y_g in grouped.items():
             assert Y_g.shape == (10, 4)  # n_samples, n_obs
@@ -177,9 +175,7 @@ class TestAggregateByGroup:
     def test_group_by_seed(self, tmp_path):
         """Grouping by lineage_seed returns correct number of groups."""
         cache = _make_synthetic_cache(tmp_path, n_samples=10, n_seeds=2)
-        grouped = _aggregate_by_group(
-            cache.Y_timeseries, cache.Y_timeseries_meta, "lineage_seed"
-        )
+        grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "lineage_seed")
         assert len(grouped) == 2
         for seed, Y_s in grouped.items():
             assert Y_s.shape == (10, 4)
@@ -190,19 +186,13 @@ class TestAggregateByGroup:
         # Remove lineage_seed from metadata
         for m in cache.Y_timeseries_meta:
             del m["lineage_seed"]
-        grouped = _aggregate_by_group(
-            cache.Y_timeseries, cache.Y_timeseries_meta, "lineage_seed"
-        )
+        grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "lineage_seed")
         assert grouped == {}
 
     def test_per_group_means_are_correct(self, tmp_path):
         """Verify that group means match manual computation."""
-        cache = _make_synthetic_cache(
-            tmp_path, n_samples=2, n_timesteps=6, n_generations=2, n_obs=2
-        )
-        grouped = _aggregate_by_group(
-            cache.Y_timeseries, cache.Y_timeseries_meta, "generation"
-        )
+        cache = _make_synthetic_cache(tmp_path, n_samples=2, n_timesteps=6, n_generations=2, n_obs=2)
+        grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "generation")
         # Check first sample, generation 0
         ts = cache.Y_timeseries[0]
         gen_labels = cache.Y_timeseries_meta[0]["generation"]
@@ -219,8 +209,11 @@ class TestRunByGeneration:
         """Each generation should have its own SobolIndices."""
         cache = _make_synthetic_cache(tmp_path, n_samples=20, n_generations=3)
         result = run_by_generation(
-            param_space, cache.X, cache.Y_timeseries,
-            cache.Y_timeseries_meta, polynomial_order=1,
+            param_space,
+            cache.X,
+            cache.Y_timeseries,
+            cache.Y_timeseries_meta,
+            polynomial_order=1,
         )
         assert len(result) == 3
         for gen, sobol in result.items():
@@ -246,8 +239,11 @@ class TestRunBySeed:
         """Each seed should have its own SobolIndices."""
         cache = _make_synthetic_cache(tmp_path, n_samples=20, n_seeds=2)
         result = run_by_seed(
-            param_space, cache.X, cache.Y_timeseries,
-            cache.Y_timeseries_meta, polynomial_order=1,
+            param_space,
+            cache.X,
+            cache.Y_timeseries,
+            cache.Y_timeseries_meta,
+            polynomial_order=1,
         )
         assert len(result) == 2
         for seed, sobol in result.items():
@@ -398,7 +394,9 @@ class TestFitPCEAndSobol:
         Y = 2.0 * X[:, 0] + 0.5 * X[:, 1]
 
         sobol, surr = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=1,
         )
@@ -416,7 +414,9 @@ class TestFitPCEAndSobol:
         Y = X[:, 0] ** 2 + 0.3 * X[:, 1]
 
         _, surr = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=2,
         )
@@ -437,7 +437,9 @@ class TestFitPCEAndSobol:
         ])
 
         sobol, _ = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=1,
         )
@@ -454,7 +456,9 @@ class TestFitPCEAndSobol:
         Y = np.column_stack([X[:, 0], X[:, 1]])
 
         sobol, _ = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=1,
             per_output=True,
@@ -479,7 +483,9 @@ class TestRegressionModes:
         """Default LSQ regression produces valid Sobol."""
         X, Y, bounds = self._make_data()
         sobol, surr = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=2,
             regression="lsq",
@@ -491,7 +497,9 @@ class TestRegressionModes:
         """BCS regression produces valid (possibly sparse) Sobol."""
         X, Y, bounds = self._make_data()
         sobol, surr = _fit_pce_and_sobol(
-            X, Y, bounds,
+            X,
+            Y,
+            bounds,
             parameter_names=["x0", "x1"],
             polynomial_order=2,
             regression="bcs",

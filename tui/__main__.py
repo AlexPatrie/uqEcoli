@@ -14,9 +14,8 @@ import os
 import sys
 
 import typer
-from typer import Option
-
 from sms_api.common import StrEnumBase
+from typer import Option
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -28,7 +27,6 @@ import argparse
 
 from sms_api.tui.app import DEFAULT_API_URL
 from sms_api.tui.app import main as main_standard
-
 
 agent_cli = typer.Typer()
 

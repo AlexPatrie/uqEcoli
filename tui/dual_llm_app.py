@@ -16,14 +16,13 @@ import sys
 if sys.platform == "darwin":
     os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
+from sms_api.tui.client import BASE_URL
+from sms_api.tui.dual_llm_agent import DualLLMAgent
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Footer, Header, Input, Markdown, Static
-
-from sms_api.tui.client import BASE_URL
-from sms_api.tui.dual_llm_agent import DualLLMAgent
 
 logger = logging.getLogger(__name__)
 

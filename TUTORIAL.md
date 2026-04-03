@@ -1,4 +1,4 @@
-# UQ Framework Tutorial — `uq.common.handlers`
+# UQ Framework Tutorial — `uq_simple.workflow`
 
 Two-stage workflow for global sensitivity analysis of the vEcoli whole-cell
 model, following [RFC006](readmes/start/tools/RFC006.md) and the
@@ -42,7 +42,7 @@ Sampling follows the PyTUQ UQPC workflow directly:
 ### Python API
 
 ```python
-from uq.common.workflow import sample
+from uq_simple.workflow import sample
 
 cache = sample(
     sim_data_path="/path/to/sims/my_experiment/parca/kb/simData.cPickle",
@@ -122,7 +122,7 @@ exact consistency with the Legendre basis used in PCE fitting.
 ### Python API
 
 ```python
-from uq.common.workflow import quantify
+from uq_simple.workflow import quantify
 
 result = quantify(
     cache_dir="./uq_cache",
@@ -213,7 +213,7 @@ uq_results/
 ## Full end-to-end example
 
 ```python
-from uq.common.workflow import sample, quantify
+from uq_simple.workflow import sample, quantify
 
 SIM_DATA = "/path/to/sims/api_simulation_default/parca/kb/simData.cPickle"
 
@@ -259,7 +259,7 @@ if result.strategy4_per_stage:
 For finer control, use the step-level functions directly:
 
 ```python
-from uq.common.workflow import run_uqpc, run_strategy1_uniform
+from uq_simple.workflow import run_uqpc, run_strategy1_uniform
 from uq.pipeline.param_loader import ParameterDataset
 from uq.sampling import PrecomputedCache
 
@@ -321,40 +321,40 @@ Example interpretation:
 
 ## Regarding Strategies 1-4
 
-The PCE fitting and Sobol computation are identical across all four strategies — same _fit_surrogate → _compute_sobol path, same PyTUQ PCRV + lsq/bcs/anl machinery. The only thing that changes is how you aggregate the raw timeseries into the Y matrix that gets fed to run_uqpc.                                               
-                                                                                                                                                                                                                                                                                                                                                  
-### The raw data shape from a batch run is conceptually: 
+The PCE fitting and Sobol computation are identical across all four strategies — same _fit_surrogate → _compute_sobol path, same PyTUQ PCRV + lsq/bcs/anl machinery. The only thing that changes is how you aggregate the raw timeseries into the Y matrix that gets fed to run_uqpc.
 
-`(n_variants, n_lineage_seeds, n_generations, n_agents, n_timesteps, n_observables)`                                                                                                                                                                                                                                                          
+### The raw data shape from a batch run is conceptually:
+
+`(n_variants, n_lineage_seeds, n_generations, n_agents, n_timesteps, n_observables)`
 
 #### where:
 
-`n_agents per generation = 1 (single daughters), so generation and agent_id are 1:1 (i.e.; /generation=3/agent_id=000)`                                                                                                                                                                                                                                         
+`n_agents per generation = 1 (single daughters), so generation and agent_id are 1:1 (i.e.; /generation=3/agent_id=000)`
 
 
-### Each strategy collapses different axes before PCE sees it:                                                                                                                                                                                                                                                                                        
+### Each strategy collapses different axes before PCE sees it:
 
 ```
-┌──────────┬───────────────────────────────────────────────────┬──────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐                                                                                                                                                                 
-│ Strategy │                What gets collapsed                │                 Y shape into PCE                 │                            Lens                             │                                                                                                                                                               
-├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤                                                                                                                                                                 
-│ 1        │ seeds, generations, agents, timesteps             │ (n_variants, n_obs)                              │ Everything averaged — one scalar per variant per observable │                                                                                                                                                               
+┌──────────┬───────────────────────────────────────────────────┬──────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐
+│ Strategy │                What gets collapsed                │                 Y shape into PCE                 │                            Lens                             │
 ├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ 2        │ seeds, agents, timesteps (within each gen)        │ (n_variants, n_obs) × one PCE per generation     │ Hold generation fixed, average the rest                     │                                                                                                                                                                 
-├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤                                                                                                                                                                 
-│ 3        │ generations, agents, timesteps (within each seed) │ (n_variants, n_obs) × one PCE per seed           │ Hold seed fixed, average the rest                           │                                                                                                                                                                 
-├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤                                                                                                                                                                 
-│ 4        │ nothing collapsed temporally — binned by θ        │ (n_variants, n_bins × n_obs) × one PCE per stage │ Hold cell-cycle stage fixed                                 │                                                                                                                                                               
-└──────────┴───────────────────────────────────────────────────┴──────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘                                                                                                                                                                 
+│ 1        │ seeds, generations, agents, timesteps             │ (n_variants, n_obs)                              │ Everything averaged — one scalar per variant per observable │
+├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ 2        │ seeds, agents, timesteps (within each gen)        │ (n_variants, n_obs) × one PCE per generation     │ Hold generation fixed, average the rest                     │
+├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ 3        │ generations, agents, timesteps (within each seed) │ (n_variants, n_obs) × one PCE per seed           │ Hold seed fixed, average the rest                           │
+├──────────┼───────────────────────────────────────────────────┼──────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ 4        │ nothing collapsed temporally — binned by θ        │ (n_variants, n_bins × n_obs) × one PCE per stage │ Hold cell-cycle stage fixed                                 │
+└──────────┴───────────────────────────────────────────────────┴──────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
-The n_variants axis (`= n_samples = number of LHS points in parameter space`) is _always the row dimension_ — that's the axis PCE regresses over. _The strategies just change what's in the columns._                                                                                                                                                   
-                                                                                                                                                                                                                                                                                                                                                  
+The n_variants axis (`= n_samples = number of LHS points in parameter space`) is _always the row dimension_ — that's the axis PCE regresses over. _The strategies just change what's in the columns._
+
 So in the code, the following (for example) exists:
 
-1. `run_strategy2_by_generation calls _aggregate_by_group(..., "generation")` to partition timeseries rows by their generation label, 
-2. computes per-generation means, 
-3. calls the exact same run_uqpc() that Strategy 1 uses. 
+1. `run_strategy2_by_generation calls _aggregate_by_group(..., "generation")` to partition timeseries rows by their generation label,
+2. computes per-generation means,
+3. calls the exact same run_uqpc() that Strategy 1 uses.
 
 Strategy 3 does the same with `"lineage_seed"`. _The GSA algorithm is completely agnostic to which lens produced the Y matrix._
 
@@ -365,7 +365,7 @@ Strategy 3 does the same with `"lineage_seed"`. _The GSA algorithm is completely
 A Textual-based terminal UI wraps both `sample()` and `quantify()`:
 
 ```bash
-uv run python -m uq.common.tui
+uv run python -m uq_simple.tui
 ```
 
 Four tabs: **Sample** (fill in simData path, click Run), **Quantify**

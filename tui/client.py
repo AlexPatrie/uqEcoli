@@ -4,7 +4,6 @@ from enum import StrEnum
 from typing import Any
 
 import httpx
-
 from sms_api.simulation.models import (
     HpcRun,
     RegisteredSimulators,
