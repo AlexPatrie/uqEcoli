@@ -29,6 +29,7 @@ if sys.platform == "darwin":
         current = multiprocessing.get_start_method()
         if current != "spawn":
             import warnings
+
             warnings.warn(f"Multiprocessing start method already set to '{current}', not 'spawn'")
 
 import torch
@@ -77,13 +78,7 @@ def get_device(as_mapping: bool = False) -> DeviceMapping | str:
     Returns:
         Device string or DeviceMapping for model loading.
     """
-    dev = (
-        Device.MPS
-        if torch.backends.mps.is_available()
-        else Device.CUDA
-        if torch.cuda.is_available()
-        else Device.CPU
-    )
+    dev = Device.MPS if torch.backends.mps.is_available() else Device.CUDA if torch.cuda.is_available() else Device.CPU
     return DeviceMapping({"": dev}) if as_mapping else dev
 
 
@@ -247,9 +242,7 @@ def generate_response(prompt: str, max_new_tokens: int = 128) -> str:
 
     # Format as chat message
     messages = [{"role": "user", "content": prompt}]
-    chat_input = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
+    chat_input = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     # Tokenize
     inputs = tokenizer(chat_input, return_tensors="pt")

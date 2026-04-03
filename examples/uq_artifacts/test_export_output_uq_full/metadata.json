@@ -1,0 +1,10 @@
+{
+  "n_cell_cycle_stages": 10,
+  "population_params": [
+    "vio_expression",
+    "vio_trl_eff",
+    "mecillinam_concentration"
+  ],
+  "population_stratification": "population",
+  "cell_cycle_stratification": "cell_cycle"
+}

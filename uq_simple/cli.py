@@ -43,87 +43,39 @@ app = typer.Typer(help="Scientifically transparent UQ for vEcoli.")
 
 @app.command()
 def sample(
-    experiment_ids: list[str] = [
-        "first_sms_perturb_growth",
-        "sms_variants_multigeneration",
-        "sms_multiseed",
-        "sms",
-        "sms_multiseed_multigen",
-        "single",
-        "sms_multigen",
-        "sms_perturb_growth_10800",
-        "sms_perturb",
-        "test_installation",
-        "sms_perturb_growth",
-        "sms_variants",
-        "sms_single",
-        "multigeneration",
-    ],
-    sim_base_path: str | None = None,
-    cache_dir: str | None = None,
-    n_samples: int = 200,
+    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+    cache_dir: str = typer.Option("./uq_cache", help="Cache output directory"),
+    n_samples: int = 20,
     seed: int = 42,
-    observable_columns: list[str] | None = None,
-    max_workers: int | None = None,
-    max_duration: float = 10800.0,
     generations: int = 1,
-    live: bool = True,
+    n_init_sims: int = 1,
+    max_duration: float = 10800.0,
     params_file: str | None = None,
-    batch_dir: str | None = None,
 ) -> None:
-    """Generate LHS samples, run vEcoli, cache (X, Y).
+    """UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli workflow.py.
 
-    Identical to ``uq sample`` — uses Latin Hypercube Sampling,
-    subprocess-based vEcoli execution, and PrecomputedCache.
+    Generates samples using PyTUQ's native PCRV sampling, evaluates
+    vEcoli as a subprocess via runscripts/workflow.py, and caches
+    (X, Y, timeseries) to disk as a PrecomputedCache.
 
-    Use --generations >= 2 to enable Strategy 2 (by-generation GSA)
-    in the quantify step.  Generation and lineage seed metadata are
-    automatically extracted from hive-partitioned Parquet outputs.
+    Use --generations >= 2 to enable Strategy 2 (by-generation GSA).
     """
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
+    from uq_simple.workflow import sample as wf_sample
+
+    console.print(f"[bold cyan]Sampling:[/bold cyan] {n_samples} variants, {n_init_sims} seeds, {generations} gens")
+    console.print(f"  [dim]simData: {sim_data_path}[/dim]")
+    console.print(f"  [dim]cache:   {cache_dir}[/dim]")
+
+    result = wf_sample(
+        sim_data_path=sim_data_path,
+        cache_dir=cache_dir,
+        n_samples=n_samples,
+        seed=seed,
+        params_file=params_file,
+        max_duration=max_duration,
+        generations=generations,
+        n_init_sims=n_init_sims,
     )
-
-    from uq.handlers import generate_samples, verify_out_dirs
-
-    verify_out_dirs(sim_base_path, experiment_ids)
-
-    _batch_dir = Path(batch_dir) if batch_dir else None
-
-    with Progress(
-        SpinnerColumn("dots", style="bold magenta"),
-        TextColumn("[bold cyan]{task.description:<35}"),
-        BarColumn(bar_width=40, complete_style="magenta", finished_style="green"),
-        TextColumn("[bold green]{task.percentage:>5.1f}%"),
-        TextColumn("[dim]|[/dim]"),
-        TimeElapsedColumn(),
-        console=console,
-        transient=False,
-    ) as progress:
-        task = progress.add_task("Initializing", total=100)
-
-        def _on_progress(description: str, advance: int) -> None:
-            progress.update(task, advance=advance, description=description)
-
-        result = generate_samples(
-            experiment_ids=experiment_ids,
-            sim_base_path=sim_base_path,
-            cache_dir=cache_dir,
-            n_samples=n_samples,
-            seed=seed,
-            observable_columns=observable_columns,
-            max_workers=max_workers,
-            max_duration=max_duration,
-            generations=generations,
-            live=live,
-            params_file=params_file,
-            batch_dir=_batch_dir,
-            on_progress=_on_progress,
-        )
 
     console.print(
         f"[bold green]Cached {result.X.shape[0]} samples[/bold green] "
@@ -133,31 +85,22 @@ def sample(
     if result.Y_timeseries is not None:
         console.print(f"  [dim]Timeseries: {len(result.Y_timeseries)} samples[/dim]")
     if result.Y_timeseries_meta is not None:
-        console.print("  [dim]Metadata: generation/seed labels cached (strategies 2-3 enabled)[/dim]")
-    elif generations < 2:
-        console.print(
-            "  [dim yellow]Hint: use --generations >= 2 to enable strategy 2 (by-generation GSA)[/dim yellow]"
-        )
+        console.print("  [dim]Metadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
 
 
-# ── quantify: simplified pipeline ────────────────────────────────────
+# ── quantify ─────────────────────────────────────────────────────────
 
 
 @app.command()
 def quantify(
-    experiment_ids: list[str],
-    sim_base_path: str,
-    precomputed_path: str,
-    export_path: str,
+    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+    cache_dir: str = typer.Option("./uq_cache", help="Cache from sample step"),
+    export_path: str = typer.Option("./uq_results", help="Export directory"),
     n_bins: int = 10,
-    polynomial_order: int = 1,
-    observable_columns: list[str] | None = None,
+    polynomial_order: int = 2,
     regression: str = "lsq",
 ) -> None:
-    """Run the simplified UQ pipeline (all 4 RFC006 strategies).
-
-    Loads cached samples, fits PCE surrogates, computes Sobol indices
-    across all four aggregation strategies:
+    """UQPC Steps 4-5: fit PCE surrogates, compute Sobol (all 4 strategies).
 
     \b
     Strategy 1: Uniform (bulk) — population-averaged sensitivity
@@ -167,52 +110,21 @@ def quantify(
 
     \b
     Regression methods (--regression):
-      lsq  Least squares (default) — standard overdetermined solve
-      bcs  Bayesian Compressed Sensing — sparse PCE (fewer terms)
-      anl  Analytical — posterior predictive with uncertainty
-
-    Strategies 2-3 require generation/seed metadata in the cache
-    (automatically stored when sampling with live vEcoli).
+      lsq  Least squares (default)
+      bcs  Bayesian Compressed Sensing (sparse)
+      anl  Analytical Bayesian
     """
-    from uq.pipe import initialize_datasets
-    from uq.sampling import PrecomputedCache
-    from uq_simple.pipeline import run_pipeline
+    from uq_simple.workflow import quantify as wf_quantify
 
-    obs = observable_columns or [
-        "listeners__mass__dry_mass",
-        "listeners__mass__cell_mass",
-        "listeners__mass__volume",
-        "listeners__mass__growth",
-    ]
+    console.print(f"[bold cyan]Quantify:[/bold cyan] order={polynomial_order}, bins={n_bins}, regression={regression}")
 
-    console.print("[bold cyan]Loading cached samples...[/bold cyan]")
-    cache = PrecomputedCache.load(precomputed_path)
-
-    console.print("[bold cyan]Loading parameter space...[/bold cyan]")
-    ds = initialize_datasets(
-        experiment_ids=experiment_ids,
-        sim_base_path=sim_base_path,
-        observable_columns=obs,
-    )
-
-    strategies_available = "1"
-    if cache.Y_timeseries_meta is not None:
-        strategies_available = "1,2,3,4"
-    else:
-        strategies_available = "1,4"
-    console.print(
-        f"[bold cyan]Running pipeline[/bold cyan] "
-        f"(order={polynomial_order}, bins={n_bins}, "
-        f"regression={regression}, strategies={strategies_available})"
-    )
-    result = run_pipeline(
-        cache=cache,
-        param_space=ds.parameter_space,
-        observable_names=obs,
+    result = wf_quantify(
+        cache_dir=cache_dir,
+        sim_data_path=sim_data_path,
         polynomial_order=polynomial_order,
         n_bins=n_bins,
-        export_path=export_path,
         regression=regression,
+        export_path=export_path,
     )
 
     _print_report(result)
@@ -227,10 +139,8 @@ def _pct(v: float) -> str:
 
 
 def _print_report(result) -> None:
-    """Render results as a rich terminal report."""
+    """Render QuantifyResult as a rich terminal report."""
     from rich.columns import Columns
-
-    from uq_simple.pipeline import _stage_description
 
     console.print()
 
@@ -243,25 +153,18 @@ def _print_report(result) -> None:
     console.print("[dim]  Refs: Macklin et al. Science 2020; Ahn-Horst et al. npj Syst Biol Appl 2022[/dim]")
     console.print()
 
-    # Phase 1 / Strategy 1
+    # Strategy 1: population
     _print_sobol_table(
         "STRATEGY 1 // POPULATION-AVERAGED (all cells, all times)",
-        result.population_sobol,
+        result.strategy1.sobol,
         "cyan",
     )
 
     # Strategy 2: by generation
-    if result.per_generation_sobol:
+    if result.strategy2:
         gen_tables = []
-        for gen, sobol in sorted(result.per_generation_sobol.items()):
-            gen_tables.append(
-                _sobol_table(
-                    f"Generation {gen}",
-                    sobol,
-                    "blue",
-                    n_top=3,
-                )
-            )
+        for gen, r in sorted(result.strategy2.items()):
+            gen_tables.append(_sobol_table(f"Generation {gen}", r.sobol, "blue", n_top=3))
         console.print(
             Panel(
                 Columns(gen_tables, equal=True, expand=True),
@@ -274,17 +177,10 @@ def _print_report(result) -> None:
         )
 
     # Strategy 3: by lineage seed
-    if result.per_seed_sobol:
+    if result.strategy3:
         seed_tables = []
-        for seed, sobol in sorted(result.per_seed_sobol.items()):
-            seed_tables.append(
-                _sobol_table(
-                    f"Seed {seed}",
-                    sobol,
-                    "yellow",
-                    n_top=3,
-                )
-            )
+        for seed, r in sorted(result.strategy3.items()):
+            seed_tables.append(_sobol_table(f"Seed {seed}", r.sobol, "yellow", n_top=3))
         console.print(
             Panel(
                 Columns(seed_tables, equal=True, expand=True),
@@ -296,30 +192,18 @@ def _print_report(result) -> None:
             )
         )
 
-    # Phase 2 / Strategy 4: growth-stratified
-    if result.per_stage_sobol:
-        n = len(result.per_stage_sobol)
+    # Strategy 4: growth-stratified
+    if result.strategy4_per_stage:
+        n = len(result.strategy4_per_stage)
         tables = []
-        for i, sobol in enumerate(result.per_stage_sobol):
+        for i, r in enumerate(result.strategy4_per_stage):
             lo, hi = i / n, (i + 1) / n
-            desc = _stage_description(i, n)
-            tables.append(
-                _sobol_table(
-                    f"θ {lo:.0%}–{hi:.0%} ({desc.split('(')[0].strip()})",
-                    sobol,
-                    "green",
-                    n_top=3,
-                )
-            )
-
+            tables.append(_sobol_table(f"θ {lo:.0%}–{hi:.0%}", r.sobol, "green", n_top=3))
         console.print(
             Panel(
                 Columns(tables, equal=True, expand=True),
-                title=f"[bold green]STRATEGY 4 // GROWTH-STRATIFIED SENSITIVITY ({n} stages)[/bold green]",
-                subtitle=(
-                    "[dim]θ = normalized log(dry_mass), 0 = birth, 1 = division. "
-                    "How does parameter importance change as the cell grows?[/dim]"
-                ),
+                title=f"[bold green]STRATEGY 4 // GROWTH-STRATIFIED ({n} stages)[/bold green]",
+                subtitle="[dim]θ = normalized log(dry_mass), 0=birth, 1=division[/dim]",
                 border_style="green",
                 box=box.ROUNDED,
                 padding=(0, 1),
@@ -389,7 +273,7 @@ def tui() -> None:
     Four tabs: Sample, Quantify, Results, Log.
     Keyboard: [s] Sample  [u] Quantify  [r] Results  [l] Log  [q] Quit
     """
-    from uq.common.tui import UQPCApp
+    from uq_simple.tui import UQPCApp
 
     UQPCApp().run()
 

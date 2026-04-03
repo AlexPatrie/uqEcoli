@@ -6,13 +6,12 @@ import logging
 import re
 from typing import Any
 
+from sms_api.tui.client import SMSAPIClient
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Footer, Header, Input, Markdown, Static
-
-from sms_api.tui.client import SMSAPIClient
 
 logger = logging.getLogger(__name__)
 

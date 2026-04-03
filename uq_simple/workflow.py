@@ -175,7 +175,9 @@ def _generate_training_samples(
 
     logger.info(
         "Generated %d training samples (%d germ dims, %d physical params)",
-        n_samples, in_pcdim, X_train.shape[1],
+        n_samples,
+        in_pcdim,
+        X_train.shape[1],
     )
     return germ_train, X_train
 
@@ -302,9 +304,11 @@ def _fit_surrogate(
     n_out = Y_train.shape[1]
 
     logger.info(
-        "Fitting PCE surrogate: order=%d, method=%s, "
-        "n_train=%d, n_outputs=%d",
-        polynomial_order, regression, n_train, n_out,
+        "Fitting PCE surrogate: order=%d, method=%s, n_train=%d, n_outputs=%d",
+        polynomial_order,
+        regression,
+        n_train,
+        n_out,
     )
 
     # Step 1-2: Multi-index + PCRV
@@ -329,10 +333,7 @@ def _fit_surrogate(
         elif regression == "lsq":
             lreg_obj = lsq()
         else:
-            raise ValueError(
-                f"Unknown regression method: {regression!r}. "
-                f"Must be 'lsq', 'bcs', or 'anl'."
-            )
+            raise ValueError(f"Unknown regression method: {regression!r}. Must be 'lsq', 'bcs', or 'anl'.")
 
         lreg_obj.fita(Amat, Y_train[:, j])
         mindices_list.append(mindex[lreg_obj.used, :])
@@ -427,8 +428,8 @@ def _compute_sobol(
     Returns:
         SobolIndices with main, total, and joint indices.
     """
-    allsens_main = output_pcrv.computeSens()       # (n_out, n_params)
-    allsens_total = output_pcrv.computeTotSens()    # (n_out, n_params)
+    allsens_main = output_pcrv.computeSens()  # (n_out, n_params)
+    allsens_total = output_pcrv.computeTotSens()  # (n_out, n_params)
     allsens_joint = output_pcrv.computeJointSens()  # (n_out, n_params, n_params)
 
     n_outputs = Y_train.shape[1]
@@ -488,9 +489,7 @@ def _build_surrogate(
         PCESurrogate ready for export / prediction.
     """
     coefficients = output_pcrv.coefs[0] if output_pcrv.coefs else np.zeros(1)
-    multi_indices = output_pcrv.mindices[0] if output_pcrv.mindices else np.zeros(
-        (1, n_params), dtype=int
-    )
+    multi_indices = output_pcrv.mindices[0] if output_pcrv.mindices else np.zeros((1, n_params), dtype=int)
 
     return PCESurrogate(
         coefficients=coefficients,
@@ -557,10 +556,12 @@ def run_uqpc(
     n_samples, n_outputs = Y_train.shape
 
     logger.info(
-        "UQPC workflow: %d samples, %d params, %d outputs, "
-        "order=%d, method=%s",
-        n_samples, n_params, n_outputs,
-        polynomial_order, regression,
+        "UQPC workflow: %d samples, %d params, %d outputs, order=%d, method=%s",
+        n_samples,
+        n_params,
+        n_outputs,
+        polynomial_order,
+        regression,
     )
 
     # ── Step 1: Input PC setup ──
@@ -571,7 +572,10 @@ def run_uqpc(
         germ_train = _physical_to_germ(X_train, bounds)
     else:
         germ_train, X_train = _generate_training_samples(
-            pc, n_samples, in_pcdim, seed=seed,
+            pc,
+            n_samples,
+            in_pcdim,
+            seed=seed,
         )
 
     # ── Step 2b: Generate test samples (if requested) ──
@@ -584,7 +588,8 @@ def run_uqpc(
 
     # ── Step 4: Construct PC surrogate ──
     output_pcrv, linregs = _fit_surrogate(
-        germ_train, Y_train,
+        germ_train,
+        Y_train,
         polynomial_order=polynomial_order,
         regression=regression,
         tolerance=tolerance,
@@ -592,14 +597,20 @@ def run_uqpc(
 
     # Predict at training points
     Y_train_pc, Y_train_pc_std = _predict_and_variance(
-        output_pcrv, linregs, germ_train, n_outputs,
+        output_pcrv,
+        linregs,
+        germ_train,
+        n_outputs,
     )
 
     # Predict at test points (if available — model eval not done here)
     Y_test_pc, Y_test_pc_std, Y_test = None, None, None
     if germ_test is not None:
         Y_test_pc, Y_test_pc_std = _predict_and_variance(
-            output_pcrv, linregs, germ_test, n_outputs,
+            output_pcrv,
+            linregs,
+            germ_test,
+            n_outputs,
         )
 
     # ── Step 5: Relative errors ──
@@ -615,7 +626,11 @@ def run_uqpc(
 
     # ── Build exportable surrogate ──
     surrogate = _build_surrogate(
-        output_pcrv, polynomial_order, n_params, n_outputs, bounds,
+        output_pcrv,
+        polynomial_order,
+        n_params,
+        n_outputs,
+        bounds,
     )
 
     return UQPCResult(
@@ -678,7 +693,10 @@ def run_uqpc_live(
 
     # ── Step 2: Generate training samples ──
     germ_train, X_train = _generate_training_samples(
-        pc, n_samples, in_pcdim, seed=seed,
+        pc,
+        n_samples,
+        in_pcdim,
+        seed=seed,
     )
 
     # ── Step 2b: Generate test samples ──
@@ -688,27 +706,36 @@ def run_uqpc_live(
 
     # ── Step 3: Evaluate forward model ──
     Y_train, Y_test = _evaluate_model_online(
-        simulation_func, X_train, X_test,
+        simulation_func,
+        X_train,
+        X_test,
     )
 
     n_outputs = Y_train.shape[1]
 
     # ── Step 4: Construct PC surrogate ──
     output_pcrv, linregs = _fit_surrogate(
-        germ_train, Y_train,
+        germ_train,
+        Y_train,
         polynomial_order=polynomial_order,
         regression=regression,
         tolerance=tolerance,
     )
 
     Y_train_pc, Y_train_pc_std = _predict_and_variance(
-        output_pcrv, linregs, germ_train, n_outputs,
+        output_pcrv,
+        linregs,
+        germ_train,
+        n_outputs,
     )
 
     Y_test_pc, Y_test_pc_std = None, None
     if germ_test is not None:
         Y_test_pc, Y_test_pc_std = _predict_and_variance(
-            output_pcrv, linregs, germ_test, n_outputs,
+            output_pcrv,
+            linregs,
+            germ_test,
+            n_outputs,
         )
 
     # ── Step 5: Relative errors ──
@@ -727,7 +754,11 @@ def run_uqpc_live(
     # ── Build exportable surrogate ──
     n_params = bounds.shape[0]
     surrogate = _build_surrogate(
-        output_pcrv, polynomial_order, n_params, n_outputs, bounds,
+        output_pcrv,
+        polynomial_order,
+        n_params,
+        n_outputs,
+        bounds,
     )
 
     return UQPCResult(
@@ -1015,7 +1046,8 @@ def run_strategy4_growth_stratified(
         per_stage_results.append(result)
         logger.info(
             "Stage %d/%d: relerr_train=%s, S_T=%s",
-            s + 1, n_bins,
+            s + 1,
+            n_bins,
             result.relerr_train,
             result.sobol.total_order,
         )
@@ -1145,54 +1177,97 @@ class QuantifyResult:
     cache: PrecomputedCache
 
     def export(self, export_dir: str | Path) -> Path:
-        """Write all strategy artifacts to *export_dir*."""
+        """Write all strategy artifacts to *export_dir*.
+
+        Produces a directory layout compatible with both the Marimo
+        dashboard (``app/dashboard_simple.py``) and the Textual TUI.
+        The ``uq_results.json`` follows the same schema as
+        ``SimplePipelineResult._build_summary()`` so the dashboard
+        can read it without changes.
+        """
         import json
 
         out = Path(export_dir)
         out.mkdir(parents=True, exist_ok=True)
+        names = self.parameter_names
+        s1 = self.strategy1
 
-        # Strategy 1
-        s1_dir = out / "strategy1_population"
-        s1_dir.mkdir(exist_ok=True)
-        np.save(s1_dir / "first_order.npy", self.strategy1.sobol.first_order)
-        np.save(s1_dir / "total_order.npy", self.strategy1.sobol.total_order)
-        np.save(s1_dir / "relerr_train.npy", self.strategy1.relerr_train)
-        self.strategy1.surrogate.export(s1_dir / "surrogate")
+        # Population surrogate (dashboard expects population_surrogate/)
+        s1.surrogate.export(out / "population_surrogate")
 
-        # Strategy 2
+        # Population Sobol .npy
+        pop_dir = out / "population_sobol"
+        pop_dir.mkdir(exist_ok=True)
+        np.save(pop_dir / "first_order.npy", s1.sobol.first_order)
+        np.save(pop_dir / "total_order.npy", s1.sobol.total_order)
+
+        # Per-generation Sobol
         for gen, r in self.strategy2.items():
-            d = out / f"strategy2_generation_{gen}"
+            d = out / f"generation_{gen}_sobol"
             d.mkdir(exist_ok=True)
             np.save(d / "first_order.npy", r.sobol.first_order)
             np.save(d / "total_order.npy", r.sobol.total_order)
 
-        # Strategy 3
+        # Per-seed Sobol
         for seed, r in self.strategy3.items():
-            d = out / f"strategy3_seed_{seed}"
+            d = out / f"seed_{seed}_sobol"
             d.mkdir(exist_ok=True)
             np.save(d / "first_order.npy", r.sobol.first_order)
             np.save(d / "total_order.npy", r.sobol.total_order)
 
-        # Strategy 4
+        # Growth-stratified Sobol + surrogate
         for i, r in enumerate(self.strategy4_per_stage):
-            d = out / f"strategy4_stage_{i}"
+            d = out / f"growth_stage_{i}_sobol"
             d.mkdir(exist_ok=True)
             np.save(d / "first_order.npy", r.sobol.first_order)
             np.save(d / "total_order.npy", r.sobol.total_order)
-        self.strategy4_combined.surrogate.export(out / "strategy4_surrogate")
+        self.strategy4_combined.surrogate.export(out / "growth_stratified_surrogate")
 
-        # Summary JSON
-        summary = {
-            "parameter_names": self.parameter_names,
+        # Summary JSON — dashboard-compatible format
+        n_bins = len(self.strategy4_per_stage)
+        summary: dict[str, Any] = {
+            "framework": "uq_simple (PyTUQ UQPC workflow)",
+            "parameters": {n: {"index": i} for i, n in enumerate(names)},
+            "n_parameters": len(names),
             "observable_names": self.observable_names,
-            "strategy1_total_order": {
-                n: round(float(v), 6) for n, v in
-                zip(self.parameter_names, self.strategy1.sobol.total_order)
+            "phase1_population": {
+                "sobol_total_order": {n: round(float(v), 6) for n, v in zip(names, s1.sobol.total_order)},
+                "sobol_first_order": {n: round(float(v), 6) for n, v in zip(names, s1.sobol.first_order)},
             },
-            "strategy1_relerr_train": self.strategy1.relerr_train.tolist(),
-            "n_generations": len(self.strategy2),
-            "n_seeds": len(self.strategy3),
-            "n_growth_stages": len(self.strategy4_per_stage),
+            "strategy2_by_generation": {
+                "n_generations": len(self.strategy2),
+                "generations": [
+                    {
+                        "generation": gen,
+                        "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                    }
+                    for gen, r in sorted(self.strategy2.items())
+                ],
+            },
+            "strategy3_by_seed": {
+                "n_seeds": len(self.strategy3),
+                "seeds": [
+                    {
+                        "lineage_seed": seed,
+                        "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                    }
+                    for seed, r in sorted(self.strategy3.items())
+                ],
+            },
+            "phase2_growth_stratified": {
+                "n_stages": n_bins,
+                "stages": [
+                    {
+                        "stage": j,
+                        "theta_range": [
+                            round(j / n_bins, 3) if n_bins > 0 else 0,
+                            round((j + 1) / n_bins, 3) if n_bins > 0 else 1,
+                        ],
+                        "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                    }
+                    for j, r in enumerate(self.strategy4_per_stage)
+                ],
+            },
         }
         (out / "uq_results.json").write_text(json.dumps(summary, indent=2))
 
@@ -1288,7 +1363,8 @@ def sample(
 
     logger.info(
         "Parameter space: %d params, bounds shape %s",
-        n_params, bounds.shape,
+        n_params,
+        bounds.shape,
     )
 
     # ── Step 2: Generate samples (PyTUQ-native) ──
@@ -1301,7 +1377,8 @@ def sample(
 
     logger.info(
         "Germ samples: %s, physical samples: %s",
-        germ_train.shape, X_train.shape,
+        germ_train.shape,
+        X_train.shape,
     )
 
     # ── Step 3: Evaluate model (vEcoli via workflow.py) ──
@@ -1323,12 +1400,14 @@ def sample(
     )
 
     Y_agg, Y_timeseries, Y_meta = sim_func._run_batch(
-        X_train, max_workers=max_workers,
+        X_train,
+        max_workers=max_workers,
     )
 
     logger.info(
         "Model evaluation complete: Y_agg=%s, %d timeseries",
-        Y_agg.shape, len(Y_timeseries) if Y_timeseries else 0,
+        Y_agg.shape,
+        len(Y_timeseries) if Y_timeseries else 0,
     )
 
     # ── Save to PrecomputedCache ──
@@ -1413,19 +1492,24 @@ def quantify(
         germ_train = _physical_to_germ(X, bounds)
         logger.info("Computed germ samples from physical→germ transform")
 
-    obs = cache.metadata.get("observable_columns", [
-        "listeners__mass__dry_mass",
-        "listeners__mass__cell_mass",
-        "listeners__mass__volume",
-        "listeners__mass__growth",
-    ])
+    obs = cache.metadata.get(
+        "observable_columns",
+        [
+            "listeners__mass__dry_mass",
+            "listeners__mass__cell_mass",
+            "listeners__mass__volume",
+            "listeners__mass__growth",
+        ],
+    )
 
     # ── Step 4-5 for each strategy ──
 
     # Strategy 1: uniform / bulk
     logger.info("Strategy 1: uniform (bulk)")
     s1 = run_strategy1_uniform(
-        param_space, X, Y,
+        param_space,
+        X,
+        Y,
         polynomial_order=polynomial_order,
         regression=regression,
         tolerance=tolerance,
@@ -1437,8 +1521,10 @@ def quantify(
     if cache.Y_timeseries is not None and cache.Y_timeseries_meta is not None:
         logger.info("Strategy 2: by generation")
         s2 = run_strategy2_by_generation(
-            param_space, X,
-            cache.Y_timeseries, cache.Y_timeseries_meta,
+            param_space,
+            X,
+            cache.Y_timeseries,
+            cache.Y_timeseries_meta,
             polynomial_order=polynomial_order,
             regression=regression,
             tolerance=tolerance,
@@ -1450,8 +1536,10 @@ def quantify(
     if cache.Y_timeseries is not None and cache.Y_timeseries_meta is not None:
         logger.info("Strategy 3: by lineage seed")
         s3 = run_strategy3_by_seed(
-            param_space, X,
-            cache.Y_timeseries, cache.Y_timeseries_meta,
+            param_space,
+            X,
+            cache.Y_timeseries,
+            cache.Y_timeseries_meta,
             polynomial_order=polynomial_order,
             regression=regression,
             tolerance=tolerance,
@@ -1464,7 +1552,8 @@ def quantify(
     if cache.Y_timeseries is not None:
         logger.info("Strategy 4: growth-stratified (%d bins)", n_bins)
         s4_per_stage, s4_combined = run_strategy4_growth_stratified(
-            param_space, X,
+            param_space,
+            X,
             cache.Y_timeseries,
             n_bins=n_bins,
             polynomial_order=polynomial_order,

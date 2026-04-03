@@ -1,5 +1,5 @@
 """
-Tests for ``uq.common.handlers`` — the RFC006 UQPC workflow.
+Tests for ``uq_simple.workflow`` — the RFC006 UQPC workflow.
 
 Demonstrates that the PyTUQ-based PCE pipeline (adapted from
 ``apps/uqpc/uq_pc.py``) correctly:
@@ -25,10 +25,13 @@ import numpy as np
 import pytest
 from pytuq.rv.pcrv import PCRV
 
-from uq.common.workflow import (
+from uq.inputs import XSpaceVecoli
+from uq.pipeline.models import SimDataParameter
+from uq.sampling import PrecomputedCache
+from uq.sensitivity import PCESurrogate, SobolIndices
+from uq_simple.workflow import (
     UQPCResult,
     _bin_by_growth_stage,
-    _build_surrogate,
     _compute_growth_fraction,
     _compute_relative_errors,
     _compute_sobol,
@@ -43,10 +46,6 @@ from uq.common.workflow import (
     run_uqpc,
     run_uqpc_from_cache,
 )
-from uq.inputs import XSpaceVecoli
-from uq.pipeline.models import SimDataParameter
-from uq.sampling import PrecomputedCache
-from uq.sensitivity import PCESurrogate, SobolIndices
 
 # ── Fixtures ────────────────────────────────────────────────────────
 
@@ -195,9 +194,7 @@ def _generate_timeseries_with_meta(
         Y_ts.append(np.column_stack([mass, obs2]))
 
         # Assign rows to generations and seeds uniformly
-        generations = np.repeat(np.arange(n_generations), n_timesteps // n_generations + 1)[
-            :n_timesteps
-        ]
+        generations = np.repeat(np.arange(n_generations), n_timesteps // n_generations + 1)[:n_timesteps]
         seeds = np.repeat(np.arange(n_seeds), n_timesteps // n_seeds + 1)[:n_timesteps]
         Y_meta.append({
             "generation": generations,
@@ -325,7 +322,11 @@ class TestStep4SurrogateFitting:
         X, Y = _generate_quadratic_data(n_samples=60)
         germ = _physical_to_germ(X, bounds)
         pcrv, _linregs = _fit_surrogate(
-            germ, Y, polynomial_order=3, regression="bcs", tolerance=1e-4,
+            germ,
+            Y,
+            polynomial_order=3,
+            regression="bcs",
+            tolerance=1e-4,
         )
 
         Y_pred = pcrv.function(germ)
@@ -349,7 +350,7 @@ class TestStep4SurrogateFitting:
         """Unknown regression method should raise ValueError."""
         bounds = np.array([[0.0, 1.0]])
         germ = np.linspace(-1, 1, 10).reshape(-1, 1)
-        Y = germ ** 2
+        Y = germ**2
         with pytest.raises(ValueError, match="Unknown regression method"):
             _fit_surrogate(germ, Y, polynomial_order=2, regression="xyz")
 
@@ -593,10 +594,16 @@ class TestStrategy2ByGeneration:
     def test_strategy2_returns_per_generation_results(self):
         ps = _make_param_space(n_params=2)
         X, Y_ts, Y_meta = _generate_timeseries_with_meta(
-            n_samples=30, n_generations=3, n_seeds=1,
+            n_samples=30,
+            n_generations=3,
+            n_seeds=1,
         )
         results = run_strategy2_by_generation(
-            ps, X, Y_ts, Y_meta, polynomial_order=2,
+            ps,
+            X,
+            Y_ts,
+            Y_meta,
+            polynomial_order=2,
         )
         assert isinstance(results, dict)
         assert len(results) == 3  # 3 generations
@@ -636,7 +643,9 @@ class TestStrategy3BySeed:
     def test_strategy3_returns_per_seed_results(self):
         ps = _make_param_space(n_params=2)
         X, Y_ts, Y_meta = _generate_timeseries_with_meta(
-            n_samples=30, n_seeds=2, n_generations=1,
+            n_samples=30,
+            n_seeds=2,
+            n_generations=1,
         )
         results = run_strategy3_by_seed(ps, X, Y_ts, Y_meta, polynomial_order=2)
         assert isinstance(results, dict)
@@ -666,7 +675,11 @@ class TestStrategy4GrowthStratified:
         ps = _make_param_space(n_params=2)
         X, Y_ts = _generate_synthetic_timeseries(n_samples=30, n_obs=2)
         per_stage, combined = run_strategy4_growth_stratified(
-            ps, X, Y_ts, n_bins=5, polynomial_order=2,
+            ps,
+            X,
+            Y_ts,
+            n_bins=5,
+            polynomial_order=2,
         )
         assert len(per_stage) == 5
         assert isinstance(combined, UQPCResult)
@@ -679,7 +692,11 @@ class TestStrategy4GrowthStratified:
         ps = _make_param_space(n_params=2)
         X, Y_ts = _generate_synthetic_timeseries(n_samples=40, n_obs=2)
         per_stage, _ = run_strategy4_growth_stratified(
-            ps, X, Y_ts, n_bins=5, polynomial_order=2,
+            ps,
+            X,
+            Y_ts,
+            n_bins=5,
+            polynomial_order=2,
         )
         # Collect total-order indices across stages
         st_matrix = np.array([r.sobol.total_order for r in per_stage])
@@ -814,7 +831,10 @@ class TestE2EFullPipeline:
         and verify they produce structurally valid, non-degenerate results."""
         ps = _make_param_space(n_params=2)
         X, Y_ts, Y_meta = _generate_timeseries_with_meta(
-            n_samples=40, n_timesteps=200, n_generations=2, n_seeds=2,
+            n_samples=40,
+            n_timesteps=200,
+            n_generations=2,
+            n_seeds=2,
         )
         Y_bulk = np.vstack([ts.mean(axis=0) for ts in Y_ts])
 
@@ -834,7 +854,11 @@ class TestE2EFullPipeline:
 
         # Strategy 4: growth-stratified
         per_stage, _combined = run_strategy4_growth_stratified(
-            ps, X, Y_ts, n_bins=4, polynomial_order=2,
+            ps,
+            X,
+            Y_ts,
+            n_bins=4,
+            polynomial_order=2,
         )
         assert len(per_stage) == 4
 

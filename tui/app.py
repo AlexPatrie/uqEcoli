@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import logging
 
+from sms_api.tui.client import BaseUrl
+from sms_api.tui.llm_agent import AtlantisAgent
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import ScrollableContainer, Vertical
 from textual.widgets import Footer, Header, Input, Markdown, Static
-
-from sms_api.tui.client import BaseUrl
-from sms_api.tui.llm_agent import AtlantisAgent
 
 # Default to localhost for local development
 DEFAULT_API_URL = BaseUrl.LOCAL

@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 from fastmcp import FastMCP
-
 from sms_api.tui.client import BASE_URL, SMSAPIClient
 
 logger = logging.getLogger(__name__)

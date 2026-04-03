@@ -12,7 +12,6 @@ from typing import Any
 
 import ollama
 from ollama import AsyncClient
-
 from sms_api.tui.client import BASE_URL
 from sms_api.tui.mcp_tools import execute_tool, get_tools_for_ollama, set_api_url
 
@@ -217,9 +216,7 @@ Be concise but informative. Use markdown formatting."""
 
         # If native tool calls are present, execute them
         if tool_calls:
-            async for chunk in self._execute_native_tool_calls(
-                content, tool_calls, on_tool_call, on_tool_result
-            ):
+            async for chunk in self._execute_native_tool_calls(content, tool_calls, on_tool_call, on_tool_result):
                 yield chunk
         elif content:
             # Try to extract function call from text output

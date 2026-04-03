@@ -1,8 +1,8 @@
-"""UQPC TUI — Textual terminal interface for ``uq.common.workflow``.
+"""UQPC TUI — Textual terminal interface for ``uq_simple.workflow``.
 
 Launch:
     uv run uq-simple tui
-    uv run python -m uq.common.tui
+    uv run python -m uq_simple.tui
 
 ANSI-only colors via ``textual-ansi`` theme — adapts to any terminal.
 """
@@ -346,9 +346,7 @@ class UQPCApp(App[None]):
     def _build_tabs() -> TabbedContent:
         tabs = TabbedContent(id="tabs")
         log_pane = TabPane("Log", id="tab-log")
-        log_pane.compose_add_child(
-            RichLog(id="result-log", highlight=True, markup=True, wrap=True)
-        )
+        log_pane.compose_add_child(RichLog(id="result-log", highlight=True, markup=True, wrap=True))
         table_pane = TabPane("Table", id="tab-table")
         table_pane.compose_add_child(DataTable(id="data-table"))
         tabs.compose_add_child(log_pane)
@@ -395,9 +393,7 @@ class UQPCApp(App[None]):
         bar = self.query_one("#progress-bar", ProgressBar)
         bar.display = True
         bar.update(total=total, progress=current)
-        self.query_one("#progress-status", Static).update(
-            f"[ansi_cyan]{label}[/]  [ansi_yellow]{current}/{total}[/]"
-        )
+        self.query_one("#progress-status", Static).update(f"[ansi_cyan]{label}[/]  [ansi_yellow]{current}/{total}[/]")
 
     def _hide_progress(self) -> None:
         self.query_one("#progress-bar", ProgressBar).display = False
@@ -423,8 +419,8 @@ class UQPCApp(App[None]):
 
     @work(thread=True)
     def _do_sample(self) -> None:
-        from uq.common.workflow import _setup_input_pc
         from uq.pipeline.param_loader import ParameterDataset
+        from uq_simple.workflow import _setup_input_pc
 
         self._sampling_cancel.clear()
         sim_path = self._cfg("cfg-simdata")
@@ -442,8 +438,7 @@ class UQPCApp(App[None]):
         self.call_from_thread(self._switch_to_log)
         self.call_from_thread(
             self.write_log,
-            f"[bold cyan]SAMPLING[/] {n_samples} variants "
-            f"x {n_init_sims} seeds x {generations} gens",
+            f"[bold cyan]SAMPLING[/] {n_samples} variants x {n_init_sims} seeds x {generations} gens",
         )
 
         # ── Step 1: Setup inputs ──
@@ -458,14 +453,11 @@ class UQPCApp(App[None]):
         bounds = np.array(param_space.parameter_bounds)
         self.call_from_thread(
             self.write_log,
-            f"[ansi_bright_black]  {param_space.n_parameters} params: "
-            f"{param_space.parameter_names}[/]",
+            f"[ansi_bright_black]  {param_space.n_parameters} params: {param_space.parameter_names}[/]",
         )
 
         # ── Step 2: Generate samples via PCRV ──
-        self.call_from_thread(
-            self.write_log, "[ansi_bright_black]Step 2: PCRV.sampleGerm()...[/]"
-        )
+        self.call_from_thread(self.write_log, "[ansi_bright_black]Step 2: PCRV.sampleGerm()...[/]")
         input_pc, _, _ = _setup_input_pc(bounds)
         np.random.seed(42)
         germ_train = input_pc.sampleGerm(n_samples)
@@ -476,9 +468,7 @@ class UQPCApp(App[None]):
         )
 
         # ── Step 3: Build config + run workflow.py with live output ──
-        self.call_from_thread(
-            self.write_log, "[ansi_bright_black]Step 3: running vEcoli workflow.py...[/]"
-        )
+        self.call_from_thread(self.write_log, "[ansi_bright_black]Step 3: running vEcoli workflow.py...[/]")
 
         import shutil
 
@@ -527,9 +517,7 @@ class UQPCApp(App[None]):
 
         # Total sims = (n_variants + baseline) * n_init_sims * generations
         total_sims = (n_samples + 1) * n_init_sims * generations
-        self.call_from_thread(
-            self._set_progress, 0, total_sims, "Launching Nextflow"
-        )
+        self.call_from_thread(self._set_progress, 0, total_sims, "Launching Nextflow")
 
         history_base = output_dir / experiment_id / "history"
 
@@ -631,22 +619,14 @@ class UQPCApp(App[None]):
 
                     # Log significant lines
                     if any(kw in low for kw in ["error", "fail", "exception", "traceback"]):
-                        self.call_from_thread(
-                            self.write_log, f"[ansi_red]  {clean}[/]"
-                        )
+                        self.call_from_thread(self.write_log, f"[ansi_red]  {clean}[/]")
                     elif any(kw in low for kw in ["completed at", "duration", "succeeded"]):
-                        self.call_from_thread(
-                            self.write_log, f"[ansi_green]  {clean}[/]"
-                        )
+                        self.call_from_thread(self.write_log, f"[ansi_green]  {clean}[/]")
                     elif "of" in low and ("sim" in low or "createvariant" in low):
                         # Nextflow progress like "sim... | 2 of 3 ✔"
-                        self.call_from_thread(
-                            self.write_log, f"[ansi_bright_black]  {clean}[/]"
-                        )
+                        self.call_from_thread(self.write_log, f"[ansi_bright_black]  {clean}[/]")
                     elif any(kw in low for kw in ["warn", "note"]):
-                        self.call_from_thread(
-                            self.write_log, f"[ansi_yellow]  {clean}[/]"
-                        )
+                        self.call_from_thread(self.write_log, f"[ansi_yellow]  {clean}[/]")
 
         stdout_thread = threading.Thread(target=_read_stdout, daemon=True)
         stdout_thread.start()
@@ -657,9 +637,7 @@ class UQPCApp(App[None]):
                 if self._sampling_cancel.is_set():
                     proc.terminate()
                     proc.wait(timeout=10)
-                    self.call_from_thread(
-                        self.write_log, "[ansi_yellow]Sampling cancelled[/]"
-                    )
+                    self.call_from_thread(self.write_log, "[ansi_yellow]Sampling cancelled[/]")
                     poll_stop.set()
                     self.call_from_thread(self._hide_progress)
                     return
@@ -683,17 +661,12 @@ class UQPCApp(App[None]):
         if exit_code != 0 and not self._sampling_cancel.is_set():
             self.call_from_thread(
                 self.write_log,
-                f"[ansi_yellow]workflow.py exited with code {exit_code} "
-                f"(some variants may have failed)[/]",
+                f"[ansi_yellow]workflow.py exited with code {exit_code} (some variants may have failed)[/]",
             )
 
         # ── Step 4: Collect + preprocess ──
-        self.call_from_thread(
-            self._set_progress, total_sims, total_sims, "Collecting outputs"
-        )
-        self.call_from_thread(
-            self.write_log, "[ansi_bright_black]Collecting Parquet outputs...[/]"
-        )
+        self.call_from_thread(self._set_progress, total_sims, total_sims, "Collecting outputs")
+        self.call_from_thread(self.write_log, "[ansi_bright_black]Collecting Parquet outputs...[/]")
 
         try:
             # Find history_base (workflow.py may nest differently)
@@ -703,7 +676,9 @@ class UQPCApp(App[None]):
                     history_base = candidates[0]
 
             Y_agg, Y_ts, Y_meta = _collect_variant_timeseries(
-                history_base, n_samples, DEFAULT_OBS,
+                history_base,
+                n_samples,
+                DEFAULT_OBS,
             )
         except Exception as e:
             self.call_from_thread(self.write_log, f"[ansi_red]Collection failed: {e}[/]")
@@ -733,14 +708,12 @@ class UQPCApp(App[None]):
         self.call_from_thread(self._hide_progress)
         self.call_from_thread(
             self.write_log,
-            f"[ansi_green]Cached {Y_agg.shape[0]} samples "
-            f"({Y_agg.shape[1]} obs) to {cache_dir}[/]",
+            f"[ansi_green]Cached {Y_agg.shape[0]} samples ({Y_agg.shape[1]} obs) to {cache_dir}[/]",
         )
         if Y_ts:
             self.call_from_thread(
                 self.write_log,
-                f"[ansi_bright_black]  Timeseries: {len(Y_ts)} samples, "
-                f"shape {Y_ts[0].shape}[/]",
+                f"[ansi_bright_black]  Timeseries: {len(Y_ts)} samples, shape {Y_ts[0].shape}[/]",
             )
         self.call_from_thread(self.write_log, "")
 
@@ -748,7 +721,7 @@ class UQPCApp(App[None]):
 
     @work(thread=True)
     def _do_quantify(self) -> None:
-        from uq.common.workflow import quantify
+        from uq_simple.workflow import quantify
 
         cache_dir = self._cfg("cfg-cache") or "./uq_cache"
         sim_path = self._cfg("cfg-simdata")
@@ -787,16 +760,12 @@ class UQPCApp(App[None]):
             )
 
             # Inline S1 summary
-            self.call_from_thread(
-                self.write_log, "\n[bold cyan]Strategy 1 — Population[/]"
-            )
+            self.call_from_thread(self.write_log, "\n[bold cyan]Strategy 1 — Population[/]")
             s1 = result.strategy1
             for i, nm in enumerate(result.parameter_names):
                 st = s1.sobol.total_order[i]
                 bar = "\u2588" * int(st * 30)
-                self.call_from_thread(
-                    self.write_log, f"  {nm:<35s} {st:.4f} {bar}"
-                )
+                self.call_from_thread(self.write_log, f"  {nm:<35s} {st:.4f} {bar}")
             self.call_from_thread(
                 self.write_log,
                 f"[ansi_bright_black]  relerr: {s1.relerr_train.tolist()}[/]\n",
@@ -836,8 +805,7 @@ class UQPCApp(App[None]):
                 return
             cols = ["Parameter"] + [f"Gen {g}" for g in sorted(r.strategy2)]
             rows = [
-                [nm]
-                + [f"{r.strategy2[g].sobol.total_order[i]:.4f}" for g in sorted(r.strategy2)]
+                [nm] + [f"{r.strategy2[g].sobol.total_order[i]:.4f}" for g in sorted(r.strategy2)]
                 for i, nm in enumerate(names)
             ]
             self._populate_table(cols, rows)
@@ -847,8 +815,7 @@ class UQPCApp(App[None]):
                 return
             cols = ["Parameter"] + [f"Seed {s}" for s in sorted(r.strategy3)]
             rows = [
-                [nm]
-                + [f"{r.strategy3[s].sobol.total_order[i]:.4f}" for s in sorted(r.strategy3)]
+                [nm] + [f"{r.strategy3[s].sobol.total_order[i]:.4f}" for s in sorted(r.strategy3)]
                 for i, nm in enumerate(names)
             ]
             self._populate_table(cols, rows)
@@ -859,11 +826,7 @@ class UQPCApp(App[None]):
             nb = len(r.strategy4_per_stage)
             cols = ["Parameter"] + [f"{j / nb:.0%}-{(j + 1) / nb:.0%}" for j in range(nb)]
             rows = [
-                [nm]
-                + [
-                    f"{r.strategy4_per_stage[j].sobol.total_order[i]:.4f}"
-                    for j in range(nb)
-                ]
+                [nm] + [f"{r.strategy4_per_stage[j].sobol.total_order[i]:.4f}" for j in range(nb)]
                 for i, nm in enumerate(names)
             ]
             self._populate_table(cols, rows)
@@ -881,9 +844,7 @@ class UQPCApp(App[None]):
         self.call_from_thread(self.write_log, f"[ansi_cyan]Exporting to {export_path}...[/]")
         try:
             self._result.export(export_path)
-            self.call_from_thread(
-                self.write_log, f"[ansi_green]Exported to {export_path}[/]"
-            )
+            self.call_from_thread(self.write_log, f"[ansi_green]Exported to {export_path}[/]")
             self.call_from_thread(
                 self._show_json,
                 json.loads((export_path / "uq_results.json").read_text()),
