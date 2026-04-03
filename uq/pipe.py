@@ -167,7 +167,7 @@ class DatasetMultiExperiment:
         self.observables = [c for c in self.y.columns if c not in self._METADATA_COLS]
 
 
-def initialize_data(
+def initialize_datasets(
     experiment_ids: str | list[str],
     sim_base_path: str | Path,
     observable_columns: list[str] | None = None,
@@ -214,7 +214,7 @@ def test_initialize_data():
         "api_simulation_default",
     ]
     base_path = Path("/Users/alexanderpatrie/sms/vEcoli/api_integration/sims")
-    ds = initialize_data(experiment_ids=experiments, sim_base_path=base_path)
+    ds = initialize_datasets(experiment_ids=experiments, sim_base_path=base_path)
     print()
 
 
@@ -296,7 +296,7 @@ class Pipeline(BaseClass):
 
     def _initialize_data(self) -> tuple[DatasetMultiExperiment]:
         # --- Step 1: Load x and y for given experiment ids ---
-        dataset = initialize_data(
+        dataset = initialize_datasets(
             experiment_ids=self.experiment_ids,
             sim_base_path=self.sim_base_path,
             observable_columns=self.observable_columns,
@@ -609,7 +609,7 @@ def execute_pipeline(
     from uq.wrappers import DataDrivenWrapper
 
     # --- Step 1: Load x and y for given experiment ids ---
-    ds = initialize_data(
+    ds = initialize_datasets(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
         observable_columns=observable_columns,
