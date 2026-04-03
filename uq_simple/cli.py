@@ -1,31 +1,38 @@
 """
 uq_simple CLI — scientifically transparent UQ for vEcoli.
 
-Two commands mirror the full ``uq`` CLI:
+Three commands:
 
     uv run uq-simple sample ...     # Stage 1: generate + cache LHS samples
-    uv run uq-simple quantify ...   # Stage 2: PCE / Sobol / growth-stratified
+    uv run uq-simple quantify ...   # Stage 2: all 4 RFC006 strategies via PyTUQ PCE
+    uv run uq-simple dashboard ...  # Interactive visualization (tk or marimo)
 
-The ``sample`` command is identical to ``uq sample`` — it uses the same
-LHS sampling, subprocess-based vEcoli execution, and PrecomputedCache.
+The ``sample`` command is identical to ``uq sample`` — uses LHS sampling,
+subprocess-based vEcoli execution, and PrecomputedCache.  Also caches
+per-row generation/lineage_seed metadata for strategies 2-3.
 
-The ``quantify`` command replaces Koopman spectral decomposition with
-growth-stratified sensitivity analysis (normalized log-mass ratio) —
-no claim about cell cycle phases, just how sensitivity changes as cells grow.
+The ``quantify`` command fits PCE surrogates via ``pytuq.surrogates.pce.PCE``
+(following the UQPC workflow) and computes Sobol indices across all 4
+RFC006 aggregation strategies:
+    1. Uniform (bulk) — population-averaged sensitivity
+    2. By generation — controls for convergence toward steady-state
+    3. By lineage seed — controls for stochastic variance
+    4. Growth-stratified — θ = normalized log(dry_mass), no spectral decomposition
+
+Regression backends (--regression): lsq (default), bcs (sparse), anl (analytical).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import typer
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-
-import numpy as np
 
 console = Console()
 app = typer.Typer(help="Scientifically transparent UQ for vEcoli.")
@@ -36,7 +43,22 @@ app = typer.Typer(help="Scientifically transparent UQ for vEcoli.")
 
 @app.command()
 def sample(
-    experiment_ids: list[str],
+    experiment_ids: list[str] = [
+        "first_sms_perturb_growth",
+        "sms_variants_multigeneration",
+        "sms_multiseed",
+        "sms",
+        "sms_multiseed_multigen",
+        "single",
+        "sms_multigen",
+        "sms_perturb_growth_10800",
+        "sms_perturb",
+        "test_installation",
+        "sms_perturb_growth",
+        "sms_variants",
+        "sms_single",
+        "multigeneration",
+    ],
     sim_base_path: str | None = None,
     cache_dir: str | None = None,
     n_samples: int = 200,
@@ -53,6 +75,10 @@ def sample(
 
     Identical to ``uq sample`` — uses Latin Hypercube Sampling,
     subprocess-based vEcoli execution, and PrecomputedCache.
+
+    Use --generations >= 2 to enable Strategy 2 (by-generation GSA)
+    in the quantify step.  Generation and lineage seed metadata are
+    automatically extracted from hive-partitioned Parquet outputs.
     """
     from rich.progress import (
         BarColumn,
@@ -61,6 +87,7 @@ def sample(
         TextColumn,
         TimeElapsedColumn,
     )
+
     from uq.handlers import generate_samples, verify_out_dirs
 
     verify_out_dirs(sim_base_path, experiment_ids)
@@ -105,6 +132,12 @@ def sample(
     )
     if result.Y_timeseries is not None:
         console.print(f"  [dim]Timeseries: {len(result.Y_timeseries)} samples[/dim]")
+    if result.Y_timeseries_meta is not None:
+        console.print("  [dim]Metadata: generation/seed labels cached (strategies 2-3 enabled)[/dim]")
+    elif generations < 2:
+        console.print(
+            "  [dim yellow]Hint: use --generations >= 2 to enable strategy 2 (by-generation GSA)[/dim yellow]"
+        )
 
 
 # ── quantify: simplified pipeline ────────────────────────────────────
@@ -119,15 +152,29 @@ def quantify(
     n_bins: int = 10,
     polynomial_order: int = 1,
     observable_columns: list[str] | None = None,
+    regression: str = "lsq",
 ) -> None:
-    """Run the simplified UQ pipeline (growth-stratified sensitivity).
+    """Run the simplified UQ pipeline (all 4 RFC006 strategies).
 
     Loads cached samples, fits PCE surrogates, computes Sobol indices
-    for both bulk (Phase 1) and growth-stratified (Phase 2) outputs.
-    Phase 2 bins by normalized log(dry_mass) to reveal how parameter
-    importance changes as cells grow.
+    across all four aggregation strategies:
+
+    \b
+    Strategy 1: Uniform (bulk) — population-averaged sensitivity
+    Strategy 2: By generation — convergence control (needs generations >= 2)
+    Strategy 3: By lineage seed — stochastic variance control
+    Strategy 4: Growth-stratified — θ = normalized log(dry_mass)
+
+    \b
+    Regression methods (--regression):
+      lsq  Least squares (default) — standard overdetermined solve
+      bcs  Bayesian Compressed Sensing — sparse PCE (fewer terms)
+      anl  Analytical — posterior predictive with uncertainty
+
+    Strategies 2-3 require generation/seed metadata in the cache
+    (automatically stored when sampling with live vEcoli).
     """
-    from uq.pipe import initialize_data
+    from uq.pipe import initialize_datasets
     from uq.sampling import PrecomputedCache
     from uq_simple.pipeline import run_pipeline
 
@@ -142,16 +189,21 @@ def quantify(
     cache = PrecomputedCache.load(precomputed_path)
 
     console.print("[bold cyan]Loading parameter space...[/bold cyan]")
-    ds = initialize_data(
+    ds = initialize_datasets(
         experiment_ids=experiment_ids,
         sim_base_path=sim_base_path,
         observable_columns=obs,
     )
 
+    strategies_available = "1"
+    if cache.Y_timeseries_meta is not None:
+        strategies_available = "1,2,3,4"
+    else:
+        strategies_available = "1,4"
     console.print(
         f"[bold cyan]Running pipeline[/bold cyan] "
         f"(order={polynomial_order}, bins={n_bins}, "
-        f"stratification=growth_progress)"
+        f"regression={regression}, strategies={strategies_available})"
     )
     result = run_pipeline(
         cache=cache,
@@ -160,6 +212,7 @@ def quantify(
         polynomial_order=polynomial_order,
         n_bins=n_bins,
         export_path=export_path,
+        regression=regression,
     )
 
     _print_report(result)
@@ -176,6 +229,7 @@ def _pct(v: float) -> str:
 def _print_report(result) -> None:
     """Render results as a rich terminal report."""
     from rich.columns import Columns
+
     from uq_simple.pipeline import _stage_description
 
     console.print()
@@ -184,51 +238,103 @@ def _print_report(result) -> None:
     header.append("  UQ SENSITIVITY REPORT  ", style="bold white on magenta")
     header.append("  vEcoli Whole-Cell Model", style="bold cyan")
     console.print(Panel(header, box=box.DOUBLE_EDGE, border_style="magenta", padding=(0, 1)))
-    console.print(
-        "[dim]  Methods: PCE surrogate (Legendre, PyTUQ) + Sobol indices (Sudret 2008)[/dim]"
-    )
-    console.print(
-        "[dim]  Phase 2 stratification: θ = normalized log(dry_mass) — growth progress, not cell cycle[/dim]"
-    )
-    console.print(
-        "[dim]  Refs: Macklin et al. Science 2020; Ahn-Horst et al. npj Syst Biol Appl 2022[/dim]"
-    )
+    console.print("[dim]  Methods: PCE surrogate (Legendre, PyTUQ) + Sobol indices (Sudret 2008)[/dim]")
+    console.print("[dim]  Strategies: 1=uniform, 2=by generation, 3=by seed, 4=growth-stratified (RFC006)[/dim]")
+    console.print("[dim]  Refs: Macklin et al. Science 2020; Ahn-Horst et al. npj Syst Biol Appl 2022[/dim]")
     console.print()
 
-    # Phase 1
+    # Phase 1 / Strategy 1
     _print_sobol_table(
-        "PHASE 1 // POPULATION-AVERAGED (all cells, all times)",
-        result.population_sobol, "cyan",
+        "STRATEGY 1 // POPULATION-AVERAGED (all cells, all times)",
+        result.population_sobol,
+        "cyan",
     )
 
-    # Phase 2
+    # Strategy 2: by generation
+    if result.per_generation_sobol:
+        gen_tables = []
+        for gen, sobol in sorted(result.per_generation_sobol.items()):
+            gen_tables.append(
+                _sobol_table(
+                    f"Generation {gen}",
+                    sobol,
+                    "blue",
+                    n_top=3,
+                )
+            )
+        console.print(
+            Panel(
+                Columns(gen_tables, equal=True, expand=True),
+                title="[bold blue]STRATEGY 2 // BY GENERATION (convergence control)[/bold blue]",
+                subtitle="[dim]Controls for transient dynamics in early generations[/dim]",
+                border_style="blue",
+                box=box.ROUNDED,
+                padding=(0, 1),
+            )
+        )
+
+    # Strategy 3: by lineage seed
+    if result.per_seed_sobol:
+        seed_tables = []
+        for seed, sobol in sorted(result.per_seed_sobol.items()):
+            seed_tables.append(
+                _sobol_table(
+                    f"Seed {seed}",
+                    sobol,
+                    "yellow",
+                    n_top=3,
+                )
+            )
+        console.print(
+            Panel(
+                Columns(seed_tables, equal=True, expand=True),
+                title="[bold yellow]STRATEGY 3 // BY LINEAGE SEED (stochastic variance control)[/bold yellow]",
+                subtitle="[dim]Controls for gene expression noise and stochastic partitioning[/dim]",
+                border_style="yellow",
+                box=box.ROUNDED,
+                padding=(0, 1),
+            )
+        )
+
+    # Phase 2 / Strategy 4: growth-stratified
     if result.per_stage_sobol:
         n = len(result.per_stage_sobol)
         tables = []
         for i, sobol in enumerate(result.per_stage_sobol):
             lo, hi = i / n, (i + 1) / n
             desc = _stage_description(i, n)
-            tables.append(_sobol_table(
-                f"θ {lo:.0%}–{hi:.0%} ({desc.split('(')[0].strip()})",
-                sobol, "green", n_top=3,
-            ))
+            tables.append(
+                _sobol_table(
+                    f"θ {lo:.0%}–{hi:.0%} ({desc.split('(')[0].strip()})",
+                    sobol,
+                    "green",
+                    n_top=3,
+                )
+            )
 
-        console.print(Panel(
-            Columns(tables, equal=True, expand=True),
-            title=f"[bold green]PHASE 2 // GROWTH-STRATIFIED SENSITIVITY ({n} stages)[/bold green]",
-            subtitle=(
-                "[dim]θ = normalized log(dry_mass), 0 = birth, 1 = division. "
-                "How does parameter importance change as the cell grows?[/dim]"
-            ),
-            border_style="green", box=box.ROUNDED, padding=(0, 1),
-        ))
+        console.print(
+            Panel(
+                Columns(tables, equal=True, expand=True),
+                title=f"[bold green]STRATEGY 4 // GROWTH-STRATIFIED SENSITIVITY ({n} stages)[/bold green]",
+                subtitle=(
+                    "[dim]θ = normalized log(dry_mass), 0 = birth, 1 = division. "
+                    "How does parameter importance change as the cell grows?[/dim]"
+                ),
+                border_style="green",
+                box=box.ROUNDED,
+                padding=(0, 1),
+            )
+        )
 
 
 def _sobol_table(title: str, sobol, border: str, n_top: int = 10) -> Table:
     table = Table(
-        box=box.SIMPLE_HEAVY, show_header=True,
-        header_style="bold magenta", border_style=border,
-        title=title, title_style=f"bold {border}",
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+        border_style=border,
+        title=title,
+        title_style=f"bold {border}",
     )
     table.add_column("PARAMETER", style="bold yellow", no_wrap=True)
     table.add_column("S_Ti", style="bright_green", justify="right")
@@ -244,10 +350,48 @@ def _sobol_table(title: str, sobol, border: str, n_top: int = 10) -> Table:
 
 
 def _print_sobol_table(title: str, sobol, border: str) -> None:
-    console.print(Panel(
-        _sobol_table(title, sobol, border),
-        border_style=border, box=box.ROUNDED, padding=(0, 1),
-    ))
+    console.print(
+        Panel(
+            _sobol_table(title, sobol, border),
+            border_style=border,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
+
+
+@app.command()
+def dashboard(
+    results_path: str | None = None,
+    run_mode: str = "tk",
+) -> None:
+    """Launch the uq_simple interactive dashboard.
+
+    \b
+    --run-mode tk   Tkinter DAW (default) — draggable parameter markers
+    --run-mode mo   Marimo notebook — slider-reactive
+    """
+    import subprocess as _sp
+
+    if run_mode == "mo":
+        _sp.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard_simple.py"], check=True)
+    else:
+        from app.uq_daw_simple import run_tk_dashboard_simple
+
+        run_tk_dashboard_simple(data_path=results_path)
+
+
+@app.command()
+def tui() -> None:
+    """Launch the UQPC interactive terminal UI (Textual).
+
+    \b
+    Four tabs: Sample, Quantify, Results, Log.
+    Keyboard: [s] Sample  [u] Quantify  [r] Results  [l] Log  [q] Quit
+    """
+    from uq.common.tui import UQPCApp
+
+    UQPCApp().run()
 
 
 def main() -> None:
