@@ -313,3 +313,44 @@ where `n_agents` per generation = 1 (single daughters, `generation=3/agent_id=00
 
 The `n_variants` axis is always the row dimension — that's what PCE
 regresses over. The strategies just change what's in the columns.
+
+---
+
+### Sampling
+
+```
+--n-samples 50 controls ONE thing: how many points PCRV.sampleGerm(50) draws from germ space. Each point becomes one sim_data_setattr mutation dict in the
+  variants section of the config JSON. So there are exactly 50 variants (plus 1 baseline = variant 0).
+
+  --generations 2 and --n-init-sims 2 control how many simulations vEcoli runs per variant. Each variant gets n_init_sims × generations simulations:
+
+  Total simulations = (50 variants + 1 baseline) × 2 seeds × 2 generations = 204
+
+  But the number of samples for PCE is still 50. Here's why:
+
+  The collection step (_collect_variant_timeseries) iterates for i in range(n_samples) — it reads variant 1 through variant 50 from the Parquet. For each
+  variant, it grabs ALL rows (across all seeds, generations, agents) and computes ts.mean(axis=0) to get one aggregated output vector. So variant 1's output is
+  the mean across its 2 seeds × 2 generations × however many timesteps = one row in Y.
+
+  The output arrays are:
+  - X.shape = (50, 6) — 50 parameter vectors, 6 params each
+  - Y.shape = (50, 4) — 50 time-averaged output vectors, 4 observables each
+  - Y_timeseries — 50 arrays, each containing ALL rows from that variant (across seeds/gens)
+  - Y_timeseries_meta — 50 dicts, each with generation and lineage_seed arrays labeling every row
+
+  So n_samples = number of PCE training points = number of variants = rows in X and Y.
+
+  generations and n_init_sims don't increase the PCE sample count — they increase the statistical richness within each sample, which enables strategies 2 and 3:
+
+  - Strategy 2 (by generation): partitions each variant's timeseries rows by the generation label, computes per-generation means, fits a separate PCE per
+  generation. With generations=1, there's only one group — strategy 2 is identical to strategy 1 (which is exactly what you saw).
+  - Strategy 3 (by seed): same idea, partitions by lineage_seed. With n_init_sims=1, only one seed — strategy 3 = strategy 1.
+  - Strategy 4 (by growth stage): partitions by θ (growth progress). This works even with generations=1, n_init_sims=1 because the binning is across timesteps
+  within each variant's timeseries.
+
+  So --n-samples 50 --generations 2 --n-init-sims 2 means:
+  - PCE sees 50 training points (enough for order-2 with 6 params: 28 terms, 50 > 2×28 ✓)
+  - Strategy 2 gets 2 generation groups to compare
+  - Strategy 3 gets 2 seed groups to compare
+  - 204 total vEcoli simulations (Nextflow runs them concurrently)
+```
