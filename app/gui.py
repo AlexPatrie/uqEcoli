@@ -17,11 +17,6 @@ __generated_with = "0.21.1"
 app = marimo.App(width="full")
 
 
-# ═══════════════════════════════════════════════════════════════════
-# Cell 1: Imports + state
-# ═══════════════════════════════════════════════════════════════════
-
-
 @app.cell
 def _():
     import marimo as mo
@@ -30,7 +25,7 @@ def _():
 
 
 @app.cell
-def _(mo):
+def _():
     import json
     import subprocess
     import sys
@@ -47,31 +42,19 @@ def _(mo):
         ProgressBar as WProgressBar,
     )
 
-    return Path, go, json, make_subplots, mo, np, subprocess, sys, ParallelCoordinates, TangleSlider, WProgressBar
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 2: Header
-# ═══════════════════════════════════════════════════════════════════
+    return Path, TangleSlider, go, json, make_subplots, np, subprocess, sys
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        # UQPC · Global Sensitivity Analysis
+    mo.md("""
+    # UQPC · Global Sensitivity Analysis
 
-        **RFC006** · PyTUQ UQPC workflow · vEcoli whole-cell model
+    **RFC006** · PyTUQ UQPC workflow · vEcoli whole-cell model
 
-        ---
-        """
-    )
+    ---
+    """)
     return
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 3: Configuration panel
-# ═══════════════════════════════════════════════════════════════════
 
 
 @app.cell
@@ -162,16 +145,17 @@ def _(mo):
     pce_order = _order_slider
     growth_bins = _bins_slider
     regression = _regression_select
-
     return (
-        cache_dir, export_dir, growth_bins, n_generations,
-        n_samples, n_seeds, pce_order, regression, sim_data_path,
+        cache_dir,
+        export_dir,
+        growth_bins,
+        n_generations,
+        n_samples,
+        n_seeds,
+        pce_order,
+        regression,
+        sim_data_path,
     )
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 4: Parameter toggles
-# ═══════════════════════════════════════════════════════════════════
 
 
 @app.cell
@@ -200,12 +184,7 @@ def _(mo):
     mo.vstack(_elements)
 
     param_toggles = _toggles
-    return (param_toggles,)
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 5: Sampling info
-# ═══════════════════════════════════════════════════════════════════
+    return
 
 
 @app.cell
@@ -228,22 +207,28 @@ def _(mo, n_generations, n_samples, n_seeds):
     return
 
 
-# ═══════════════════════════════════════════════════════════════════
-# Cell 6: Run Sampling button
-# ═══════════════════════════════════════════════════════════════════
-
-
 @app.cell
 def _(mo):
     _run_sample_btn = mo.ui.run_button(label="Run Sampling (Steps 1-3)")
     _run_sample_btn
 
     run_sample_btn = _run_sample_btn
+    run_sample_btn
     return (run_sample_btn,)
 
 
 @app.cell
-def _(cache_dir, mo, n_generations, n_samples, n_seeds, run_sample_btn, sim_data_path, subprocess, sys):
+def _(
+    cache_dir,
+    mo,
+    n_generations,
+    n_samples,
+    n_seeds,
+    run_sample_btn,
+    sim_data_path,
+    subprocess,
+    sys,
+):
     mo.stop(not run_sample_btn.value, mo.md("*Click 'Run Sampling' to start*"))
 
     _cmd = [
@@ -280,12 +265,7 @@ def _(cache_dir, mo, n_generations, n_samples, n_seeds, run_sample_btn, sim_data
         )
 
     sample_done = _result.returncode == 0
-    return (sample_done,)
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 7: Run Quantify button
-# ═══════════════════════════════════════════════════════════════════
+    return
 
 
 @app.cell
@@ -298,7 +278,24 @@ def _(mo):
 
 
 @app.cell
-def _(cache_dir, export_dir, growth_bins, mo, pce_order, regression, run_quantify_btn, sim_data_path, subprocess, sys):
+def _(run_quantify_btn):
+    run_quantify_btn
+    return
+
+
+@app.cell
+def _(
+    cache_dir,
+    export_dir,
+    growth_bins,
+    mo,
+    pce_order,
+    regression,
+    run_quantify_btn,
+    sim_data_path,
+    subprocess,
+    sys,
+):
     mo.stop(not run_quantify_btn.value, mo.md("*Click 'Run Quantify' after sampling*"))
 
     _cmd = [
@@ -336,12 +333,7 @@ def _(cache_dir, export_dir, growth_bins, mo, pce_order, regression, run_quantif
         )
 
     quantify_done = _result.returncode == 0
-    return (quantify_done,)
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 8: Load results
-# ═══════════════════════════════════════════════════════════════════
+    return
 
 
 @app.cell
@@ -369,11 +361,6 @@ def _(Path, export_dir, json, mo, np):
     data = _data
     surr = _surr
     return data, surr
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 9: Strategy 1 — Sobol bar chart
-# ═══════════════════════════════════════════════════════════════════
 
 
 @app.cell
@@ -415,13 +402,7 @@ def _(data, go, mo):
 
     mo.md("## Results")
     _fig
-
     return
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 10: Strategy 4 — Growth-stratified spectrogram
-# ═══════════════════════════════════════════════════════════════════
 
 
 @app.cell
@@ -468,17 +449,11 @@ def _(data, go, mo, np):
         height=450,
     )
     _fig
-
     return
 
 
-# ═══════════════════════════════════════════════════════════════════
-# Cell 11: PCE response curve explorer (with TangleSliders)
-# ═══════════════════════════════════════════════════════════════════
-
-
 @app.cell
-def _(TangleSlider, data, go, mo, np, surr):
+def _(TangleSlider, data, mo, surr):
     if data is None or not surr.get("available"):
         mo.stop(True, mo.md("*Surrogate not available — run quantify with export*"))
 
@@ -588,17 +563,11 @@ def _(data, go, make_subplots, mo, np, param_sliders, surr):
         height=600,
     )
     _figs
-
     return
 
 
-# ═══════════════════════════════════════════════════════════════════
-# Cell 12: Strategy 2 + 3 comparison
-# ═══════════════════════════════════════════════════════════════════
-
-
 @app.cell
-def _(data, go, mo, make_subplots):
+def _(data, go, make_subplots, mo):
     if data is None:
         mo.stop(True)
 
@@ -649,13 +618,7 @@ def _(data, go, mo, make_subplots):
         barmode="group",
     )
     _fig
-
     return
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Cell 13: Raw JSON viewer
-# ═══════════════════════════════════════════════════════════════════
 
 
 @app.cell
@@ -670,7 +633,6 @@ def _(data, json, mo):
         value=_json_str,
         language="json",
     )
-
     return
 
 
