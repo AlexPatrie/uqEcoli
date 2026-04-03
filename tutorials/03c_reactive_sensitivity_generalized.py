@@ -306,7 +306,7 @@ def _(
     generate_synthetic_coefficients,
     np,
 ):
-    from uq.sensitivity import PCESurrogate
+    from libuq.sensitivity import PCESurrogate
 
     # Extract parameter info from config
     PARAM_NAMES = [p["name"] for p in PARAMETER_CONFIG]

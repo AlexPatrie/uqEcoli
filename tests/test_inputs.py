@@ -15,7 +15,7 @@ class TestGenericSimDataParams:
     @pytest.mark.unit
     def test_creation(self):
         """GenericSimDataParams should store parameter specs and values."""
-        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
+        from libuq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         specs = [
             SimDataParameter(
@@ -34,8 +34,8 @@ class TestGenericSimDataParams:
     @pytest.mark.unit
     def test_from_sample(self):
         """XSpaceVecoli.sample_to_params should produce GenericSimDataParams."""
-        from uq.inputs import XSpaceVecoli
-        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
+        from libuq.inputs import XSpaceVecoli
+        from libuq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         space = XSpaceVecoli(
             parameters=[
@@ -52,7 +52,7 @@ class TestGenericSimDataParams:
     @pytest.mark.unit
     def test_to_simulation_config(self):
         """to_simulation_config should produce a mutations dict."""
-        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
+        from libuq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         specs = [
             SimDataParameter(name="p1", attr_path="a.b.c", bounds=(0.0, 1.0)),
@@ -95,8 +95,8 @@ class TestInputParameterSpace:
     @pytest.mark.unit
     def test_subset_parameters(self):
         """InputParameterSpace works with a subset of parameters."""
-        from uq.inputs import XSpaceVecoli
-        from uq.pipeline.models import SimDataParameter
+        from libuq.inputs import XSpaceVecoli
+        from libuq.pipeline.models import SimDataParameter
 
         space = XSpaceVecoli(
             parameters=[
@@ -110,8 +110,8 @@ class TestInputParameterSpace:
     @pytest.mark.unit
     def test_custom_bounds(self):
         """InputParameterSpace accepts custom bounds via SimDataParameter."""
-        from uq.inputs import XSpaceVecoli
-        from uq.pipeline.models import SimDataParameter
+        from libuq.inputs import XSpaceVecoli
+        from libuq.pipeline.models import SimDataParameter
 
         space = XSpaceVecoli(
             parameters=[
@@ -139,7 +139,7 @@ class TestInputParameterSpace:
     @pytest.mark.unit
     def test_sample_to_params_conversion(self, input_parameter_space):
         """sample_to_params converts array to GenericSimDataParams."""
-        from uq.pipeline.models import GenericSimDataParams
+        from libuq.pipeline.models import GenericSimDataParams
 
         sample = np.array([2.0, 1.0, 5.0])
         params = input_parameter_space.sample_to_params(sample)

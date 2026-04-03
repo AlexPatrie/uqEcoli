@@ -70,7 +70,7 @@ def _load_real_dataset_safe(
     Returns:
         DataFrame or None if data not available
     """
-    from uq.inputs import load_dataset
+    from libuq.inputs import load_dataset
 
     repo_root = _get_repo_root()
     observables_file = repo_root / "baseline_observables.json"
@@ -314,7 +314,7 @@ def parameter_output_samples(
 @pytest.fixture
 def sim_data_params():
     """Sample SimDataParameter specs for testing (equivalent to former vio/mecillinam params)."""
-    from uq.pipeline.models import SimDataParameter
+    from libuq.pipeline.models import SimDataParameter
 
     return [
         SimDataParameter(
@@ -332,8 +332,8 @@ def sim_data_params():
 @pytest.fixture
 def input_parameter_space():
     """InputParameterSpace configured for testing."""
-    from uq.inputs import XSpaceVecoli
-    from uq.pipeline.models import SimDataParameter
+    from libuq.inputs import XSpaceVecoli
+    from libuq.pipeline.models import SimDataParameter
 
     return XSpaceVecoli(
         parameters=[
@@ -364,7 +364,7 @@ def input_parameter_space():
 @pytest.fixture
 def aggregated_uniform(synthetic_simulation_dataframe: pl.DataFrame):
     """AggregatedOutput for uniform strategy."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
     mean = (
@@ -398,7 +398,7 @@ def aggregated_uniform(synthetic_simulation_dataframe: pl.DataFrame):
 @pytest.fixture
 def aggregated_by_generation(synthetic_simulation_dataframe: pl.DataFrame):
     """AggregatedOutput stratified by generation."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
     by_gen = (
@@ -430,7 +430,7 @@ def aggregated_by_generation(synthetic_simulation_dataframe: pl.DataFrame):
 @pytest.fixture
 def aggregated_by_seed(synthetic_simulation_dataframe: pl.DataFrame):
     """AggregatedOutput stratified by lineage seed."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     df = synthetic_simulation_dataframe
     by_seed = (
@@ -467,7 +467,7 @@ def aggregated_by_seed(synthetic_simulation_dataframe: pl.DataFrame):
 @pytest.fixture
 def sample_sobol_indices():
     """Sample SobolIndices for testing."""
-    from uq import SobolIndices
+    from libuq import SobolIndices
 
     return SobolIndices(
         first_order=np.array([0.45, 0.25, 0.20]),
@@ -485,7 +485,7 @@ def sample_sobol_indices():
 @pytest.fixture
 def real_aggregated_uniform(real_simulation_dataframe):
     """AggregatedOutput for uniform strategy using real data."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     if real_simulation_dataframe is None:
         pytest.skip("Real simulation data not available")
@@ -507,7 +507,7 @@ def real_aggregated_uniform(real_simulation_dataframe):
 @pytest.fixture
 def real_aggregated_by_generation(real_simulation_dataframe):
     """AggregatedOutput stratified by generation using real data."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     if real_simulation_dataframe is None:
         pytest.skip("Real simulation data not available")
@@ -542,7 +542,7 @@ def real_aggregated_by_generation(real_simulation_dataframe):
 @pytest.fixture
 def real_aggregated_by_seed(real_simulation_dataframe):
     """AggregatedOutput stratified by lineage seed using real data."""
-    from uq import AggregatedOutput
+    from libuq import AggregatedOutput
 
     if real_simulation_dataframe is None:
         pytest.skip("Real simulation data not available")
@@ -611,7 +611,7 @@ def real_trajectory(real_simulation_dataframe) -> np.ndarray:
 @pytest.fixture
 def pce_parameters():
     """Sample Parameter list for PCE testing."""
-    from uq.models import Parameter
+    from libuq.models import Parameter
 
     return [
         Parameter(name="p1", bounds=(0.0, 1.0), default=0.5, step=0.1, description="Parameter 1"),
@@ -636,7 +636,7 @@ def pce_sample_data(rng):
 @pytest.fixture
 def pce_surrogate_config(pce_parameters):
     """Sample PCESurrogateConfig for testing."""
-    from uq.models import PCESurrogateConfig
+    from libuq.models import PCESurrogateConfig
 
     return PCESurrogateConfig(
         parameters=pce_parameters,
@@ -648,7 +648,7 @@ def pce_surrogate_config(pce_parameters):
 @pytest.fixture
 def pce_fit_result(pce_sample_data):
     """Pre-fitted PCE result for testing."""
-    from uq.pce.surrogate import fit_pce_coefficients
+    from libuq.pce.surrogate import fit_pce_coefficients
 
     X, Y = pce_sample_data
     bounds = np.array([[-1, 1], [-1, 1], [-1, 1]])

@@ -47,7 +47,7 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    from uq import (
+    from libuq import (
         XSpaceVecoli,
         SensitivityAnalyzer,
         SobolIndices,

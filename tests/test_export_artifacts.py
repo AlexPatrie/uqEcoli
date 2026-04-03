@@ -13,10 +13,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uq.koopman import KoopmanMode, KoopmanSpectrum
-from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
-from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate, SobolIndices
-from uq.viz import plot_koopman_spectrum
+from libuq.koopman import KoopmanMode, KoopmanSpectrum
+from libuq.pipeline.models import PipelineResult, StratificationLens, UqProfile
+from libuq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate, SobolIndices
+from libuq.viz import plot_koopman_spectrum
 
 OUTPUT_DIR = Path(__file__).parent.parent / "examples" / "uq_artifacts" / "test_export_output"
 

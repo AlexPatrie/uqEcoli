@@ -456,4 +456,4 @@ class LosslessScore:
 
 # Type alias for external imports
 if TYPE_CHECKING:
-    from uq.koopman import KoopmanMode, KoopmanSpectrum
+    from libuq.koopman import KoopmanMode, KoopmanSpectrum

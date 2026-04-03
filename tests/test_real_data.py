@@ -208,7 +208,7 @@ class TestRealDataAggregation:
         real_aggregated_by_seed,
     ):
         """Variance decomposition should work with real data."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         log_header("VARIANCE DECOMPOSITION - REAL DATA")
 
@@ -243,7 +243,7 @@ class TestRealDataCellCycle:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         log_header("MASS-BASED CELL CYCLE - REAL DATA")
 
@@ -277,7 +277,7 @@ class TestRealDataCellCycle:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import DNAReplicationCellCycleVariable
+        from libuq import DNAReplicationCellCycleVariable
 
         log_header("DNA REPLICATION CELL CYCLE - REAL DATA")
 
@@ -306,7 +306,7 @@ class TestRealDataKoopman:
     @pytest.mark.real_data
     def test_dmd_with_real_trajectory(self, real_trajectory):
         """DMD should work with real cell trajectory."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         log_header("DYNAMIC MODE DECOMPOSITION - REAL DATA")
 
@@ -330,7 +330,7 @@ class TestRealDataKoopman:
     @pytest.mark.real_data
     def test_edmd_with_real_trajectory(self, real_trajectory):
         """Extended DMD should work with real cell trajectory."""
-        from uq import ExtendedDMD
+        from libuq import ExtendedDMD
 
         log_header("EXTENDED DMD - REAL DATA")
 
@@ -349,7 +349,7 @@ class TestRealDataKoopman:
     @pytest.mark.real_data
     def test_cell_cycle_koopman_with_real_data(self, real_trajectory):
         """Cell cycle Koopman analysis should work with real data."""
-        from uq import CellCycleKoopmanAnalyzer
+        from libuq import CellCycleKoopmanAnalyzer
 
         log_header("CELL CYCLE KOOPMAN ANALYSIS - REAL DATA")
 
@@ -383,8 +383,8 @@ class TestRealDataSensitivity:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import XSpaceVecoli
-        from uq.pipeline.models import SimDataParameter
+        from libuq import XSpaceVecoli
+        from libuq.pipeline.models import SimDataParameter
 
         log_header("PARAMETER SPACE VALIDATION - REAL DATA")
 
@@ -464,7 +464,7 @@ class TestRealDataE2E:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import (
+        from libuq import (
             XSpaceVecoli,
             compute_variance_decomposition,
         )
@@ -479,7 +479,7 @@ class TestRealDataE2E:
 
         # 1. Define parameter space
         log_section("Step 1: Define Parameter Space")
-        from uq.pipeline.models import SimDataParameter
+        from libuq.pipeline.models import SimDataParameter
 
         param_space = XSpaceVecoli(
             parameters=[
@@ -549,7 +549,7 @@ class TestRealDataE2E:
         if real_simulation_dataframe is None:
             pytest.skip("Real simulation data not available")
 
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         log_header("CELL CYCLE STRATIFICATION - REAL vEcoli DATA")
 
@@ -599,7 +599,7 @@ class TestRealDataE2E:
     @pytest.mark.e2e
     def test_koopman_spectral_decomposition_real_data(self, real_trajectory):
         """Koopman spectral decomposition should reveal dynamics in real data."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         log_header("KOOPMAN SPECTRAL ANALYSIS - REAL vEcoli DATA")
 
@@ -687,8 +687,8 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 1: Define Scientifically Relevant Input Parameters")
 
-        from uq import XSpaceVecoli
-        from uq.pipeline.models import SimDataParameter
+        from libuq import XSpaceVecoli
+        from libuq.pipeline.models import SimDataParameter
 
         # Create the full parameter space using generic SimDataParameter specs
         param_space = XSpaceVecoli(
@@ -742,7 +742,7 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 3: Apply All Four Aggregation Strategies")
 
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         # Strategy 1: Uniform aggregation
         assert real_aggregated_uniform.n_samples > 0
@@ -765,7 +765,7 @@ class TestRFC006FullWorkflow:
         log_section("Step 3b: Cell Cycle Variable Calculation (RFC006 Strategy 4)")
 
         from tests.conftest import REAL_DATA_OUTDIR
-        from uq import calculate_cell_cycle
+        from libuq import calculate_cell_cycle
 
         # Use the dedicated calculate_cell_cycle function from uq.cell_cycle
         # This function encapsulates the RFC006 cell cycle workflow
@@ -797,8 +797,8 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 4: Morris Screening to Identify Important Parameters")
 
-        from uq import SensitivityAnalyzer
-        from uq.pce.surrogate import FunctionWrapper
+        from libuq import SensitivityAnalyzer
+        from libuq.pce.surrogate import FunctionWrapper
 
         # Define a simple model function for Morris screening
         # In practice, this would be the actual simulation wrapper
@@ -841,7 +841,7 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 5: PCE Surrogate Fitting on Important Parameters")
 
-        from uq.pce.surrogate import (
+        from libuq.pce.surrogate import (
             create_samples,
             fit_pce_coefficients,
             generate_multi_indices,
@@ -906,7 +906,7 @@ class TestRFC006FullWorkflow:
 
         # Note: Full Sobol computation would require PCE coefficient analysis
         # Here we verify the infrastructure exists
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         # Create mock Sobol indices to verify the class works
         mock_first_order = np.random.rand(n_params)

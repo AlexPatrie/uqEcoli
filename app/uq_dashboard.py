@@ -49,7 +49,7 @@ with app.setup:
 
 @app.cell
 def file_selector():
-    from uq.common.utils import get_repo_root
+    from libuq.common.utils import get_repo_root
 
     file_area = mo.ui.file(kind="area", on_change=lambda v: set_file_input(v[0].name))
     _default = str(get_repo_root() / "examples" / "uq_artifacts" / "test_export_output" / "uq_results.json")

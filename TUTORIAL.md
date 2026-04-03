@@ -1,4 +1,4 @@
-# UQ Framework Tutorial — `uq_simple.workflow`
+# UQ Framework Tutorial — `uq.workflow`
 
 Two-stage workflow for global sensitivity analysis of the vEcoli whole-cell
 model, following [RFC006](readmes/start/tools/RFC006.md) and the
@@ -42,7 +42,7 @@ Sampling follows the PyTUQ UQPC workflow directly:
 ### Python API
 
 ```python
-from uq_simple.workflow import sample
+from uq.workflow import sample
 
 cache = sample(
     sim_data_path="/path/to/sims/my_experiment/parca/kb/simData.cPickle",
@@ -86,7 +86,7 @@ By default, `sample()` uses 6 physiologically relevant parameters
 
 ```python
 # Option A: pass SimDataParameter objects directly
-from uq.pipeline.models import SimDataParameter
+from libuq.pipeline.models import SimDataParameter
 
 cache = sample(
     sim_data_path="/path/to/simData.cPickle",
@@ -122,7 +122,7 @@ exact consistency with the Legendre basis used in PCE fitting.
 ### Python API
 
 ```python
-from uq_simple.workflow import quantify
+from uq.workflow import quantify
 
 result = quantify(
     cache_dir="./uq_cache",
@@ -213,7 +213,7 @@ uq_results/
 ## Full end-to-end example
 
 ```python
-from uq_simple.workflow import sample, quantify
+from uq.workflow import sample, quantify
 
 SIM_DATA = "/path/to/sims/api_simulation_default/parca/kb/simData.cPickle"
 
@@ -259,9 +259,9 @@ if result.strategy4_per_stage:
 For finer control, use the step-level functions directly:
 
 ```python
-from uq_simple.workflow import run_uqpc, run_strategy1_uniform
-from uq.pipeline.param_loader import ParameterDataset
-from uq.sampling import PrecomputedCache
+from uq.workflow import run_uqpc, run_strategy1_uniform
+from libuq.pipeline.param_loader import ParameterDataset
+from libuq.sampling import PrecomputedCache
 
 # Load existing cache + rebuild parameter space
 cache = PrecomputedCache.load("./uq_cache")
@@ -365,7 +365,7 @@ Strategy 3 does the same with `"lineage_seed"`. _The GSA algorithm is completely
 A Textual-based terminal UI wraps both `sample()` and `quantify()`:
 
 ```bash
-uv run python -m uq_simple.tui
+uv run python -m uq.tui
 ```
 
 Four tabs: **Sample** (fill in simData path, click Run), **Quantify**

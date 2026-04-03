@@ -16,10 +16,10 @@ import numpy as np
 import pytest
 from typer.testing import CliRunner
 
-from uq import SobolIndices
-from uq.pipe import Pipeline
-from uq.pipeline.models import PipelineResult, StratificationLens
-from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
+from libuq import SobolIndices
+from libuq.pipe import Pipeline
+from libuq.pipeline.models import PipelineResult, StratificationLens
+from libuq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -73,7 +73,7 @@ def precomputed_cache_dir(tmp_path_factory) -> Path:
     if not _data_available():
         pytest.skip("Real simulation data not available")
 
-    from uq.handlers import generate_samples
+    from libuq.handlers import generate_samples
 
     cache_dir = tmp_path_factory.mktemp("uq_cache")
     generate_samples(
@@ -90,8 +90,8 @@ def precomputed_cache_dir(tmp_path_factory) -> Path:
 @pytest.fixture(scope="module")
 def quantify_pipeline(precomputed_cache_dir) -> Pipeline:
     """Run the full pipeline via handlers.pipeline() once per module."""
-    from uq import handlers
-    from uq.pce.models import PCEParameterSelectionConfig
+    from libuq import handlers
+    from libuq.pce.models import PCEParameterSelectionConfig
 
     return handlers.pipeline(
         experiment_ids=EXPERIMENT_IDS,
@@ -254,7 +254,7 @@ class TestQuantifyCli:
 
     def test_quantify_with_precomputed(self, precomputed_cache_dir, tmp_path):
         """Run `uq quantify` via CliRunner with precomputed samples."""
-        from uq.cli import app
+        from libuq.cli import app
 
         export_dir = tmp_path / "cli_export"
         runner = CliRunner()
@@ -303,7 +303,7 @@ class TestQuantifyCli:
 
     def test_quantify_report_contains_sobol(self, precomputed_cache_dir):
         """Report output should contain Sobol index information."""
-        from uq.cli import app
+        from libuq.cli import app
 
         runner = CliRunner()
         result = runner.invoke(
@@ -345,7 +345,7 @@ class TestSamplePipelineCompatibility:
         """Cache parameter_names must match what initialize_data produces."""
         import json
 
-        from uq.pipe import initialize_datasets
+        from libuq.pipe import initialize_datasets
 
         ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
@@ -382,7 +382,7 @@ class TestSamplePipelineCompatibility:
         This test creates a deliberately mismatched cache (wrong n_params)
         and verifies the pipeline catches the incompatibility.
         """
-        from uq.sampling import PrecomputedCache
+        from libuq.sampling import PrecomputedCache
 
         # Create a fake cache with 1 parameter (pipeline expects more)
         fake_cache = PrecomputedCache(
@@ -395,8 +395,8 @@ class TestSamplePipelineCompatibility:
         fake_cache.save()
 
         # The pipeline should fail or raise when dimensions don't match
-        from uq import handlers
-        from uq.pce.models import PCEParameterSelectionConfig
+        from libuq import handlers
+        from libuq.pce.models import PCEParameterSelectionConfig
 
         with pytest.raises(Exception):
             handlers.pipeline(

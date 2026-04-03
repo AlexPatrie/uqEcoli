@@ -16,7 +16,7 @@ class TestCellCyclePhase:
     @pytest.mark.unit
     def test_phase_values(self):
         """CellCyclePhase should have standard E. coli phases."""
-        from uq import CellCyclePhase
+        from libuq import CellCyclePhase
 
         assert CellCyclePhase.B_PERIOD.value == "B_period"
         assert CellCyclePhase.C_PERIOD.value == "C_period"
@@ -26,7 +26,7 @@ class TestCellCyclePhase:
     @pytest.mark.unit
     def test_all_phases_defined(self):
         """All standard E. coli cell cycle phases should be defined."""
-        from uq import CellCyclePhase
+        from libuq import CellCyclePhase
 
         phases = list(CellCyclePhase)
         # B, C, D periods plus unknown
@@ -39,7 +39,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_creation_with_values(self):
         """CellCycleVariable should store numpy array of values."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         values = np.linspace(0, 1, 100)
         cc_var = CellCycleVariable(values=values)
@@ -49,7 +49,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_creation_with_phase_labels(self):
         """CellCycleVariable should support phase labels."""
-        from uq import CellCyclePhase, CellCycleVariable
+        from libuq import CellCyclePhase, CellCycleVariable
 
         values = np.linspace(0, 1, 100)
         phases = np.array([CellCyclePhase.B_PERIOD.value] * 100)
@@ -62,7 +62,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_default_normalized(self):
         """CellCycleVariable should default to normalized=True."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         cc_var = CellCycleVariable(values=np.array([0.5]))
         assert cc_var.normalized is True
@@ -70,7 +70,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_to_stage_bins_normalized(self):
         """to_stage_bins should bin normalized values correctly."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         # Values evenly spread across [0, 1]
         values = np.linspace(0, 1, 100)
@@ -87,7 +87,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_to_stage_bins_unnormalized(self):
         """to_stage_bins should work with unnormalized values."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         values = np.linspace(0, 100, 100)  # Range [0, 100]
         cc_var = CellCycleVariable(values=values, normalized=False)
@@ -101,7 +101,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_variable_name_stored(self):
         """CellCycleVariable should store variable name."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         cc_var = CellCycleVariable(
             values=np.array([0.5]),
@@ -113,7 +113,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_metadata_stored(self):
         """CellCycleVariable should store metadata."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         metadata = {"method": "log_ratio", "version": 1}
         cc_var = CellCycleVariable(
@@ -130,7 +130,7 @@ class TestCellCycleVariableComputer:
     @pytest.mark.unit
     def test_abstract_interface(self):
         """CellCycleVariableComputer should define abstract interface."""
-        from uq import CellCycleVariableComputer
+        from libuq import CellCycleVariableComputer
 
         # Should have abstract methods
         assert hasattr(CellCycleVariableComputer, "name")
@@ -144,7 +144,7 @@ class TestMassBasedCellCycleVariable:
     @pytest.mark.unit
     def test_name_property(self):
         """MassBasedCellCycleVariable should have correct name."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         assert computer.name == "mass_based"
@@ -152,7 +152,7 @@ class TestMassBasedCellCycleVariable:
     @pytest.mark.unit
     def test_required_columns(self):
         """MassBasedCellCycleVariable should specify required columns."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         required = computer.required_columns
@@ -164,7 +164,7 @@ class TestMassBasedCellCycleVariable:
     @pytest.mark.unit
     def test_compute_with_synthetic_data(self, synthetic_simulation_dataframe):
         """MassBasedCellCycleVariable should compute from simulation data."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         df = synthetic_simulation_dataframe
@@ -179,7 +179,7 @@ class TestMassBasedCellCycleVariable:
     @pytest.mark.unit
     def test_compute_produces_normalized_values(self, synthetic_simulation_dataframe):
         """MassBasedCellCycleVariable should produce values in [0, 1]."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -194,7 +194,7 @@ class TestDNAReplicationCellCycleVariable:
     @pytest.mark.unit
     def test_name_property(self):
         """DNAReplicationCellCycleVariable should have correct name."""
-        from uq import DNAReplicationCellCycleVariable
+        from libuq import DNAReplicationCellCycleVariable
 
         computer = DNAReplicationCellCycleVariable()
         assert computer.name == "dna_replication"
@@ -202,7 +202,7 @@ class TestDNAReplicationCellCycleVariable:
     @pytest.mark.unit
     def test_required_columns(self):
         """DNAReplicationCellCycleVariable should specify required columns."""
-        from uq import DNAReplicationCellCycleVariable
+        from libuq import DNAReplicationCellCycleVariable
 
         computer = DNAReplicationCellCycleVariable()
         required = computer.required_columns
@@ -213,7 +213,7 @@ class TestDNAReplicationCellCycleVariable:
     @pytest.mark.unit
     def test_assigns_phase_labels(self, synthetic_simulation_dataframe):
         """DNAReplicationCellCycleVariable should assign phase labels."""
-        from uq import DNAReplicationCellCycleVariable
+        from libuq import DNAReplicationCellCycleVariable
 
         computer = DNAReplicationCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -224,7 +224,7 @@ class TestDNAReplicationCellCycleVariable:
     @pytest.mark.unit
     def test_phase_labels_are_valid(self, synthetic_simulation_dataframe):
         """Phase labels should be valid CellCyclePhase values."""
-        from uq import CellCyclePhase, DNAReplicationCellCycleVariable
+        from libuq import CellCyclePhase, DNAReplicationCellCycleVariable
 
         computer = DNAReplicationCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -248,7 +248,7 @@ class TestCellAngleCellCycleVariable:
     @pytest.mark.unit
     def test_name_property(self):
         """CellAngleCellCycleVariable should have correct name."""
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         computer = CellAngleCellCycleVariable()
         assert computer.name == "cell_angle"
@@ -256,7 +256,7 @@ class TestCellAngleCellCycleVariable:
     @pytest.mark.unit
     def test_required_columns(self):
         """CellAngleCellCycleVariable should specify required columns."""
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         computer = CellAngleCellCycleVariable()
         required = computer.required_columns
@@ -268,7 +268,7 @@ class TestCellAngleCellCycleVariable:
     @pytest.mark.unit
     def test_produces_circular_coordinate(self, synthetic_simulation_dataframe):
         """CellAngleCellCycleVariable should produce values in [0, 1]."""
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         computer = CellAngleCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -280,7 +280,7 @@ class TestCellAngleCellCycleVariable:
     @pytest.mark.unit
     def test_metadata_includes_method(self, synthetic_simulation_dataframe):
         """CellAngleCellCycleVariable should include method in metadata."""
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         computer = CellAngleCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -296,7 +296,7 @@ class TestCompositeCellCycleVariable:
         """CompositeCellCycleVariable should use custom compute function."""
         import polars as pl
 
-        from uq import CompositeCellCycleVariable
+        from libuq import CompositeCellCycleVariable
 
         def custom_compute(data: pl.DataFrame) -> np.ndarray:
             mass = data["listeners__mass__dry_mass"].to_numpy()
@@ -314,7 +314,7 @@ class TestCompositeCellCycleVariable:
     @pytest.mark.unit
     def test_custom_compute_with_data(self, synthetic_simulation_dataframe):
         """CompositeCellCycleVariable should compute from data."""
-        from uq import CompositeCellCycleVariable
+        from libuq import CompositeCellCycleVariable
 
         def custom_compute(data: pl.DataFrame) -> np.ndarray:
             mass = data["listeners__mass__dry_mass"].to_numpy()
@@ -337,7 +337,7 @@ class TestCellCycleAggregator:
     @pytest.mark.unit
     def test_available_variables(self):
         """CellCycleAggregator should have standard variables available."""
-        from uq import CellCycleAggregator
+        from libuq import CellCycleAggregator
 
         available = CellCycleAggregator.VARIABLES
 
@@ -350,7 +350,7 @@ class TestCellCycleAggregator:
         """CellCycleAggregator should raise for invalid variable type."""
         import duckdb
 
-        from uq import CellCycleAggregator
+        from libuq import CellCycleAggregator
 
         conn = duckdb.connect()
 
@@ -367,7 +367,7 @@ class TestCellCycleAggregator:
         """CellCycleAggregator should respect n_stages parameter."""
         import duckdb
 
-        from uq import CellCycleAggregator
+        from libuq import CellCycleAggregator
 
         conn = duckdb.connect()
 
@@ -388,7 +388,7 @@ class TestRegisterCellCycleVariable:
     @pytest.mark.unit
     def test_register_custom_variable(self):
         """register_cell_cycle_variable should add custom variables."""
-        from uq import (
+        from libuq import (
             CellCycleAggregator,
             CellCycleVariable,
             CellCycleVariableComputer,
@@ -421,7 +421,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_stratification_produces_per_stage_stats(self, rng):
         """Cell cycle stratification should produce statistics per stage."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         # Create mock cell cycle data
         n_samples = 1000
@@ -442,7 +442,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_cell_cycle_preserves_sample_count(self, rng):
         """Cell cycle binning should preserve total sample count."""
-        from uq import CellCycleVariable
+        from libuq import CellCycleVariable
 
         n_samples = 500
         values = rng.uniform(0, 1, n_samples)
@@ -455,7 +455,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_phenotypic_variation_across_cycle(self, synthetic_simulation_dataframe):
         """Cell cycle variable should capture phenotypic variation."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -467,7 +467,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_cyclic_nature_of_variable(self, synthetic_simulation_dataframe):
         """Cell cycle variables should be approximately cyclic."""
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         computer = CellAngleCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -483,7 +483,7 @@ class TestCellCycleRequirements:
     @pytest.mark.unit
     def test_computed_from_process_variables(self, synthetic_simulation_dataframe):
         """Cell cycle variables should be computed from vEcoli process variables."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
 
@@ -494,7 +494,7 @@ class TestCellCycleRequirements:
     @pytest.mark.unit
     def test_produces_low_dimensional_output(self, synthetic_simulation_dataframe):
         """Cell cycle variable should be low-dimensional (scalar per timepoint)."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -505,7 +505,7 @@ class TestCellCycleRequirements:
     @pytest.mark.unit
     def test_deterministic_binning(self, synthetic_simulation_dataframe):
         """Cell cycle variable should enable deterministic binning."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         computer = MassBasedCellCycleVariable()
         result = computer.compute(synthetic_simulation_dataframe)
@@ -528,7 +528,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_name_property(self):
         """KoopmanCellCycleVariable should have correct name."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable()
         assert computer.name == "koopman"
@@ -536,7 +536,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_required_columns(self):
         """KoopmanCellCycleVariable should specify required columns."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable()
         required = computer.required_columns
@@ -549,7 +549,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_custom_observable_columns(self):
         """KoopmanCellCycleVariable should accept custom observable columns."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         custom_cols = ["listeners__mass__dry_mass", "listeners__mass__dna_mass"]
         computer = KoopmanCellCycleVariable(observable_columns=custom_cols)
@@ -560,7 +560,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_expected_cycle_time_parameter(self):
         """KoopmanCellCycleVariable should accept expected_cycle_time."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(expected_cycle_time=7200.0)  # 2 hours
         assert computer._expected_cycle_time == 7200.0
@@ -568,7 +568,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_compute_with_synthetic_data(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should compute from simulation data."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -588,7 +588,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_compute_produces_normalized_values(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should produce values in [0, 1]."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -604,7 +604,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_metadata_includes_koopman_info(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should include Koopman info in metadata."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -621,7 +621,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_assigns_phase_labels(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should assign phase labels."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -637,7 +637,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_use_edmd_parameter(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should support EDMD toggle."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         # Test with standard DMD
         computer_dmd = KoopmanCellCycleVariable(
@@ -667,7 +667,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_cell_cycle_mode_accessible(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should expose the identified cell cycle mode."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -684,7 +684,7 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_fallback_for_short_data(self, rng):
         """KoopmanCellCycleVariable should fallback gracefully for short data."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         # Create very short data
         df = pl.DataFrame({
@@ -710,14 +710,14 @@ class TestKoopmanCellCycleVariable:
     @pytest.mark.unit
     def test_registered_in_aggregator(self):
         """KoopmanCellCycleVariable should be registered in CellCycleAggregator."""
-        from uq import CellCycleAggregator
+        from libuq import CellCycleAggregator
 
         assert "koopman" in CellCycleAggregator.VARIABLES
 
     @pytest.mark.unit
     def test_deterministic_output(self, synthetic_simulation_dataframe):
         """KoopmanCellCycleVariable should produce deterministic output."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -739,7 +739,7 @@ class TestKoopmanCellCycleIntegration:
     @pytest.mark.unit
     def test_koopman_variable_enables_stratification(self, synthetic_simulation_dataframe):
         """Koopman cell cycle variable should enable cell cycle stratification."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         computer = KoopmanCellCycleVariable(
             observable_columns=[
@@ -760,7 +760,7 @@ class TestKoopmanCellCycleIntegration:
     @pytest.mark.unit
     def test_koopman_captures_periodic_structure(self, rng):
         """Koopman cell cycle variable should capture periodic dynamics."""
-        from uq import KoopmanCellCycleVariable
+        from libuq import KoopmanCellCycleVariable
 
         # Create synthetic data with clear periodic structure
         n_points = 200
@@ -797,7 +797,7 @@ class TestKoopmanCellCycleIntegration:
     @pytest.mark.unit
     def test_koopman_vs_mass_based_correlation(self, synthetic_simulation_dataframe):
         """Koopman and mass-based variables should be correlated for simple data."""
-        from uq import KoopmanCellCycleVariable, MassBasedCellCycleVariable
+        from libuq import KoopmanCellCycleVariable, MassBasedCellCycleVariable
 
         mass_computer = MassBasedCellCycleVariable()
         koopman_computer = KoopmanCellCycleVariable(

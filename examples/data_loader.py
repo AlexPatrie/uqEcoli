@@ -1,6 +1,6 @@
 import pytest
 
-from uq import OutputExtractor, OutputType
+from libuq import OutputExtractor, OutputType
 from ecoli.library.parquet_emitter import create_duckdb_conn, dataset_sql
 
 

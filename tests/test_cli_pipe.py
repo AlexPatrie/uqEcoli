@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from uq import SobolIndices
-from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
-from uq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
+from libuq import SobolIndices
+from libuq.pipeline.models import PipelineResult, StratificationLens, UqProfile
+from libuq.sensitivity import CellCycleRelevanceResult, MorrisIndices, PCESurrogate
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -74,8 +74,8 @@ def pipeline_result():
         if not history_path.exists():
             pytest.skip(f"history dir not found for {exp_id}: {history_path}")
 
-    from uq.pce.models import PCEParameterSelectionConfig
-    from uq.pipe import execute_pipeline
+    from libuq.pce.models import PCEParameterSelectionConfig
+    from libuq.pipe import execute_pipeline
 
     prescreen_config = PCEParameterSelectionConfig(n_trajectories=N_TRAJECTORIES, n_top=N_TOP)
     return execute_pipeline(
@@ -100,7 +100,7 @@ class TestInitializeData:
     """Tests for initialize_data — real sim data loading."""
 
     def test_loads_multi_experiment(self, _skip_if_no_data):
-        from uq.pipe import initialize_datasets
+        from libuq.pipe import initialize_datasets
 
         ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
@@ -115,7 +115,7 @@ class TestInitializeData:
         assert len(ds.x) == len(EXPERIMENT_IDS)
 
     def test_loads_single_experiment(self, _skip_if_no_data):
-        from uq.pipe import initialize_datasets
+        from libuq.pipe import initialize_datasets
 
         ds = initialize_datasets(
             experiment_ids="mecillinam",
@@ -136,8 +136,8 @@ class TestInitializeData:
 @pytest.mark.execute_pipeline
 class TestAggregation:
     def test_aggregation_strategies(self, _skip_if_no_data):
-        from uq.pipe import initialize_datasets
-        from uq.pipeline.workflow import aggregate_timeseries, get_variance_decomposition
+        from libuq.pipe import initialize_datasets
+        from libuq.pipeline.workflow import aggregate_timeseries, get_variance_decomposition
 
         ds = initialize_datasets(
             experiment_ids=EXPERIMENT_IDS,
@@ -207,7 +207,7 @@ class TestFullPipeline:
         assert "seed_fraction" in decomp
 
     def test_aggregation_result(self, pipeline_result):
-        from uq.pipeline.workflow import AggregationResult
+        from libuq.pipeline.workflow import AggregationResult
 
         assert isinstance(pipeline_result.aggregation, AggregationResult)
 
@@ -266,7 +266,7 @@ class TestCliDemo:
         """Verify the demo CLI command runs the full pipeline."""
         from typer.testing import CliRunner
 
-        from uq.cli import app
+        from libuq.cli import app
 
         runner = CliRunner()
         result = runner.invoke(app, ["demo"])

@@ -60,7 +60,7 @@ def __(mo):
 @app.cell
 def __():
     # Import the input parameter classes
-    from uq import VioPathwayParams, MecillinamParams, GeneKnockoutParams
+    from libuq import VioPathwayParams, MecillinamParams, GeneKnockoutParams
 
     return GeneKnockoutParams, MecillinamParams, VioPathwayParams
 
@@ -177,7 +177,7 @@ def __(mo):
 
 @app.cell
 def __(ko_params, mec_params, mo, vio_params):
-    from uq import UQInputParametersVecoli
+    from libuq import UQInputParametersVecoli
 
     # Combine all parameters
     full_params = UQInputParametersVecoli(
@@ -231,7 +231,7 @@ def __(mo):
 
 @app.cell
 def __(mo):
-    from uq import XSpaceVecoli
+    from libuq import XSpaceVecoli
     import numpy as np
 
     # Define a parameter space
@@ -342,7 +342,7 @@ def __(mo):
 
 @app.cell
 def __(mo):
-    from uq import AggregationStrategy
+    from libuq import AggregationStrategy
 
     strategies = list(AggregationStrategy)
 

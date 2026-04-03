@@ -1,10 +1,10 @@
 """
-uq_simple interactive dashboard — all 4 RFC006 strategies.
+uq interactive dashboard — all 4 RFC006 strategies.
 
 Launch:
     uv run marimo run app/dashboard_simple.py
 
-Loads artifacts from a uq_simple pipeline export (uq_results.json +
+Loads artifacts from a uq pipeline export (uq_results.json +
 population_surrogate/) and provides reactive parameter exploration
 across all four aggregation strategies:
   1. Uniform (bulk) — PCE response curves + population Sobol

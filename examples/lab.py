@@ -31,7 +31,7 @@ def _(mo):
 
 @app.cell
 def _(exp_id):
-    from uq import XSpaceVecoli, SensitivityAnalyzer, AggregationStrategy, SimulationWrapper, WrapperConfig
+    from libuq import XSpaceVecoli, SensitivityAnalyzer, AggregationStrategy, SimulationWrapper, WrapperConfig
 
     class x:
         timesteps = 1111

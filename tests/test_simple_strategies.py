@@ -19,10 +19,10 @@ import json
 import numpy as np
 import pytest
 
-from uq.inputs import XSpaceVecoli
-from uq.pipeline.models import SimDataParameter
-from uq.sampling import PrecomputedCache
-from uq_simple.pipeline import (
+from libuq.inputs import XSpaceVecoli
+from libuq.pipeline.models import SimDataParameter
+from libuq.sampling import PrecomputedCache
+from uq.pipeline import (
     SimplePipelineResult,
     _aggregate_by_group,
     _fit_pce_and_sobol,

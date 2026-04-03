@@ -22,8 +22,8 @@ pytestmark = pytest.mark.skipif(
 
 def test_build_variants_section_generic():
     """Test that _build_variants_section_generic produces correct variant config."""
-    from uq.generators.vecoli import _build_variants_section_generic
-    from uq.pipeline.models import SimDataParameter
+    from libuq.generators.vecoli import _build_variants_section_generic
+    from libuq.pipeline.models import SimDataParameter
 
     params = [
         SimDataParameter("p1", "process.transcription.fraction_active_rnap_free", (0.2, 0.5)),
@@ -43,7 +43,7 @@ def test_build_variants_section_generic():
 
 def test_build_workflow_config():
     """Test that _build_workflow_config produces valid vEcoli config."""
-    from uq.generators.vecoli import _build_workflow_config
+    from libuq.generators.vecoli import _build_workflow_config
 
     variants = {"sim_data_setattr": {"mutations": {"value": [{"a": 1}]}}}
     config = _build_workflow_config(
@@ -85,8 +85,8 @@ def test_sim_data_setattr_variant():
 
 def test_xspace_generic_mode():
     """Test XSpaceVecoli in generic mode with SimDataParameter specs."""
-    from uq.inputs import XSpaceVecoli
-    from uq.pipeline.models import GenericSimDataParams, SimDataParameter
+    from libuq.inputs import XSpaceVecoli
+    from libuq.pipeline.models import GenericSimDataParams, SimDataParameter
 
     params = [
         SimDataParameter("p1", "some.path", (0.0, 1.0)),
@@ -112,8 +112,8 @@ def test_xspace_generic_mode():
 
 def test_param_loader_validates_paths():
     """Test that ParameterDataset validates sim_data attribute paths."""
-    from uq.pipeline.models import SimDataParameter
-    from uq.pipeline.param_loader import ParameterDataset
+    from libuq.pipeline.models import SimDataParameter
+    from libuq.pipeline.param_loader import ParameterDataset
 
     ds = ParameterDataset(sim_data_path=SIM_DATA_PATH)
 
@@ -134,9 +134,9 @@ def test_run_batch_workflow(tmp_path):
 
     This test runs actual vEcoli simulations (takes ~60s).
     """
-    from uq.generators.vecoli import TimeseriesGeneratorVecoli
-    from uq.pipeline.models import SimDataParameter
-    from uq.pipeline.param_loader import ParameterDataset
+    from libuq.generators.vecoli import TimeseriesGeneratorVecoli
+    from libuq.pipeline.models import SimDataParameter
+    from libuq.pipeline.param_loader import ParameterDataset
 
     ds = ParameterDataset(sim_data_path=SIM_DATA_PATH)
     params = [
@@ -167,7 +167,7 @@ def test_run_batch_workflow(tmp_path):
 @pytest.mark.slow
 def test_generate_samples_handler(tmp_path):
     """Test the full handlers.generate_samples() function."""
-    from uq.handlers import generate_samples
+    from libuq.handlers import generate_samples
 
     cache = generate_samples(
         experiment_ids=["single"],

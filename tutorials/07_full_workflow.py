@@ -95,8 +95,8 @@ def _(mo):
 
 @app.cell
 def _():
-    from uq import XSpaceVecoli, OutputType, get_output_variable_info
-    from uq.pipeline.models import VioPathwayParams, MecillinamParams, GeneKnockoutParams
+    from libuq import XSpaceVecoli, OutputType, get_output_variable_info
+    from libuq.pipeline.models import VioPathwayParams, MecillinamParams, GeneKnockoutParams
 
     # Define the input parameter space (Ξ)
     param_space = XSpaceVecoli(
@@ -155,7 +155,7 @@ def _(mo):
 
 @app.cell
 def _(np, param_space):
-    from uq.synthetic import generate_signal, generate_synthetic_simulation_data
+    from libuq.synthetic import generate_signal, generate_synthetic_simulation_data
 
     # Load synthetic simulation data (stands in for real ParquetEmitter output)
     sim_data = generate_synthetic_simulation_data()
@@ -216,7 +216,7 @@ def _(mo):
 
 @app.cell
 def _(observable_columns, sim_data):
-    from uq.pipeline.workflow import aggregate_timeseries
+    from libuq.pipeline.workflow import aggregate_timeseries
 
     # Step 3: Aggregate via strategies 1-3
     agg_result = aggregate_timeseries(sim_data, observable_columns)
@@ -249,7 +249,7 @@ def _(mo):
 
 @app.cell
 def _(agg_result, np):
-    from uq.pipeline.workflow import get_variance_decomposition
+    from libuq.pipeline.workflow import get_variance_decomposition
 
     decomp = get_variance_decomposition(agg_result)
 
@@ -293,7 +293,7 @@ def _(mo):
 
 @app.cell
 def _(bulk_wrapper, param_space):
-    from uq.pipeline.workflow import run_phase1
+    from libuq.pipeline.workflow import run_phase1
 
     sobol_bulk, surrogate_bulk, _morris = run_phase1(
         param_space=param_space,
@@ -347,9 +347,9 @@ def _(mo):
 
 @app.cell
 def _(agg_result, np, observable_columns, param_space):
-    from uq import identify_cell_cycle_relevant_observables
-    from uq.pipeline.workflow import compute_strategy4_sobol
-    from uq.synthetic import generate_signal as _gen_signal
+    from libuq import identify_cell_cycle_relevant_observables
+    from libuq.pipeline.workflow import compute_strategy4_sobol
+    from libuq.synthetic import generate_signal as _gen_signal
 
     # Step 5b: GSA-informed observable selection
     relevance = identify_cell_cycle_relevant_observables(
@@ -445,7 +445,7 @@ def _(mo):
 
 @app.cell
 def _(per_stage_sobol, sobol_bulk, surrogate_bulk, surrogate_cc):
-    from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
+    from libuq.pipeline.models import PipelineResult, StratificationLens, UqProfile
 
     pipeline_result = PipelineResult(
         population=UqProfile(
@@ -526,7 +526,7 @@ def _(mo):
 
 @app.cell
 def _(observable_columns, pl, sim_data):
-    from uq import CellCycleKoopmanAnalyzer, DynamicModeDecomposition
+    from libuq import CellCycleKoopmanAnalyzer, DynamicModeDecomposition
 
     _trajectory = (
         sim_data.filter((pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0))

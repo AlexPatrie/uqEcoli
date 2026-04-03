@@ -29,7 +29,7 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    from uq import (
+    from libuq import (
         XSpaceVecoli,
         SensitivityAnalyzer,
         AggregationStrategy,

@@ -350,7 +350,7 @@ def _(mo):
 
 @app.cell
 def _(np):
-    from uq.koopman import KoopmanMode, KoopmanSpectrum
+    from libuq.koopman import KoopmanMode, KoopmanSpectrum
 
     # Create synthetic modes
     _cell_cycle_time = 3600.0  # 1 hour

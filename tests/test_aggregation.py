@@ -20,7 +20,7 @@ class TestAggregationStrategy:
     @pytest.mark.unit
     def test_enum_values(self):
         """AggregationStrategy should have all four required strategies."""
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert AggregationStrategy.UNIFORM.value == "uniform"
         assert AggregationStrategy.BY_GENERATION.value == "by_generation"
@@ -30,7 +30,7 @@ class TestAggregationStrategy:
     @pytest.mark.unit
     def test_enum_count(self):
         """AggregationStrategy should have exactly four strategies."""
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         strategies = list(AggregationStrategy)
         assert len(strategies) == 4, "Must have exactly 4 aggregation strategies per requirements"
@@ -38,7 +38,7 @@ class TestAggregationStrategy:
     @pytest.mark.unit
     def test_string_conversion(self):
         """AggregationStrategy values should be usable as strings."""
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert str(AggregationStrategy.UNIFORM) == "AggregationStrategy.UNIFORM"
         assert AggregationStrategy.UNIFORM.value == "uniform"
@@ -50,7 +50,7 @@ class TestAggregatedOutput:
     @pytest.mark.unit
     def test_creation_with_arrays(self):
         """AggregatedOutput should store numpy arrays."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         mean = np.array([1.0, 2.0, 3.0])
         std = np.array([0.1, 0.2, 0.3])
@@ -64,7 +64,7 @@ class TestAggregatedOutput:
     @pytest.mark.unit
     def test_creation_with_groups(self):
         """AggregatedOutput should support group labels."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         mean = np.array([[1.0, 2.0], [3.0, 4.0]])
         std = np.array([[0.1, 0.2], [0.3, 0.4]])
@@ -83,7 +83,7 @@ class TestAggregatedOutput:
     @pytest.mark.unit
     def test_optional_raw_data(self):
         """AggregatedOutput should optionally store raw data."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         raw = np.random.randn(100, 3)
         output = AggregatedOutput(
@@ -99,7 +99,7 @@ class TestAggregatedOutput:
     @pytest.mark.unit
     def test_default_optional_fields(self):
         """Optional fields should default to None."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         output = AggregatedOutput(
             mean=np.array([1.0]),
@@ -206,7 +206,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_cell_cycle_strategy_exists(self):
         """Cell cycle aggregation strategy should exist."""
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert AggregationStrategy.BY_CELL_CYCLE is not None
         assert AggregationStrategy.BY_CELL_CYCLE.value == "by_cell_cycle"
@@ -214,7 +214,7 @@ class TestCellCycleStratification:
     @pytest.mark.unit
     def test_cell_cycle_variables_available(self):
         """Cell cycle variables should be defined."""
-        from uq import (
+        from libuq import (
             CellAngleCellCycleVariable,
             DNAReplicationCellCycleVariable,
             MassBasedCellCycleVariable,
@@ -232,7 +232,7 @@ class TestVarianceDecomposition:
     @pytest.mark.unit
     def test_decomposition_returns_dict(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance decomposition should return dictionary."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         result = compute_variance_decomposition(
             aggregated_by_generation,
@@ -245,7 +245,7 @@ class TestVarianceDecomposition:
     @pytest.mark.unit
     def test_decomposition_keys(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance decomposition should have expected keys."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         result = compute_variance_decomposition(
             aggregated_by_generation,
@@ -267,7 +267,7 @@ class TestVarianceDecomposition:
     @pytest.mark.unit
     def test_decomposition_total_variance(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Total variance should equal uniform std squared."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         result = compute_variance_decomposition(
             aggregated_by_generation,
@@ -281,7 +281,7 @@ class TestVarianceDecomposition:
     @pytest.mark.unit
     def test_decomposition_fractions_bounded(self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed):
         """Variance fractions should be between 0 and 1."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         result = compute_variance_decomposition(
             aggregated_by_generation,
@@ -296,7 +296,7 @@ class TestVarianceDecomposition:
     @pytest.mark.unit
     def test_decomposition_with_synthetic_data(self, rng):
         """Variance decomposition should work with synthetic data."""
-        from uq import AggregatedOutput, compute_variance_decomposition
+        from libuq import AggregatedOutput, compute_variance_decomposition
 
         # Create data with known variance structure
         n_samples = 1000
@@ -351,7 +351,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_uniform_method(self, rng):
         """Aggregator._aggregate_uniform should compute statistics."""
-        from uq.aggregation import Aggregator
+        from libuq.aggregation import Aggregator
 
         # Create mock aggregator (without DB connection)
         class MockAggregator(Aggregator):
@@ -370,7 +370,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_stratified_method(self, rng):
         """Aggregator._aggregate_stratified should compute per-group statistics."""
-        from uq.aggregation import Aggregator
+        from libuq.aggregation import Aggregator
 
         class MockAggregator(Aggregator):
             def __init__(self):
@@ -391,7 +391,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_requires_labels_for_stratified(self, rng):
         """Aggregator.aggregate should require labels for stratified strategies."""
-        from uq.aggregation import AggregationStrategy, Aggregator
+        from libuq.aggregation import AggregationStrategy, Aggregator
 
         class MockAggregator(Aggregator):
             def __init__(self):
@@ -406,7 +406,7 @@ class TestAggregatorClass:
     @pytest.mark.unit
     def test_aggregate_uniform_no_labels_needed(self, rng):
         """Aggregator.aggregate should not require labels for uniform strategy."""
-        from uq.aggregation import AggregationStrategy, Aggregator
+        from libuq.aggregation import AggregationStrategy, Aggregator
 
         class MockAggregator(Aggregator):
             def __init__(self):
@@ -426,7 +426,7 @@ class TestAggregationIntegration:
     @pytest.mark.unit
     def test_all_strategies_produce_valid_output(self, synthetic_simulation_dataframe, rng):
         """All aggregation strategies should produce valid AggregatedOutput."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         df = synthetic_simulation_dataframe
         data = df.select([
@@ -524,7 +524,7 @@ class TestBulkSingleCellMapping:
         self, aggregated_uniform, aggregated_by_generation, aggregated_by_seed
     ):
         """Aggregation enables attributing variance to different sources."""
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         decomp = compute_variance_decomposition(
             aggregated_by_generation,

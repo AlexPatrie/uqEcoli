@@ -1,5 +1,5 @@
 """
-Tests for ``uq_simple.workflow`` — the RFC006 UQPC workflow.
+Tests for ``uq.workflow`` — the RFC006 UQPC workflow.
 
 Demonstrates that the PyTUQ-based PCE pipeline (adapted from
 ``apps/uqpc/uq_pc.py``) correctly:
@@ -25,11 +25,11 @@ import numpy as np
 import pytest
 from pytuq.rv.pcrv import PCRV
 
-from uq.inputs import XSpaceVecoli
-from uq.pipeline.models import SimDataParameter
-from uq.sampling import PrecomputedCache
-from uq.sensitivity import PCESurrogate, SobolIndices
-from uq_simple.workflow import (
+from libuq.inputs import XSpaceVecoli
+from libuq.pipeline.models import SimDataParameter
+from libuq.sampling import PrecomputedCache
+from libuq.sensitivity import PCESurrogate, SobolIndices
+from uq.workflow import (
     UQPCResult,
     _bin_by_growth_stage,
     _compute_growth_fraction,

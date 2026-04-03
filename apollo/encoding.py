@@ -39,7 +39,7 @@ from apollo.types import (
 )
 
 if TYPE_CHECKING:
-    from uq.koopman import KoopmanMode, KoopmanSpectrum
+    from libuq.koopman import KoopmanMode, KoopmanSpectrum
 
 
 def encode_mode(
@@ -300,7 +300,7 @@ def encode_trajectory(
     Returns:
         CellularScore representing the trajectory's Koopman spectrum
     """
-    from uq.koopman import DynamicModeDecomposition, ExtendedDMD
+    from libuq.koopman import DynamicModeDecomposition, ExtendedDMD
 
     # Perform DMD analysis
     if use_edmd:
@@ -342,7 +342,7 @@ def encode_trajectory_lossless(
     Returns:
         LosslessScore for exact reconstruction
     """
-    from uq.koopman import DynamicModeDecomposition, ExtendedDMD
+    from libuq.koopman import DynamicModeDecomposition, ExtendedDMD
 
     # Perform DMD analysis
     if use_edmd:

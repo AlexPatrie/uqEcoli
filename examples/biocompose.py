@@ -164,7 +164,7 @@ def _(N, StrEnum, T, dc, dt, np, pl, pprint, t):
     # instead, load the real deal :)
     from pathlib import Path
 
-    from uq.inputs import load_dataset
+    from libuq.inputs import load_dataset
 
     def load_trajectory():
         import json
