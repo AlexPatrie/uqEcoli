@@ -123,7 +123,7 @@ def _(mo):
             "bcs — Bayesian Compressed Sensing": "bcs",
             "anl — Analytical Bayesian": "anl",
         },
-        value="lsq",
+        value="lsq — Least Squares",
         label="Regression method",
     )
 
