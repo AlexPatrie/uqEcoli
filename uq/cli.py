@@ -60,31 +60,195 @@ def sample(
 
     Use --generations >= 2 to enable Strategy 2 (by-generation GSA).
     """
-    from uq.workflow import sample as wf_sample
+    import json as _json
+    import os
+    import re
+    import shutil
+    import subprocess
+    import sys
+    import time as _time
+
+    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+    from libuq.pipeline.models import SimDataParameter
+    from libuq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS, ParameterDataset
+    from libuq.sampling import PrecomputedCache
+    from uq.tui import (
+        _build_config,
+        _build_variants_from_samples,
+        _collect_variant_timeseries,
+        _count_completed_variants,
+        _get_vecoli_root,
+    )
+    from uq.workflow import _setup_input_pc
+
+    # ── Step 1: Setup inputs ──
+    sim_data_path = str(Path(sim_data_path).resolve())
+    cache_path = Path(cache_dir).resolve()
 
     console.print(f"[bold cyan]Sampling:[/bold cyan] {n_samples} variants, {n_init_sims} seeds, {generations} gens")
     console.print(f"  [dim]simData: {sim_data_path}[/dim]")
-    console.print(f"  [dim]cache:   {cache_dir}[/dim]")
+    console.print(f"  [dim]cache:   {cache_path}[/dim]")
 
-    result = wf_sample(
+    console.print("[dim]Step 1: loading simData...[/dim]")
+    ds = ParameterDataset(sim_data_path=sim_data_path)
+    if params_file is not None:
+        raw = _json.loads(Path(params_file).read_text())
+        parameters = [SimDataParameter.from_dict(p) for p in raw]
+    else:
+        parameters = None
+    param_space = ds.to_parameter_space(parameters=parameters)
+    bounds = np.array(param_space.parameter_bounds)
+    console.print(f"  [dim]{param_space.n_parameters} params: {param_space.parameter_names}[/dim]")
+
+    # ── Step 2: Generate samples via PCRV ──
+    console.print("[dim]Step 2: PCRV.sampleGerm()...[/dim]")
+    input_pc, _, _ = _setup_input_pc(bounds)
+    np.random.seed(seed)
+    germ_train = input_pc.sampleGerm(n_samples)
+    X_train = input_pc.evalPC(germ_train)
+    console.print(f"  [dim]X shape: {X_train.shape}[/dim]")
+
+    # ── Step 3: Build config + run workflow.py ──
+    batch_dir = cache_path / "_batch"
+    if batch_dir.exists():
+        shutil.rmtree(batch_dir)
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = batch_dir / "output"
+    output_dir.mkdir(exist_ok=True)
+    experiment_id = "uqpc_batch"
+
+    variants = _build_variants_from_samples(X_train, param_space._sim_data_parameters)
+    config = _build_config(
         sim_data_path=sim_data_path,
-        cache_dir=cache_dir,
-        n_samples=n_samples,
-        seed=seed,
-        params_file=params_file,
-        max_duration=max_duration,
-        generations=generations,
+        output_dir=str(output_dir),
+        variants_section=variants,
+        experiment_id=experiment_id,
         n_init_sims=n_init_sims,
+        generations=generations,
+        max_duration=max_duration,
     )
+    config_path = batch_dir / "workflow_config.json"
+    config_path.write_text(_json.dumps(config, indent=2))
+
+    vecoli_root = _get_vecoli_root()
+    nf_temp = Path(vecoli_root) / "nextflow_temp" / experiment_id
+    if nf_temp.exists():
+        shutil.rmtree(nf_temp)
+
+    total_sims = (n_samples + 1) * n_init_sims * generations
+    history_base = output_dir / experiment_id / "history"
+    ansi_re = re.compile(r"\x1b\[[\d;]*[A-Za-z]|\x1b\[\d*[A-GJK]|\x07")
+
+    console.print(f"[dim]Step 3: running vEcoli workflow.py ({total_sims} sims)...[/dim]")
+
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = vecoli_root + (os.pathsep + existing if existing else "")
+    env["PYTHONUNBUFFERED"] = "1"
+
+    workflow_script = os.path.join(vecoli_root, "runscripts", "workflow.py")
+    cmd = [sys.executable, workflow_script, "--config", str(config_path)]
+
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=vecoli_root, env=env,
+    )
+
+    with Progress(
+        SpinnerColumn("dots", style="bold magenta"),
+        TextColumn("[bold cyan]{task.description:<50}"),
+        BarColumn(bar_width=30, complete_style="green", finished_style="green"),
+        TextColumn("[bold green]{task.percentage:>5.1f}%"),
+        TextColumn("[dim]|[/dim]"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Launching Nextflow", total=total_sims)
+        start = _time.monotonic()
+
+        while proc.poll() is None:
+            # Read available stdout
+            if proc.stdout is not None:
+                fd = proc.stdout.fileno()
+                try:
+                    chunk = os.read(fd, 8192)
+                except OSError:
+                    chunk = b""
+                if chunk:
+                    for raw_line in chunk.decode("utf-8", errors="replace").splitlines():
+                        clean = ansi_re.sub("", raw_line).strip()
+                        if not clean:
+                            continue
+                        low = clean.lower()
+                        if any(kw in low for kw in ["error", "fail", "exception"]):
+                            console.print(f"  [red]{clean}[/red]")
+                        elif any(kw in low for kw in ["completed at", "duration", "succeeded"]):
+                            console.print(f"  [green]{clean}[/green]")
+                        elif any(kw in low for kw in ["warn", "note"]):
+                            console.print(f"  [yellow]{clean}[/yellow]")
+                        else:
+                            console.print(f"  [dim]{clean}[/dim]")
+
+            # Poll completed variants
+            n_done = _count_completed_variants(history_base)
+            elapsed = int(_time.monotonic() - start)
+            progress.update(
+                task,
+                completed=n_done,
+                description=f"Simulating  {n_done}/{total_sims}  [{elapsed}s]",
+            )
+            _time.sleep(0.5)
+
+    # Drain remaining stdout
+    if proc.stdout is not None:
+        remaining = proc.stdout.read()
+        if remaining:
+            for raw_line in remaining.decode("utf-8", errors="replace").splitlines():
+                clean = ansi_re.sub("", raw_line).strip()
+                if clean:
+                    console.print(f"  [dim]{clean}[/dim]")
+
+    exit_code = proc.returncode
+    if exit_code != 0:
+        console.print(f"[yellow]workflow.py exited with code {exit_code}[/yellow]")
+
+    # ── Step 4: Collect + cache ──
+    console.print("[dim]Collecting Parquet outputs...[/dim]")
+    if not history_base.exists():
+        candidates = list(output_dir.glob("*/history"))
+        if candidates:
+            history_base = candidates[0]
+
+    obs = [
+        "listeners__mass__dry_mass",
+        "listeners__mass__cell_mass",
+        "listeners__mass__volume",
+        "listeners__mass__growth",
+    ]
+    Y_agg, Y_ts, Y_meta = _collect_variant_timeseries(history_base, n_samples, obs)
+
+    cache_path.mkdir(parents=True, exist_ok=True)
+    cache = PrecomputedCache(
+        cache_dir=cache_path,
+        X=X_train,
+        Y=Y_agg,
+        parameter_names=param_space.parameter_names,
+        metadata={"bounds": bounds.tolist(), "seed": seed, "observable_columns": obs},
+        Y_timeseries=Y_ts,
+        Y_timeseries_meta=Y_meta,
+    )
+    cache.save()
+    np.save(cache_path / "germ_train.npy", germ_train)
 
     console.print(
-        f"[bold green]Cached {result.X.shape[0]} samples[/bold green] "
-        f"({result.X.shape[1]} params, {result.Y.shape[1]} outputs) "
-        f"to [cyan]{cache_dir}[/cyan]"
+        f"[bold green]Cached {Y_agg.shape[0]} samples[/bold green] "
+        f"({Y_agg.shape[1]} params, {Y_agg.shape[1]} outputs) "
+        f"to [cyan]{cache_path}[/cyan]"
     )
-    if result.Y_timeseries is not None:
-        console.print(f"  [dim]Timeseries: {len(result.Y_timeseries)} samples[/dim]")
-    if result.Y_timeseries_meta is not None:
+    if Y_ts:
+        console.print(f"  [dim]Timeseries: {len(Y_ts)} samples[/dim]")
+    if Y_meta:
         console.print("  [dim]Metadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
 
 
