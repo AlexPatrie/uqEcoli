@@ -434,12 +434,26 @@ def tui() -> None:
     """Launch the UQPC interactive terminal UI (Textual).
 
     \b
-    Four tabs: Sample, Quantify, Results, Log.
-    Keyboard: [s] Sample  [u] Quantify  [r] Results  [l] Log  [q] Quit
+    Sidebar: config + sample + quantify + results.
+    Keyboard: q=quit  d=theme
     """
     from uq.tui import UQPCApp
 
     UQPCApp().run()
+
+
+@app.command()
+def gui() -> None:
+    """Launch the UQPC interactive GUI (marimo).
+
+    Full workflow in the browser: configure, sample, quantify, explore.
+    """
+    import subprocess as _sp
+
+    _sp.run(
+        ["uv", "run", "marimo", "run", "--no-token", "app/gui.py"],
+        check=True,
+    )
 
 
 def main() -> None:
