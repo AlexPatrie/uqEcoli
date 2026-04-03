@@ -45,13 +45,35 @@ The TUI does this automatically before each run.
 
 ## TUI hangs during sampling (no progress, no output)
 
-**Cause (fixed):** The old implementation used `readline()` which blocks
-until `\n`. Nextflow uses `\r` for its live progress updates, so
-`readline()` hung indefinitely.
+This went through three iterations:
 
-**Fix (already applied):** The TUI reads stdout in chunks via
-`proc.stdout.read(4096)` in a dedicated thread, splitting on both `\r`
-and `\n`. The main thread polls `proc.poll()` every second.
+**v1 bug:** Used `readline()` which blocks until `\n`. Nextflow uses `\r`
+for progress. Fix: split on both `\r` and `\n`.
+
+**v2 bug:** Used `proc.stdout.read(4096)` which blocks until 4096 bytes
+accumulate or EOF. Nextflow outputs a few lines every 10-30 seconds, so
+the buffer never fills — all output appears at once when the process ends.
+Fix: use `os.read(proc.stdout.fileno(), 4096)` which returns as soon as
+ANY bytes are available (raw POSIX non-greedy read).
+
+**v3 bug:** Daemon threads called `call_from_thread()` directly, but
+Textual only processes `call_from_thread` from the `@work` thread. Fix:
+daemon threads write to a shared `log_queue` (with lock), and the main
+`@work` loop drains it every second.
+
+**Current (working):** `os.read(fd, 4096)` in a daemon thread → shared
+`log_queue` → `@work` main loop drains + `call_from_thread(write_log)`.
+
+## TUI shows garbage characters / Mac beeps during sampling
+
+**Cause:** Nextflow uses ANSI escape codes beyond simple colors — cursor
+movement (`\x1b[5A`), erase-line (`\x1b[K`), 256-color (`\x1b[38;5;232m`),
+and bell (`\x07`). The original regex `\x1b\[[0-9;]*[a-zA-Z]` missed these.
+
+**Fix:** Comprehensive regex:
+```python
+re.compile(r"\x1b\[[\d;]*[A-Za-z]|\x1b\[\d*[A-GJK]|\x07")
+```
 
 ## Sobol indices are all zero
 

@@ -29,6 +29,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
+    Checkbox,
     DataTable,
     Footer,
     Header,
@@ -38,9 +39,13 @@ from textual.widgets import (
     RichLog,
     Select,
     Static,
+    Switch,
     TabbedContent,
     TabPane,
 )
+
+from libuq.pipeline.models import SimDataParameter
+from libuq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS
 
 # ── Constants ────────────────────────────────────────────────────────
 
@@ -60,6 +65,8 @@ REGRESSION_OPTIONS = [
     ("bcs  (Bayesian Compressed Sensing)", "bcs"),
     ("anl  (Analytical Bayesian)", "anl"),
 ]
+
+_DEFAULT_PARAMS = list(DEFAULT_SIM_DATA_PARAMETERS)
 
 DEFAULT_OBS = [
     "listeners__mass__dry_mass",
@@ -106,7 +113,7 @@ def _build_config(
         "emitter": "parquet",
         "emitter_arg": {
             "out_dir": output_dir,
-            "batch_size": max(1, int(max_duration)),
+            # "batch_size": max(1, int(max_duration)),
         },
         "max_duration": max_duration,
         "n_init_sims": n_init_sims,
@@ -279,6 +286,21 @@ class UQPCApp(App[None]):
     .cfg-label {
         color: ansi_yellow; margin: 0;
     }
+    .param-row {
+        height: auto; margin: 0;
+    }
+    .param-row Checkbox {
+        width: 100%; color: ansi_cyan;
+    }
+    .bounds-row {
+        height: 3; margin: 0 0 1 0;
+    }
+    .bounds-row Label {
+        width: 3; color: ansi_bright_black;
+    }
+    .bounds-row Input {
+        width: 1fr;
+    }
     #main-content { padding: 1 2; }
     #result-log { height: 1fr; border: round ansi_bright_black; }
     DataTable { height: 1fr; border: round ansi_bright_black; }
@@ -317,6 +339,26 @@ class UQPCApp(App[None]):
                 yield Input(value="10", id="cfg-bins", type="integer")
                 yield Label("Regression", classes="cfg-label")
                 yield Select(REGRESSION_OPTIONS, value="lsq", id="cfg-reg")
+
+                yield Label("VARIANT PARAMETERS", classes="nav-section")
+                for _p in _DEFAULT_PARAMS:
+                    with Horizontal(classes="param-row"):
+                        yield Checkbox(
+                            _p.name,
+                            value=True,
+                            id=f"chk-{_p.name}",
+                        )
+                    with Horizontal(classes="bounds-row"):
+                        yield Label("lo", classes="bounds-label")
+                        yield Input(
+                            value=str(_p.bounds[0]),
+                            id=f"lo-{_p.name}",
+                        )
+                        yield Label("hi", classes="bounds-label")
+                        yield Input(
+                            value=str(_p.bounds[1]),
+                            id=f"hi-{_p.name}",
+                        )
 
                 yield Label("SAMPLE (Steps 1-3)", classes="nav-section")
                 yield Button("Run Sampling", id="run-sample", variant="success")
@@ -442,9 +484,34 @@ class UQPCApp(App[None]):
 
         # ── Step 1: Setup inputs ──
         self.call_from_thread(self.write_log, "[ansi_bright_black]Step 1: loading simData...[/]")
+
+        # Read active parameters from sidebar checkboxes + bounds inputs
+        active_params: list[SimDataParameter] = []
+        for p in _DEFAULT_PARAMS:
+            chk = self.query_one(f"#chk-{p.name}", Checkbox)
+            if chk.value:
+                lo_str = self.query_one(f"#lo-{p.name}", Input).value.strip()
+                hi_str = self.query_one(f"#hi-{p.name}", Input).value.strip()
+                lo = float(lo_str) if lo_str else p.bounds[0]
+                hi = float(hi_str) if hi_str else p.bounds[1]
+                active_params.append(
+                    SimDataParameter(
+                        name=p.name,
+                        attr_path=p.attr_path,
+                        bounds=(lo, hi),
+                        description=p.description,
+                    )
+                )
+
+        if not active_params:
+            self.call_from_thread(
+                self.write_log, "[ansi_red]No parameters selected — check at least one[/]"
+            )
+            return
+
         try:
             ds = ParameterDataset(sim_data_path=sim_path)
-            param_space = ds.to_parameter_space()
+            param_space = ds.to_parameter_space(parameters=active_params)
         except Exception as e:
             self.call_from_thread(self.write_log, f"[ansi_red]Failed to load simData: {e}[/]")
             return
@@ -454,6 +521,11 @@ class UQPCApp(App[None]):
             self.write_log,
             f"[ansi_bright_black]  {param_space.n_parameters} params: {param_space.parameter_names}[/]",
         )
+        for ap in active_params:
+            self.call_from_thread(
+                self.write_log,
+                f"[ansi_bright_black]    {ap.name}: [{ap.bounds[0]}, {ap.bounds[1]}][/]",
+            )
 
         # ── Step 2: Generate samples via PCRV ──
         self.call_from_thread(self.write_log, "[ansi_bright_black]Step 2: PCRV.sampleGerm()...[/]")
