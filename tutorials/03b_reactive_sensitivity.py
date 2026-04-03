@@ -70,7 +70,7 @@ def _(mo):
 @app.cell
 def _(np):
     # Import the PCE surrogate (with our new predict method!)
-    from uq.sensitivity import PCESurrogate
+    from libuq.sensitivity import PCESurrogate
 
     # Define parameter space bounds
     PARAM_NAMES = ["vio_expression", "vio_trl_eff", "mecillinam_conc"]

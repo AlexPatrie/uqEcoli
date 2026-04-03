@@ -63,7 +63,7 @@ def _(mo):
 
 @app.cell
 def _(np, pl):
-    from uq.inputs import load_dataset
+    from libuq.inputs import load_dataset
     from pathlib import Path
 
     def _generate_cell_trajectory(
@@ -208,7 +208,7 @@ def _(mo):
 
 @app.cell
 def _(X, np, pl):
-    from uq import KoopmanCellCycleVariable
+    from libuq import KoopmanCellCycleVariable
 
     # Create the Koopman cell cycle variable computer
     koopman_cc = KoopmanCellCycleVariable(

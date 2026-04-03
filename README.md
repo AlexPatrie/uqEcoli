@@ -121,9 +121,9 @@ uv run uq-simple dashboard ./uq_results/uq_results.json
 ### Python API
 
 ```python
-from uq.sampling import PrecomputedCache
-from uq.pipe import initialize_datasets
-from uq_simple.pipeline import run_pipeline
+from libuq.sampling import PrecomputedCache
+from libuq.pipe import initialize_datasets
+from uq.pipeline import run_pipeline
 
 cache = PrecomputedCache.load("./uq_cache")
 ds = initialize_datasets(experiment_ids=["exp1"], sim_base_path="/path/to/sims")
@@ -377,8 +377,8 @@ export-configs              →  run on cluster  →  collect-results  →  quan
 ## Python API
 
 ```python
-from uq import XSpaceVecoli
-from uq.pipeline.workflow import execute_pipeline
+from libuq import XSpaceVecoli
+from libuq.pipeline.workflow import execute_pipeline
 
 result = execute_pipeline(
     experiment_ids=["mecillinam"],
@@ -401,7 +401,8 @@ for i, stage_sobol in enumerate(result.cell_cycle.sobol_indices):
     print(f"Stage {i}: {stage_sobol.select(n=3)}")
 
 # Reload results later
-from uq.pipeline.models import PipelineResult
+from libuq.pipeline.models import PipelineResult
+
 loaded = PipelineResult.from_export("./uq_results")
 ```
 

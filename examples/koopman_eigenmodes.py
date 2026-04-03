@@ -23,7 +23,7 @@ def _():
     import pandas as pd
     import polars as pl
 
-    from uq import (
+    from libuq import (
         DynamicModeDecomposition,
         ExtendedDMD,
         KoopmanSpectrum,
@@ -32,8 +32,8 @@ def _():
         CellCycleKoopmanAnalyzer,
         XSpaceVecoli,
     )
-    from uq.wrappers import DataDrivenWrapper
-    from uq.viz import plot_koopman_spectrum
+    from libuq.wrappers import DataDrivenWrapper
+    from libuq.viz import plot_koopman_spectrum
 
     return (
         DynamicModeDecomposition,

@@ -2,7 +2,7 @@ import numpy as np
 
 from apollo import LosslessScore, encode_spectrum, encode_spectrum_lossless
 from apollo.encoding import encode_trajectory_lossless
-from uq.koopman import ExtendedDMD, KoopmanSpectrum
+from libuq.koopman import ExtendedDMD, KoopmanSpectrum
 
 # Run simulation: y = f(x, theta, t)
 # y = run_simulation(params)  # shape: (n_timesteps, n_observables)
@@ -57,7 +57,7 @@ def encode_trajectory(
 
     # Auto-select rank if not provided
     if rank is None:
-        from uq.koopman import DynamicModeDecomposition
+        from libuq.koopman import DynamicModeDecomposition
 
         dmd = DynamicModeDecomposition(rank=None, dt=dt)
         dmd.fit(y)

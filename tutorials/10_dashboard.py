@@ -77,30 +77,30 @@ def _():
 
 @app.cell
 def _():
-    from uq.pipe import Pipeline, initialize_datasets
-    from uq.pipeline.workflow import (
+    from libuq.pipe import Pipeline, initialize_datasets
+    from libuq.pipeline.workflow import (
         AggregationResult,
         aggregate_timeseries,
         get_variance_decomposition,
         run_phase1,
         run_phase2,
     )
-    from uq.pipeline.models import (
+    from libuq.pipeline.models import (
         PipelineResult,
         StratificationLens,
         UqProfile,
     )
-    from uq.sensitivity import (
+    from libuq.sensitivity import (
         MorrisIndices,
         PCESurrogate,
         SensitivityAnalyzer,
         SobolIndices,
     )
-    from uq.wrappers import DataDrivenWrapper
-    from uq.sampling import PrecomputedCache
-    from uq.pce.models import PCEParameterSelectionConfig
-    from uq.koopman import DynamicModeDecomposition
-    from uq.viz import plot_koopman_spectrum
+    from libuq.wrappers import DataDrivenWrapper
+    from libuq.sampling import PrecomputedCache
+    from libuq.pce.models import PCEParameterSelectionConfig
+    from libuq.koopman import DynamicModeDecomposition
+    from libuq.viz import plot_koopman_spectrum
 
     return (
         AggregationResult,

@@ -41,8 +41,8 @@ class TestE2EInputToOutput:
     @pytest.mark.e2e
     def test_full_input_parameter_workflow(self):
         """Complete workflow from parameter space to simulation-ready params."""
-        from uq import XSpaceVecoli
-        from uq.pipeline.models import GenericSimDataParams, SimDataParameter
+        from libuq import XSpaceVecoli
+        from libuq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         # 1. Define parameter space
         space = XSpaceVecoli(
@@ -77,7 +77,7 @@ class TestE2EAggregationWorkflow:
     @pytest.mark.e2e
     def test_uniform_aggregation_workflow(self, synthetic_simulation_dataframe):
         """Complete uniform aggregation workflow."""
-        from uq import AggregatedOutput
+        from libuq import AggregatedOutput
 
         df = synthetic_simulation_dataframe
 
@@ -104,7 +104,7 @@ class TestE2EAggregationWorkflow:
     @pytest.mark.e2e
     def test_stratified_aggregation_workflow(self, synthetic_simulation_dataframe):
         """Complete stratified aggregation workflow."""
-        from uq import AggregatedOutput, compute_variance_decomposition
+        from libuq import AggregatedOutput, compute_variance_decomposition
 
         df = synthetic_simulation_dataframe
         data = df.select([
@@ -158,8 +158,8 @@ class TestE2ESensitivityWorkflow:
     @pytest.mark.e2e
     def test_pce_sensitivity_with_synthetic_function(self, rng):
         """Complete PCE sensitivity analysis with known analytic function."""
-        from uq import SobolIndices, XSpaceVecoli
-        from uq.pipeline.models import SimDataParameter
+        from libuq import SobolIndices, XSpaceVecoli
+        from libuq.pipeline.models import SimDataParameter
 
         # 1. Define parameter space
         space = XSpaceVecoli(
@@ -205,7 +205,7 @@ class TestE2ESensitivityWorkflow:
     @pytest.mark.e2e
     def test_sensitivity_with_precomputed_data(self, parameter_output_samples, input_parameter_space):
         """Sensitivity workflow with precomputed simulation data."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         X, Y = parameter_output_samples
 
@@ -228,7 +228,7 @@ class TestE2ECellCycleWorkflow:
     @pytest.mark.e2e
     def test_cell_cycle_variable_computation(self, synthetic_simulation_dataframe):
         """Complete cell cycle variable computation workflow."""
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         df = synthetic_simulation_dataframe
 
@@ -250,7 +250,7 @@ class TestE2ECellCycleWorkflow:
     @pytest.mark.e2e
     def test_cell_cycle_stratified_aggregation(self, synthetic_simulation_dataframe):
         """Complete cell cycle stratified aggregation workflow."""
-        from uq import AggregatedOutput, MassBasedCellCycleVariable
+        from libuq import AggregatedOutput, MassBasedCellCycleVariable
 
         df = synthetic_simulation_dataframe
 
@@ -294,7 +294,7 @@ class TestE2EKoopmanWorkflow:
     @pytest.mark.e2e
     def test_koopman_spectral_decomposition(self, synthetic_trajectory):
         """Complete Koopman spectral decomposition workflow."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         # 1. Fit DMD
         dmd = DynamicModeDecomposition(dt=1.0)
@@ -317,7 +317,7 @@ class TestE2EKoopmanWorkflow:
     @pytest.mark.e2e
     def test_cell_cycle_koopman_analysis(self, rng):
         """Complete cell cycle Koopman analysis workflow."""
-        from uq import CellCycleKoopmanAnalyzer
+        from libuq import CellCycleKoopmanAnalyzer
 
         # 1. Create cell-cycle-like trajectory
         expected_cycle_time = 50.0
@@ -351,7 +351,7 @@ class TestE2EVarianceDecomposition:
     @pytest.mark.e2e
     def test_complete_variance_decomposition(self, synthetic_simulation_dataframe):
         """Complete variance decomposition workflow."""
-        from uq import AggregatedOutput, compute_variance_decomposition
+        from libuq import AggregatedOutput, compute_variance_decomposition
 
         df = synthetic_simulation_dataframe
         output_col = "listeners__mass__dry_mass"
@@ -409,13 +409,13 @@ class TestE2ECompleteWorkflow:
 
         This test demonstrates the complete workflow as specified in Milestone 08.4.2.
         """
-        from uq import (
+        from libuq import (
             AggregatedOutput,
             SobolIndices,
             XSpaceVecoli,
             compute_variance_decomposition,
         )
-        from uq.pipeline.models import SimDataParameter
+        from libuq.pipeline.models import SimDataParameter
 
         # =========================================================
         # STEP 1: Define input parameter space

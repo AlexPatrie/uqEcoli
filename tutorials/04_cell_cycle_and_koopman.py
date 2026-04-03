@@ -19,7 +19,7 @@ def _():
     import altair as alt
     import numpy as np
     import polars as pl
-    from uq import (
+    from libuq import (
         CellCycleVariable,
         CellCyclePhase,
         MassBasedCellCycleVariable,
@@ -741,7 +741,7 @@ def _(mo):
 
 @app.cell
 def _(alt, mo, np, pl, spectrum):
-    from uq import CellCycleKoopmanAnalyzer
+    from libuq import CellCycleKoopmanAnalyzer
 
     T_cycle = 60.0  # Our synthetic cycle period
     dt = 1.0
@@ -835,7 +835,7 @@ def _(mo):
 
 @app.cell
 def _(DynamicModeDecomposition, alt, generate_trajectory, mo, np, pl):
-    from uq import KoopmanSensitivityAnalyzer
+    from libuq import KoopmanSensitivityAnalyzer
 
     # Generate multiple perturbed trajectories
     perturbation_results = []

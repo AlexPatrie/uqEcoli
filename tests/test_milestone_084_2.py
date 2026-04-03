@@ -49,7 +49,7 @@ class TestRequirement1_UniformAggregation:
         This strategy enables computing the baseline "bulk" population
         average across all cells and times.
         """
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert hasattr(AggregationStrategy, "UNIFORM"), (
             "MILESTONE 08.4.2 FAILED: AggregationStrategy.UNIFORM not found. "
@@ -104,7 +104,7 @@ class TestRequirement2_LineageSeedStratification:
 
         This strategy controls for exogenous variance from stochastic seeding.
         """
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert hasattr(AggregationStrategy, "BY_LINEAGE_SEED"), (
             "MILESTONE 08.4.2 FAILED: AggregationStrategy.BY_LINEAGE_SEED not found. "
@@ -170,7 +170,7 @@ class TestRequirement3_GenerationStratification:
 
         This strategy controls for convergence towards steady-state.
         """
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert hasattr(AggregationStrategy, "BY_GENERATION"), (
             "MILESTONE 08.4.2 FAILED: AggregationStrategy.BY_GENERATION not found. "
@@ -239,7 +239,7 @@ class TestRequirement4_CellCycleStratification:
 
         This strategy enables cell cycle-aware analysis.
         """
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         assert hasattr(AggregationStrategy, "BY_CELL_CYCLE"), (
             "MILESTONE 08.4.2 FAILED: AggregationStrategy.BY_CELL_CYCLE not found. "
@@ -254,7 +254,7 @@ class TestRequirement4_CellCycleStratification:
 
         This class handles cell cycle-specific aggregation logic.
         """
-        from uq import CellCycleAggregator
+        from libuq import CellCycleAggregator
 
         assert CellCycleAggregator is not None, "MILESTONE 08.4.2 FAILED: CellCycleAggregator class not found"
 
@@ -265,7 +265,7 @@ class TestRequirement4_CellCycleStratification:
 
         This is the primary cell cycle variable using normalized log-mass.
         """
-        from uq import MassBasedCellCycleVariable
+        from libuq import MassBasedCellCycleVariable
 
         var = MassBasedCellCycleVariable()
         assert var is not None, "MILESTONE 08.4.2 FAILED: MassBasedCellCycleVariable not found"
@@ -280,7 +280,7 @@ class TestRequirement4_CellCycleStratification:
 
         This tracks B, C, D periods of chromosome replication.
         """
-        from uq import DNAReplicationCellCycleVariable
+        from libuq import DNAReplicationCellCycleVariable
 
         var = DNAReplicationCellCycleVariable()
         assert var is not None, "MILESTONE 08.4.2 FAILED: DNAReplicationCellCycleVariable not found"
@@ -292,7 +292,7 @@ class TestRequirement4_CellCycleStratification:
 
         CONTEXT.md explicitly mentions "cell angle" as an established example.
         """
-        from uq import CellAngleCellCycleVariable
+        from libuq import CellAngleCellCycleVariable
 
         var = CellAngleCellCycleVariable()
         assert var is not None, (
@@ -307,7 +307,7 @@ class TestRequirement4_CellCycleStratification:
 
         Framework must be extensible for different cell cycle definitions.
         """
-        from uq import CompositeCellCycleVariable, register_cell_cycle_variable
+        from libuq import CompositeCellCycleVariable, register_cell_cycle_variable
 
         def dummy_compute(data):
             return np.zeros(len(data))
@@ -344,7 +344,7 @@ class TestRequirement5_SingleCellToBulkMapping:
 
         This class handles the single-cell to bulk mapping.
         """
-        from uq import Aggregator
+        from libuq import Aggregator
 
         assert Aggregator is not None, "MILESTONE 08.4.2 FAILED: Aggregator class not found"
 
@@ -355,7 +355,7 @@ class TestRequirement5_SingleCellToBulkMapping:
 
         mRNA counts must be aggregatable to bulk statistics.
         """
-        from uq import Aggregator
+        from libuq import Aggregator
 
         assert hasattr(Aggregator, "aggregate_transcriptome"), (
             "MILESTONE 08.4.2 FAILED: Aggregator must have aggregate_transcriptome method"
@@ -368,7 +368,7 @@ class TestRequirement5_SingleCellToBulkMapping:
 
         Protein counts must be aggregatable to bulk statistics.
         """
-        from uq import Aggregator
+        from libuq import Aggregator
 
         assert hasattr(Aggregator, "aggregate_proteome"), (
             "MILESTONE 08.4.2 FAILED: Aggregator must have aggregate_proteome method"
@@ -381,7 +381,7 @@ class TestRequirement5_SingleCellToBulkMapping:
 
         Fluxes must be aggregatable, including exchange fluxes.
         """
-        from uq import Aggregator
+        from libuq import Aggregator
 
         assert hasattr(Aggregator, "aggregate_fluxes"), (
             "MILESTONE 08.4.2 FAILED: Aggregator must have aggregate_fluxes method"
@@ -394,7 +394,7 @@ class TestRequirement5_SingleCellToBulkMapping:
 
         Mass, volume, growth rate, etc. must be aggregatable.
         """
-        from uq import Aggregator
+        from libuq import Aggregator
 
         assert hasattr(Aggregator, "aggregate_higher_order_properties"), (
             "MILESTONE 08.4.2 FAILED: Aggregator must have aggregate_higher_order_properties method"
@@ -423,7 +423,7 @@ class TestRequirement6_PopulationLevelAnalysis:
 
         This decomposes total variance into generation, seed, and residual components.
         """
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         assert compute_variance_decomposition is not None, (
             "MILESTONE 08.4.2 FAILED: compute_variance_decomposition not found"
@@ -441,7 +441,7 @@ class TestRequirement6_PopulationLevelAnalysis:
 
         Must return generation fraction, seed fraction, and total variance.
         """
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         decomp = compute_variance_decomposition(
             aggregated_by_generation,
@@ -467,7 +467,7 @@ class TestRequirement6_PopulationLevelAnalysis:
 
         Generation and seed fractions should be between 0 and 1.
         """
-        from uq import compute_variance_decomposition
+        from libuq import compute_variance_decomposition
 
         decomp = compute_variance_decomposition(
             aggregated_by_generation,
@@ -505,7 +505,7 @@ class TestRequirement7_PCESurrogateMethod:
         """
         REQUIREMENT 7.1: SensitivityAnalyzer class must exist.
         """
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         assert SensitivityAnalyzer is not None, "MILESTONE 08.4.2 FAILED: SensitivityAnalyzer class not found"
 
@@ -516,7 +516,7 @@ class TestRequirement7_PCESurrogateMethod:
 
         PCE is the PRIMARY method specified in CONTEXT.md.
         """
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         assert hasattr(SensitivityAnalyzer, "analyze_with_pce"), (
             "MILESTONE 08.4.2 FAILED: SensitivityAnalyzer must have analyze_with_pce method. "
@@ -530,7 +530,7 @@ class TestRequirement7_PCESurrogateMethod:
 
         This stores the fitted PCE model for predictions.
         """
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         assert PCESurrogate is not None, "MILESTONE 08.4.2 FAILED: PCESurrogate class not found"
 
@@ -541,7 +541,7 @@ class TestRequirement7_PCESurrogateMethod:
 
         PCE coefficients are needed for Sobol index computation.
         """
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         surrogate = PCESurrogate(
             coefficients=np.array([1.0, 0.5, 0.3]),
@@ -570,7 +570,7 @@ class TestRequirement8_SobolIndices:
         """
         REQUIREMENT 8.1: SobolIndices class must exist.
         """
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         assert SobolIndices is not None, "MILESTONE 08.4.2 FAILED: SobolIndices class not found"
 
@@ -643,7 +643,7 @@ class TestRequirement9_LibrarySupport:
         """
         REQUIREMENT 9.1: create_uqpy_model function must exist.
         """
-        from uq import create_uqpy_model
+        from libuq import create_uqpy_model
 
         assert create_uqpy_model is not None, "MILESTONE 08.4.2 FAILED: create_uqpy_model function not found"
 
@@ -652,7 +652,7 @@ class TestRequirement9_LibrarySupport:
         """
         REQUIREMENT 9.2: create_pytuq_model function must exist.
         """
-        from uq import create_pytuq_model
+        from libuq import create_pytuq_model
 
         assert create_pytuq_model is not None, "MILESTONE 08.4.2 FAILED: create_pytuq_model function not found"
 
@@ -686,7 +686,7 @@ class TestRequirement9_LibrarySupport:
         """
         import inspect
 
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         sig = inspect.signature(SensitivityAnalyzer.analyze_with_pce)
         assert "polynomial_order" in sig.parameters, (
@@ -716,7 +716,7 @@ class TestRequirement10_ScientificInputs:
         Replaces legacy VioPathwayParams — any parameter is now represented as
         a SimDataParameter with name, attr_path, and bounds.
         """
-        from uq.pipeline.models import SimDataParameter
+        from libuq.pipeline.models import SimDataParameter
 
         param = SimDataParameter(
             name="vio_expression",
@@ -735,7 +735,7 @@ class TestRequirement10_ScientificInputs:
         Replaces legacy MecillinamParams — any scalar sim_data attribute can
         be wrapped as a SimDataParameter for sensitivity analysis.
         """
-        from uq.pipeline.models import SimDataParameter
+        from libuq.pipeline.models import SimDataParameter
 
         param = SimDataParameter(
             name="mecillinam_concentration",
@@ -774,7 +774,7 @@ class TestMilestone084_2_Summary:
         """
         SUMMARY: All four aggregation strategies must be available.
         """
-        from uq import AggregationStrategy
+        from libuq import AggregationStrategy
 
         strategies = [
             ("UNIFORM", "Baseline bulk aggregation"),

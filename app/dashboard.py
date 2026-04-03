@@ -162,7 +162,7 @@ def param_dropdown(data, get_params):
 
 @app.cell
 def _():
-    from uq.common.utils import get_repo_root
+    from libuq.common.utils import get_repo_root
 
     _default = str(get_repo_root() / "examples" / "uq_artifacts" / "test_export_output" / "uq_results.json")
     get_file_input, set_file_input = mo.state(_default)

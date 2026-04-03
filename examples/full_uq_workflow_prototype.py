@@ -37,7 +37,7 @@ import pytest
 # =============================================================================
 # UQ Package Imports
 # =============================================================================
-from uq import (
+from libuq import (
     AggregatedOutput,
     CellAngleCellCycleVariable,
     # Cell cycle
@@ -57,8 +57,8 @@ from uq import (
     # Wrappers
     compute_variance_decomposition,
 )
-from uq.pce.models import Parameter
-from uq.pipeline.models import TimeseriesDataset, Simulation, VariantConfig, BaseClass
+from libuq.pce.models import Parameter
+from libuq.pipeline.models import TimeseriesDataset, Simulation, VariantConfig, BaseClass
 
 
 @dataclass

@@ -14,9 +14,9 @@ import json
 import numpy as np
 import pytest
 
-from uq.inputs import XSpaceVecoli
-from uq.pipeline.models import SimDataParameter
-from uq.sampling import PrecomputedCache, generate_lhs_samples, run_and_cache
+from libuq.inputs import XSpaceVecoli
+from libuq.pipeline.models import SimDataParameter
+from libuq.sampling import PrecomputedCache, generate_lhs_samples, run_and_cache
 
 
 class CountingWrapper:

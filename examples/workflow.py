@@ -12,13 +12,13 @@ def _():
 
     import marimo as mo
 
-    from uq import XSpaceVecoli
-    from uq.api.models import SystemConfig, Parameter, Observable
-    from uq.pipe import initialize_datasets, DatasetMultiExperiment
-    from uq.pipeline.models import SimDataParameter
-    from uq.pipeline.workflow import aggregate_timeseries
-    from uq.sampling import run_and_cache
-    from uq.wrappers import DataDrivenWrapper
+    from libuq import XSpaceVecoli
+    from libuq.api.models import SystemConfig, Parameter, Observable
+    from libuq.pipe import initialize_datasets, DatasetMultiExperiment
+    from libuq.pipeline.models import SimDataParameter
+    from libuq.pipeline.workflow import aggregate_timeseries
+    from libuq.sampling import run_and_cache
+    from libuq.wrappers import DataDrivenWrapper
 
     return (
         DatasetMultiExperiment,
@@ -166,8 +166,8 @@ def _(
 def _(Path, dataset, observable_columns, parameter_space):
     # define timeseries generator as wrapper and generate samples
 
-    from uq.generators.vecoli import TimeseriesGeneratorVecoli
-    from uq.sampling import run_batch_and_cache
+    from libuq.generators.vecoli import TimeseriesGeneratorVecoli
+    from libuq.sampling import run_batch_and_cache
 
     seeds = 1
     generations = 1

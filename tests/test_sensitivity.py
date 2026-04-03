@@ -15,7 +15,7 @@ class TestSensitivityMethod:
     @pytest.mark.unit
     def test_pce_method_exists(self):
         """PCE sensitivity method should exist."""
-        from uq import SensitivityMethod
+        from libuq import SensitivityMethod
 
         assert SensitivityMethod.PCE is not None
         assert SensitivityMethod.PCE.value == "pce"
@@ -23,7 +23,7 @@ class TestSensitivityMethod:
     @pytest.mark.unit
     def test_sobol_method_exists(self):
         """Sobol sensitivity method should exist."""
-        from uq import SensitivityMethod
+        from libuq import SensitivityMethod
 
         assert SensitivityMethod.SOBOL is not None
         assert SensitivityMethod.SOBOL.value == "sobol"
@@ -31,7 +31,7 @@ class TestSensitivityMethod:
     @pytest.mark.unit
     def test_morris_method_exists(self):
         """Morris screening method should exist."""
-        from uq import SensitivityMethod
+        from libuq import SensitivityMethod
 
         assert SensitivityMethod.MORRIS is not None
         assert SensitivityMethod.MORRIS.value == "morris"
@@ -43,7 +43,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_creation_with_arrays(self):
         """SobolIndices should store numpy arrays."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         first_order = np.array([0.4, 0.3, 0.2])
         total_order = np.array([0.5, 0.35, 0.25])
@@ -86,7 +86,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_second_order_optional(self):
         """second_order should be optional."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         indices = SobolIndices(
             first_order=np.array([0.5]),
@@ -98,7 +98,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_confidence_intervals_optional(self):
         """confidence_intervals should be optional."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         indices = SobolIndices(
             first_order=np.array([0.5]),
@@ -110,7 +110,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_multi_output_sobol(self):
         """SobolIndices should support multiple outputs."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         # 2 outputs, 3 parameters
         first_order = np.array([[0.4, 0.3, 0.2], [0.35, 0.35, 0.25]])
@@ -129,7 +129,7 @@ class TestSobolIndices:
     @pytest.mark.unit
     def test_get_most_influential_multi_output(self):
         """get_most_influential should average across outputs."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         # Parameter p1 dominant in output1, p2 in output2
         first_order = np.array([[0.6, 0.2, 0.1], [0.2, 0.6, 0.1]])
@@ -153,7 +153,7 @@ class TestPCESurrogate:
     @pytest.mark.unit
     def test_creation(self):
         """PCESurrogate should store coefficients and metadata."""
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         coeffs = np.array([1.0, 0.5, 0.2, 0.1])
         multi_idx = np.array([[0, 0], [1, 0], [0, 1], [1, 1]])
@@ -174,7 +174,7 @@ class TestPCESurrogate:
     @pytest.mark.unit
     def test_default_basis_type(self):
         """PCESurrogate should default to Legendre basis."""
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         surrogate = PCESurrogate(
             coefficients=np.array([1.0]),
@@ -186,7 +186,7 @@ class TestPCESurrogate:
     @pytest.mark.unit
     def test_predict_returns_output(self):
         """PCESurrogate.predict should return predictions."""
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         # Create a simple surrogate: constant term only (coefficient=2.0)
         surrogate = PCESurrogate(
@@ -209,7 +209,7 @@ class TestSensitivityAnalyzer:
     @pytest.mark.unit
     def test_initialization_with_parameter_space(self, input_parameter_space):
         """SensitivityAnalyzer should initialize with parameter space."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
@@ -221,7 +221,7 @@ class TestSensitivityAnalyzer:
     @pytest.mark.unit
     def test_initialization_with_precomputed_data(self, input_parameter_space, rng):
         """SensitivityAnalyzer should accept precomputed samples and outputs."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         X = rng.uniform(size=(50, 3))
         Y = rng.normal(size=(50, 2))
@@ -238,7 +238,7 @@ class TestSensitivityAnalyzer:
     @pytest.mark.unit
     def test_get_samples_with_precomputed(self, input_parameter_space, rng):
         """_get_samples_and_outputs should return precomputed data."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         X = rng.uniform(size=(50, 3))
         Y = rng.normal(size=(50, 2))
@@ -257,7 +257,7 @@ class TestSensitivityAnalyzer:
     @pytest.mark.unit
     def test_get_samples_no_data_raises(self, input_parameter_space):
         """_get_samples_and_outputs should raise if no data available."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
@@ -329,7 +329,7 @@ class TestPCEMethod:
     @pytest.mark.unit
     def test_pce_is_default_method(self):
         """PCE should be the primary method per UQ framework."""
-        from uq import SensitivityMethod
+        from libuq import SensitivityMethod
 
         # PCE is the recommended approach in the RFC
         assert SensitivityMethod.PCE.value == "pce"
@@ -344,7 +344,7 @@ class TestPCEMethod:
     @pytest.mark.unit
     def test_pce_surrogate_has_required_attributes(self):
         """PCESurrogate should have attributes needed for sensitivity."""
-        from uq import PCESurrogate
+        from libuq import PCESurrogate
 
         surrogate = PCESurrogate(
             coefficients=np.array([1.0, 0.5]),
@@ -366,7 +366,7 @@ class TestLibrarySupport:
     @pytest.mark.unit
     def test_analyze_with_pce_exists(self, input_parameter_space, rng):
         """analyze_with_pce should exist with polynomial_order and n_samples params."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
@@ -379,7 +379,7 @@ class TestLibrarySupport:
     @pytest.mark.unit
     def test_analyze_with_sobol_exists(self, input_parameter_space):
         """SensitivityAnalyzer should have analyze_with_sobol (PyTUQ SamSobol)."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
@@ -388,7 +388,7 @@ class TestLibrarySupport:
     @pytest.mark.unit
     def test_analyze_with_morris_exists(self, input_parameter_space):
         """SensitivityAnalyzer should have analyze_with_morris."""
-        from uq import SensitivityAnalyzer
+        from libuq import SensitivityAnalyzer
 
         analyzer = SensitivityAnalyzer(input_parameter_space)
 
@@ -401,14 +401,14 @@ class TestConvenienceFunctions:
     @pytest.mark.unit
     def test_run_sensitivity_analysis_exists(self):
         """run_sensitivity_analysis function should exist."""
-        from uq import run_sensitivity_analysis
+        from libuq import run_sensitivity_analysis
 
         assert callable(run_sensitivity_analysis)
 
     @pytest.mark.unit
     def test_analyze_precomputed_results_exists(self):
         """analyze_precomputed_results function should exist."""
-        from uq import analyze_precomputed_results
+        from libuq import analyze_precomputed_results
 
         assert callable(analyze_precomputed_results)
 
@@ -417,7 +417,7 @@ class TestConvenienceFunctions:
         """run_sensitivity_analysis should have required parameters."""
         import inspect
 
-        from uq import run_sensitivity_analysis
+        from libuq import run_sensitivity_analysis
 
         sig = inspect.signature(run_sensitivity_analysis)
         params = list(sig.parameters.keys())
@@ -436,7 +436,7 @@ class TestSobolIndexInterpretation:
     @pytest.mark.unit
     def test_first_order_measures_main_effect(self):
         """First-order index should measure main effect (no interactions)."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         # Create indices where p1 has high main effect
         indices = SobolIndices(
@@ -451,7 +451,7 @@ class TestSobolIndexInterpretation:
     @pytest.mark.unit
     def test_total_minus_first_measures_interactions(self):
         """Difference between total and first order indicates interactions."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         indices = SobolIndices(
             first_order=np.array([0.3, 0.3, 0.1]),
@@ -467,7 +467,7 @@ class TestSobolIndexInterpretation:
     @pytest.mark.unit
     def test_indices_identify_unimportant_parameters(self):
         """Low Sobol indices should identify unimportant parameters."""
-        from uq import SobolIndices
+        from libuq import SobolIndices
 
         indices = SobolIndices(
             first_order=np.array([0.45, 0.45, 0.001]),

@@ -42,27 +42,27 @@ import polars as pl
 # =============================================================================
 # UQ Package Imports — using actual pipeline module
 # =============================================================================
-from uq import (
+from libuq import (
     DynamicModeDecomposition,
     MecillinamParams,
     VioPathwayParams,
     XSpaceVecoli,
     identify_cell_cycle_relevant_observables,
 )
-from uq.common.models import BaseClass
-from uq.pipeline.models import (
+from libuq.common.models import BaseClass
+from libuq.pipeline.models import (
     GeneKnockoutParams,
     PipelineResult,
     StratificationLens,
     UqProfile,
 )
-from uq.pipeline.workflow import (
+from libuq.pipeline.workflow import (
     aggregate_timeseries,
     compute_strategy4_sobol,
     get_variance_decomposition,
     run_phase1,
 )
-from uq.synthetic import generate_signal, generate_synthetic_simulation_data
+from libuq.synthetic import generate_signal, generate_synthetic_simulation_data
 
 
 # =============================================================================

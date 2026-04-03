@@ -51,7 +51,7 @@ def __():
     # Import required modules
     import numpy as np
     import polars as pl
-    from uq import (
+    from libuq import (
         AggregationStrategy,
         AggregatedOutput,
         compute_variance_decomposition,

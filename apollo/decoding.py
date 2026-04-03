@@ -24,7 +24,7 @@ from apollo.types import (
 )
 
 if TYPE_CHECKING:
-    from uq.koopman import KoopmanMode, KoopmanSpectrum
+    from libuq.koopman import KoopmanMode, KoopmanSpectrum
 
 
 def decode_note(
@@ -46,7 +46,7 @@ def decode_note(
     Returns:
         KoopmanMode (approximate)
     """
-    from uq.koopman import KoopmanMode
+    from libuq.koopman import KoopmanMode
 
     # Pitch -> Frequency
     frequency = pitch_to_frequency(note.pitch, fundamental_freq)
@@ -117,7 +117,7 @@ def decode_score(
     Returns:
         KoopmanSpectrum (approximate)
     """
-    from uq.koopman import KoopmanSpectrum
+    from libuq.koopman import KoopmanSpectrum
 
     fundamental_freq = score.metadata.fundamental_frequency
 
@@ -196,7 +196,7 @@ def decode_score_lossless(score: LosslessScore) -> "KoopmanSpectrum":
     Returns:
         KoopmanSpectrum (exact)
     """
-    from uq.koopman import KoopmanMode, KoopmanSpectrum
+    from libuq.koopman import KoopmanMode, KoopmanSpectrum
 
     modes = []
     for lossless_mode in score.modes:

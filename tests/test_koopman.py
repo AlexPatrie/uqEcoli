@@ -15,7 +15,7 @@ class TestKoopmanDictionary:
     @pytest.mark.unit
     def test_dictionary_types_exist(self):
         """KoopmanDictionary should have standard dictionary types."""
-        from uq import KoopmanDictionary
+        from libuq import KoopmanDictionary
 
         assert KoopmanDictionary.IDENTITY is not None
         assert KoopmanDictionary.POLYNOMIAL is not None
@@ -26,7 +26,7 @@ class TestKoopmanDictionary:
     @pytest.mark.unit
     def test_dictionary_values(self):
         """KoopmanDictionary should have correct string values."""
-        from uq import KoopmanDictionary
+        from libuq import KoopmanDictionary
 
         assert KoopmanDictionary.IDENTITY.value == "identity"
         assert KoopmanDictionary.POLYNOMIAL.value == "polynomial"
@@ -40,7 +40,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_mode_creation(self):
         """KoopmanMode should store eigenvalue, mode, and amplitude."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         eigenvalue = 0.9 + 0.1j
         mode = np.array([1.0, 0.5, 0.2])
@@ -55,7 +55,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_frequency_computation(self):
         """KoopmanMode should compute frequency from eigenvalue."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Eigenvalue with oscillatory component
         eigenvalue = np.exp(0.01 + 0.5j)  # growth_rate=0.01, omega=0.5
@@ -71,7 +71,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_growth_rate_computation(self):
         """KoopmanMode should compute growth rate from eigenvalue."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Growing mode (|eigenvalue| > 1)
         eigenvalue = 1.1 + 0j
@@ -86,7 +86,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_is_oscillatory_property(self):
         """is_oscillatory should detect imaginary eigenvalue component."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Oscillatory - use eigenvalue with clear oscillatory behavior
         km_osc = KoopmanMode(
@@ -107,7 +107,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_is_stable_property(self):
         """is_stable should detect decaying modes."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Stable (|eigenvalue| < 1)
         km_stable = KoopmanMode(
@@ -129,7 +129,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_is_growing_property(self):
         """is_growing should detect growing modes."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         km_growing = KoopmanMode(
             eigenvalue=1.1 + 0j,
@@ -142,7 +142,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_period_for_oscillatory(self):
         """period should be set for oscillatory modes with sufficient frequency."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Eigenvalue corresponding to a clear oscillation
         # Use moderate frequency to ensure it's detected
@@ -164,7 +164,7 @@ class TestKoopmanMode:
     @pytest.mark.unit
     def test_damping_time_for_decaying(self):
         """damping_time should be set for decaying modes."""
-        from uq import KoopmanMode
+        from libuq import KoopmanMode
 
         # Decaying mode with known decay rate
         decay_rate = -0.1  # decay rate
@@ -187,7 +187,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_spectrum_creation(self):
         """KoopmanSpectrum should store modes and metadata."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=1.0),
@@ -206,7 +206,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_dominant_modes(self):
         """get_dominant_modes should return modes by amplitude."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=0.5),
@@ -223,7 +223,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_oscillatory_modes(self):
         """get_oscillatory_modes should filter oscillatory modes."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9 + 0.1j, mode=np.array([1.0]), amplitude=1.0),
@@ -239,7 +239,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_stable_modes(self):
         """get_stable_modes should filter stable modes."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=0.9, mode=np.array([1.0]), amplitude=1.0),
@@ -255,7 +255,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_modes_in_frequency_range(self):
         """get_modes_in_frequency_range should filter by frequency."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         # Create modes with different frequencies
         modes = [
@@ -273,7 +273,7 @@ class TestKoopmanSpectrum:
     @pytest.mark.unit
     def test_get_power_spectrum(self):
         """get_power_spectrum should return frequency and power arrays."""
-        from uq import KoopmanMode, KoopmanSpectrum
+        from libuq import KoopmanMode, KoopmanSpectrum
 
         modes = [
             KoopmanMode(eigenvalue=np.exp(1j * 0.5), mode=np.array([1.0]), amplitude=2.0),
@@ -298,7 +298,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_initialization(self):
         """DMD should initialize with default parameters."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         dmd = DynamicModeDecomposition()
 
@@ -308,7 +308,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_fit_with_simple_data(self, synthetic_trajectory):
         """DMD should fit to trajectory data."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         dmd = DynamicModeDecomposition(dt=1.0)
         dmd.fit(synthetic_trajectory)
@@ -320,7 +320,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_get_spectrum(self, synthetic_trajectory):
         """DMD should produce KoopmanSpectrum."""
-        from uq import DynamicModeDecomposition, KoopmanSpectrum
+        from libuq import DynamicModeDecomposition, KoopmanSpectrum
 
         dmd = DynamicModeDecomposition(dt=1.0)
         dmd.fit(synthetic_trajectory)
@@ -332,7 +332,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_requires_fit_before_spectrum(self):
         """DMD should raise if get_spectrum called before fit."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         dmd = DynamicModeDecomposition()
 
@@ -342,7 +342,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_rank_truncation(self, synthetic_trajectory):
         """DMD should respect rank parameter."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         dmd = DynamicModeDecomposition(rank=2, dt=1.0)
         dmd.fit(synthetic_trajectory)
@@ -353,7 +353,7 @@ class TestDynamicModeDecomposition:
     @pytest.mark.unit
     def test_dmd_observable_names(self, synthetic_trajectory):
         """DMD should store observable names in spectrum."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         names = ["mass", "growth_rate", "protein"]
         dmd = DynamicModeDecomposition(dt=1.0)
@@ -369,7 +369,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_initialization(self):
         """ExtendedDMD should initialize with dictionary settings."""
-        from uq import ExtendedDMD, KoopmanDictionary
+        from libuq import ExtendedDMD, KoopmanDictionary
 
         edmd = ExtendedDMD(
             dictionary=KoopmanDictionary.POLYNOMIAL,
@@ -382,7 +382,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_fit(self, synthetic_trajectory):
         """ExtendedDMD should fit to trajectory data."""
-        from uq import ExtendedDMD
+        from libuq import ExtendedDMD
 
         edmd = ExtendedDMD(dictionary_order=2, dt=1.0)
         edmd.fit(synthetic_trajectory)
@@ -393,7 +393,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_polynomial_lifting(self, rng):
         """ExtendedDMD should lift data with polynomial features."""
-        from uq import ExtendedDMD, KoopmanDictionary
+        from libuq import ExtendedDMD, KoopmanDictionary
 
         X = rng.uniform(size=(100, 2))
 
@@ -410,7 +410,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_fourier_lifting(self, rng):
         """ExtendedDMD should lift data with Fourier features."""
-        from uq import ExtendedDMD, KoopmanDictionary
+        from libuq import ExtendedDMD, KoopmanDictionary
 
         X = rng.uniform(size=(100, 2))
 
@@ -427,7 +427,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_identity_lifting(self, rng):
         """ExtendedDMD with identity should not change data."""
-        from uq import ExtendedDMD, KoopmanDictionary
+        from libuq import ExtendedDMD, KoopmanDictionary
 
         X = rng.uniform(size=(100, 2))
 
@@ -439,7 +439,7 @@ class TestExtendedDMD:
     @pytest.mark.unit
     def test_edmd_custom_dictionary(self, rng):
         """ExtendedDMD should support custom dictionary function."""
-        from uq import ExtendedDMD, KoopmanDictionary
+        from libuq import ExtendedDMD, KoopmanDictionary
 
         def custom_func(X):
             return np.hstack([X, X**2, np.sin(X)])
@@ -461,7 +461,7 @@ class TestKoopmanSensitivityAnalyzer:
     @pytest.mark.unit
     def test_analyzer_initialization(self):
         """KoopmanSensitivityAnalyzer should initialize with settings."""
-        from uq import KoopmanSensitivityAnalyzer
+        from libuq import KoopmanSensitivityAnalyzer
 
         analyzer = KoopmanSensitivityAnalyzer(
             dmd_rank=10,
@@ -475,7 +475,7 @@ class TestKoopmanSensitivityAnalyzer:
     @pytest.mark.unit
     def test_analyze_trajectory(self, synthetic_trajectory):
         """analyze_trajectory should return KoopmanSpectrum."""
-        from uq import KoopmanSensitivityAnalyzer, KoopmanSpectrum
+        from libuq import KoopmanSensitivityAnalyzer, KoopmanSpectrum
 
         analyzer = KoopmanSensitivityAnalyzer(dt=1.0)
         spectrum = analyzer.analyze_trajectory(synthetic_trajectory)
@@ -485,7 +485,7 @@ class TestKoopmanSensitivityAnalyzer:
     @pytest.mark.unit
     def test_compare_spectra(self, rng):
         """compare_spectra should compare multiple trajectories."""
-        from uq import KoopmanSensitivityAnalyzer
+        from libuq import KoopmanSensitivityAnalyzer
 
         analyzer = KoopmanSensitivityAnalyzer(dt=1.0)
 
@@ -503,7 +503,7 @@ class TestKoopmanSensitivityAnalyzer:
     @pytest.mark.unit
     def test_spectral_sensitivity(self, rng):
         """spectral_sensitivity should compute sensitivity indices."""
-        from uq import KoopmanSensitivityAnalyzer
+        from libuq import KoopmanSensitivityAnalyzer
 
         analyzer = KoopmanSensitivityAnalyzer(dt=1.0)
 
@@ -530,7 +530,7 @@ class TestCellCycleKoopmanAnalyzer:
     @pytest.mark.unit
     def test_analyzer_initialization(self):
         """CellCycleKoopmanAnalyzer should initialize with cycle time."""
-        from uq import CellCycleKoopmanAnalyzer
+        from libuq import CellCycleKoopmanAnalyzer
 
         analyzer = CellCycleKoopmanAnalyzer(
             expected_cycle_time=3600.0,
@@ -543,7 +543,7 @@ class TestCellCycleKoopmanAnalyzer:
     @pytest.mark.unit
     def test_identify_cell_cycle_modes(self):
         """identify_cell_cycle_modes should find modes at cell cycle frequency."""
-        from uq import CellCycleKoopmanAnalyzer, KoopmanMode, KoopmanSpectrum
+        from libuq import CellCycleKoopmanAnalyzer, KoopmanMode, KoopmanSpectrum
 
         analyzer = CellCycleKoopmanAnalyzer(expected_cycle_time=100.0)
 
@@ -565,7 +565,7 @@ class TestCellCycleKoopmanAnalyzer:
     @pytest.mark.unit
     def test_analyze_cell_cycle_spectrum(self, rng):
         """analyze_cell_cycle_spectrum should return analysis dict."""
-        from uq import CellCycleKoopmanAnalyzer
+        from libuq import CellCycleKoopmanAnalyzer
 
         analyzer = CellCycleKoopmanAnalyzer(expected_cycle_time=50.0, dt=1.0)
 
@@ -586,7 +586,7 @@ class TestCellCycleKoopmanAnalyzer:
     @pytest.mark.unit
     def test_cell_cycle_variance_fraction(self, rng):
         """cell_cycle_variance_fraction should be between 0 and 1."""
-        from uq import CellCycleKoopmanAnalyzer
+        from libuq import CellCycleKoopmanAnalyzer
 
         analyzer = CellCycleKoopmanAnalyzer(expected_cycle_time=50.0, dt=1.0)
 
@@ -608,7 +608,7 @@ class TestKoopmanIntegration:
     @pytest.mark.unit
     def test_full_analysis_pipeline(self, synthetic_trajectory):
         """Full Koopman analysis pipeline should work."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         # Fit DMD
         dmd = DynamicModeDecomposition(dt=1.0)
@@ -629,7 +629,7 @@ class TestKoopmanIntegration:
     @pytest.mark.unit
     def test_reconstruct_from_modes(self, rng):
         """KoopmanSpectrum.reconstruct should approximate original data."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         # Create simple oscillating data
         t = np.arange(100)
@@ -649,7 +649,7 @@ class TestKoopmanIntegration:
     @pytest.mark.unit
     def test_edmd_improves_nonlinear_fit(self, rng):
         """EDMD should better capture nonlinear dynamics than DMD."""
-        from uq import DynamicModeDecomposition, ExtendedDMD
+        from libuq import DynamicModeDecomposition, ExtendedDMD
 
         # Create nonlinear trajectory
         t = np.arange(100)
@@ -679,7 +679,7 @@ class TestExtractKoopmanFeatures:
     @pytest.mark.unit
     def test_function_exists(self):
         """extract_koopman_features should be importable."""
-        from uq import extract_koopman_features
+        from libuq import extract_koopman_features
 
         assert callable(extract_koopman_features)
 
@@ -690,7 +690,7 @@ class TestKoopmanMusicAnalogy:
     @pytest.mark.unit
     def test_modes_like_harmonics(self, rng):
         """Koopman modes should decompose like musical harmonics."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         # Create data with multiple "harmonics"
         t = np.arange(200)
@@ -714,7 +714,7 @@ class TestKoopmanMusicAnalogy:
     @pytest.mark.unit
     def test_amplitude_like_loudness(self, rng):
         """Mode amplitude/eigenvalue should characterize dynamics."""
-        from uq import DynamicModeDecomposition
+        from libuq import DynamicModeDecomposition
 
         # Create data with exponential growth (easy for DMD to fit)
         t = np.arange(100)

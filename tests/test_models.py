@@ -20,7 +20,7 @@ class TestParameter:
     @pytest.mark.unit
     def test_creation(self):
         """Parameter should store all attributes."""
-        from uq.models import Parameter
+        from libuq.models import Parameter
 
         param = Parameter(
             name="temperature",
@@ -38,7 +38,7 @@ class TestParameter:
     @pytest.mark.unit
     def test_model_dump(self):
         """model_dump should return dict with tuple bounds."""
-        from uq.models import Parameter
+        from libuq.models import Parameter
 
         param = Parameter(
             name="pressure",
@@ -61,7 +61,7 @@ class TestPCEParameterSelectionConfig:
     @pytest.mark.unit
     def test_default_values(self):
         """Should have sensible defaults."""
-        from uq.models import PCEParameterSelectionConfig
+        from libuq.models import PCEParameterSelectionConfig
 
         config = PCEParameterSelectionConfig()
 
@@ -71,7 +71,7 @@ class TestPCEParameterSelectionConfig:
     @pytest.mark.unit
     def test_custom_values(self):
         """Should accept custom values."""
-        from uq.models import PCEParameterSelectionConfig
+        from libuq.models import PCEParameterSelectionConfig
 
         config = PCEParameterSelectionConfig(n_trajectories=30, n_top=10)
 
@@ -85,7 +85,7 @@ class TestPCEPreprocessingConfig:
     @pytest.mark.unit
     def test_default_values(self):
         """Should have sensible defaults."""
-        from uq.models import PCEPreprocessingConfig
+        from libuq.models import PCEPreprocessingConfig
 
         config = PCEPreprocessingConfig()
 
@@ -96,7 +96,7 @@ class TestPCEPreprocessingConfig:
     @pytest.mark.unit
     def test_custom_values(self):
         """Should accept custom values."""
-        from uq.models import PCEPreprocessingConfig
+        from libuq.models import PCEPreprocessingConfig
 
         config = PCEPreprocessingConfig(target_cv=0.1, min_reps=5, max_reps=50)
 
@@ -111,7 +111,7 @@ class TestPCESolverConfig:
     @pytest.mark.unit
     def test_default_values(self):
         """Should have sensible defaults."""
-        from uq.models import PCESolverConfig
+        from libuq.models import PCESolverConfig
 
         config = PCESolverConfig()
 
@@ -121,7 +121,7 @@ class TestPCESolverConfig:
     @pytest.mark.unit
     def test_analytical_config(self):
         """Should accept analytical (full Bayesian) configuration."""
-        from uq.models import PCESolverConfig
+        from libuq.models import PCESolverConfig
 
         config = PCESolverConfig(method="analytical")
 
@@ -130,7 +130,7 @@ class TestPCESolverConfig:
     @pytest.mark.unit
     def test_variational_config(self):
         """Should accept variational inference configuration."""
-        from uq.models import PCESolverConfig
+        from libuq.models import PCESolverConfig
 
         config = PCESolverConfig(method="variational")
 
@@ -139,7 +139,7 @@ class TestPCESolverConfig:
     @pytest.mark.unit
     def test_hermite_basis(self):
         """Should accept Hermite basis."""
-        from uq.models import PCESolverConfig
+        from libuq.models import PCESolverConfig
 
         config = PCESolverConfig(basis_type="hermite")
 
@@ -152,7 +152,7 @@ class TestPCESurrogateConfig:
     @pytest.mark.unit
     def test_creation_with_parameters(self):
         """Should store parameters and sample size."""
-        from uq.models import Parameter, PCESurrogateConfig
+        from libuq.models import Parameter, PCESurrogateConfig
 
         params = [
             Parameter(name="p1", bounds=(0, 1), default=0.5, step=0.1, description="Param 1"),
@@ -168,7 +168,7 @@ class TestPCESurrogateConfig:
     @pytest.mark.unit
     def test_convenience_aliases(self):
         """n, N, p should be aliases."""
-        from uq.models import Parameter, PCESurrogateConfig
+        from libuq.models import Parameter, PCESurrogateConfig
 
         params = [Parameter(name=f"p{i}", bounds=(0, 1), default=0.5, step=0.1, description="") for i in range(5)]
 
@@ -181,7 +181,7 @@ class TestPCESurrogateConfig:
     @pytest.mark.unit
     def test_auto_calculate_polynomial_order(self):
         """Should auto-calculate polynomial order from sample budget."""
-        from uq.models import Parameter, PCESurrogateConfig
+        from libuq.models import Parameter, PCESurrogateConfig
 
         params = [Parameter(name=f"p{i}", bounds=(0, 1), default=0.5, step=0.1, description="") for i in range(3)]
 
@@ -194,7 +194,7 @@ class TestPCESurrogateConfig:
     @pytest.mark.unit
     def test_warns_on_insufficient_samples(self):
         """Should warn when samples are insufficient."""
-        from uq.models import Parameter, PCESurrogateConfig
+        from libuq.models import Parameter, PCESurrogateConfig
 
         params = [Parameter(name=f"p{i}", bounds=(0, 1), default=0.5, step=0.1, description="") for i in range(5)]
 
@@ -209,7 +209,7 @@ class TestPCEConfig:
     @pytest.mark.unit
     def test_creation_with_all_subconfigs(self):
         """Should combine all sub-configurations."""
-        from uq.models import (
+        from libuq.models import (
             Parameter,
             PCEConfig,
             PCEParameterSelectionConfig,
@@ -239,7 +239,7 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_creation(self):
         """Should store all fit results."""
-        from uq.models import PCEFitResult
+        from libuq.models import PCEFitResult
 
         coeffs = np.array([1.0, 0.5, 0.2])
         indices = np.array([[0, 0], [1, 0], [0, 1]])
@@ -262,7 +262,7 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_sparsity_computed(self):
         """Sparsity should be computed automatically."""
-        from uq.models import PCEFitResult
+        from libuq.models import PCEFitResult
 
         # 3 coefficients, 1 is zero
         coeffs = np.array([1.0, 0.0, 0.5])
@@ -285,7 +285,7 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_sparsity_all_nonzero(self):
         """Sparsity should be 0 when all coefficients are non-zero."""
-        from uq.models import PCEFitResult
+        from libuq.models import PCEFitResult
 
         coeffs = np.array([1.0, 0.5, 0.2, 0.1])
         indices = np.array([[0], [1], [2], [3]])
@@ -306,7 +306,7 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_sparsity_all_zero(self):
         """Sparsity should be 1 when all coefficients are zero."""
-        from uq.models import PCEFitResult
+        from libuq.models import PCEFitResult
 
         coeffs = np.array([0.0, 0.0, 0.0])
         indices = np.array([[0], [1], [2]])
@@ -327,8 +327,8 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_to_surrogate(self):
         """to_surrogate should return valid PCESurrogate."""
-        from uq import PCESurrogate
-        from uq.models import PCEFitResult
+        from libuq import PCESurrogate
+        from libuq.models import PCEFitResult
 
         coeffs = np.array([1.0, 0.5])
         indices = np.array([[0, 0], [1, 0]])
@@ -356,7 +356,7 @@ class TestPCEFitResult:
     @pytest.mark.unit
     def test_to_surrogate_preserves_bounds(self):
         """to_surrogate should preserve input bounds."""
-        from uq.models import PCEFitResult
+        from libuq.models import PCEFitResult
 
         bounds = np.array([[0, 10], [5, 15]])
 
@@ -383,7 +383,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_creation(self):
         """Should store values and metadata."""
-        from uq.models import CellCycleVariable
+        from libuq.models import CellCycleVariable
 
         values = np.linspace(0, 1, 100)
 
@@ -400,7 +400,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_to_stage_bins(self):
         """to_stage_bins should discretize correctly."""
-        from uq.models import CellCycleVariable
+        from libuq.models import CellCycleVariable
 
         values = np.array([0.05, 0.15, 0.25, 0.95])
 
@@ -416,7 +416,7 @@ class TestCellCycleVariable:
     @pytest.mark.unit
     def test_phase_labels_optional(self):
         """phase_labels should be optional."""
-        from uq.models import CellCycleVariable
+        from libuq.models import CellCycleVariable
 
         ccv = CellCycleVariable(values=np.array([0.5]))
 
@@ -429,7 +429,7 @@ class TestMediaCondition:
     @pytest.mark.unit
     def test_all_conditions_exist(self):
         """All media conditions should be defined."""
-        from uq.models import MediaCondition
+        from libuq.models import MediaCondition
 
         assert MediaCondition.BASAL.value == "basal"
         assert MediaCondition.WITH_AA.value == "with_aa"
@@ -444,7 +444,7 @@ class TestCellCyclePhase:
     @pytest.mark.unit
     def test_all_phases_exist(self):
         """All cell cycle phases should be defined."""
-        from uq.models import CellCyclePhase
+        from libuq.models import CellCyclePhase
 
         assert CellCyclePhase.B_PERIOD.value == "B_period"
         assert CellCyclePhase.C_PERIOD.value == "C_period"

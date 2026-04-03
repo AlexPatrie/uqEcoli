@@ -108,7 +108,7 @@ def _(mo):
 def _():
     import numpy as np
 
-    from uq import XSpaceVecoli
+    from libuq import XSpaceVecoli
 
     # Build parameter space (same as what export-configs does internally)
     param_space = XSpaceVecoli(
@@ -144,7 +144,7 @@ def _(mo):
 
 @app.cell
 def _(np, param_space):
-    from uq.sampling import generate_lhs_samples
+    from libuq.sampling import generate_lhs_samples
 
     N_SAMPLES = 20
     SEED = 42
@@ -359,7 +359,7 @@ def _(N_SAMPLES, SEED, X, np, param_space):
     import tempfile
     from pathlib import Path
 
-    from uq.sampling import PrecomputedCache
+    from libuq.sampling import PrecomputedCache
 
     # Simulate what collect-results produces: synthetic Y matrix
     _rng = np.random.default_rng(SEED)
@@ -443,7 +443,7 @@ def _(mo):
 
 @app.cell
 def _(cache, np):
-    from uq.sampling import PrecomputedCache as _PC
+    from libuq.sampling import PrecomputedCache as _PC
 
     # Round-trip: load from disk
     _loaded = _PC.load(cache.cache_dir)

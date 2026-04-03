@@ -19,16 +19,16 @@ import numpy as np
 import polars as pl
 import pytest
 
-from uq import AggregatedOutput, SobolIndices, XSpaceVecoli
-from uq.pipeline.models import PipelineResult, StratificationLens, UqProfile
-from uq.pipeline.workflow import (
+from libuq import AggregatedOutput, SobolIndices, XSpaceVecoli
+from libuq.pipeline.models import PipelineResult, StratificationLens, UqProfile
+from libuq.pipeline.workflow import (
     AggregationResult,
     Strategy4Wrapper,
     _split_multi_output_sobol,
     aggregate_timeseries,
     get_variance_decomposition,
 )
-from uq.sensitivity import PCESurrogate
+from libuq.sensitivity import PCESurrogate
 
 # =============================================================================
 # Helpers
@@ -207,7 +207,7 @@ class TestStrategy4Wrapper:
     @pytest.fixture
     def mock_koopman(self):
         """A mock KoopmanCellCycleVariable that returns linearly spaced θ."""
-        from uq.pipeline.models import CellCycleVariable
+        from libuq.pipeline.models import CellCycleVariable
 
         class MockKoopman:
             def __init__(self):
@@ -304,7 +304,7 @@ class TestRunPhase1:
     """Test run_phase1 orchestration with mocked SensitivityAnalyzer."""
 
     def test_returns_sobol_and_surrogate(self, input_parameter_space):
-        from uq.pipeline.workflow import run_phase1
+        from libuq.pipeline.workflow import run_phase1
 
         mock_sobol = _make_mock_sobol(n_params=3, param_names=input_parameter_space.parameter_names)
         mock_surrogate = _make_mock_surrogate(n_params=3)
@@ -327,7 +327,7 @@ class TestRunPhase1:
         assert morris is None  # no prescreen_config provided
 
     def test_export_path(self, input_parameter_space, tmp_path):
-        from uq.pipeline.workflow import run_phase1
+        from libuq.pipeline.workflow import run_phase1
 
         mock_sobol = _make_mock_sobol(n_params=3)
         mock_surrogate = MagicMock(spec=PCESurrogate)
@@ -355,7 +355,7 @@ class TestRunPhase1:
 
 class TestComputeStrategy4Sobol:
     def test_returns_per_stage_sobol(self, input_parameter_space):
-        from uq.pipeline.workflow import compute_strategy4_sobol
+        from libuq.pipeline.workflow import compute_strategy4_sobol
 
         n_bins = 5
         mock_multi_sobol = _make_mock_multi_sobol(
@@ -437,7 +437,7 @@ class TestExecutePipeline:
         self,
         _mock_phases,
     ):
-        from uq.pipeline.workflow import execute_pipeline
+        from libuq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
             sim_data_path="/tmp/sim_data/simData.cPickle",
@@ -458,7 +458,7 @@ class TestExecutePipeline:
         self,
         _mock_phases,
     ):
-        from uq.pipeline.workflow import execute_pipeline
+        from libuq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
             sim_data_path="/tmp/sim_data/simData.cPickle",
@@ -475,7 +475,7 @@ class TestExecutePipeline:
         self,
         _mock_phases,
     ):
-        from uq.pipeline.workflow import execute_pipeline
+        from libuq.pipeline.workflow import execute_pipeline
 
         result = execute_pipeline(
             sim_data_path="/tmp/sim_data/simData.cPickle",
