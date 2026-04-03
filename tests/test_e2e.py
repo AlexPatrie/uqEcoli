@@ -45,11 +45,17 @@ class TestE2EInputToOutput:
         from uq.pipeline.models import GenericSimDataParams, SimDataParameter
 
         # 1. Define parameter space
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="param_a", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.0, 1.0)),
-            SimDataParameter(name="param_b", attr_path="mass.cell_dry_mass_fraction", bounds=(0.25, 0.35)),
-            SimDataParameter(name="param_c", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.25, 0.47)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="param_a", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.0, 1.0)
+                ),
+                SimDataParameter(name="param_b", attr_path="mass.cell_dry_mass_fraction", bounds=(0.25, 0.35)),
+                SimDataParameter(
+                    name="param_c", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.25, 0.47)
+                ),
+            ]
+        )
 
         # 2. Generate sample
         rng = np.random.default_rng(42)
@@ -156,11 +162,19 @@ class TestE2ESensitivityWorkflow:
         from uq.pipeline.models import SimDataParameter
 
         # 1. Define parameter space
-        space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="kinetic_obj_weight", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.0, 1.0)),
-            SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.0, 1.0)),
-            SimDataParameter(name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 1.0)),
-        ])
+        space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="kinetic_obj_weight",
+                    attr_path="process.metabolism.kinetic_objective_weight",
+                    bounds=(0.0, 1.0),
+                ),
+                SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.0, 1.0)),
+                SimDataParameter(
+                    name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 1.0)
+                ),
+            ]
+        )
 
         # 2. Generate samples
         n_samples = 100
@@ -406,11 +420,19 @@ class TestE2ECompleteWorkflow:
         # =========================================================
         # STEP 1: Define input parameter space
         # =========================================================
-        param_space = XSpaceVecoli(parameters=[
-            SimDataParameter(name="kinetic_obj_weight", attr_path="process.metabolism.kinetic_objective_weight", bounds=(0.5, 5.0)),
-            SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.5, 2.0)),
-            SimDataParameter(name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 10.0)),
-        ])
+        param_space = XSpaceVecoli(
+            parameters=[
+                SimDataParameter(
+                    name="kinetic_obj_weight",
+                    attr_path="process.metabolism.kinetic_objective_weight",
+                    bounds=(0.5, 5.0),
+                ),
+                SimDataParameter(name="dry_mass_frac", attr_path="mass.cell_dry_mass_fraction", bounds=(0.5, 2.0)),
+                SimDataParameter(
+                    name="rnap_free", attr_path="process.transcription.fraction_active_rnap_free", bounds=(0.0, 10.0)
+                ),
+            ]
+        )
 
         assert param_space.n_parameters == 3
 

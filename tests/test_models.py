@@ -450,5 +450,3 @@ class TestCellCyclePhase:
         assert CellCyclePhase.C_PERIOD.value == "C_period"
         assert CellCyclePhase.D_PERIOD.value == "D_period"
         assert CellCyclePhase.UNKNOWN.value == "unknown"
-
-

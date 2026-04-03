@@ -1,0 +1,154 @@
+{
+  "sim_data_path": "/Users/alexanderpatrie/sms/uqEcoli/samples/kb/simData.cPickle",
+  "experiment_id": "uq_batch",
+  "emitter": "parquet",
+  "emitter_arg": {
+    "out_dir": "/Users/alexanderpatrie/sms/uqEcoli/samples/output",
+    "batch_size": 10800
+  },
+  "max_duration": 10800.0,
+  "n_init_sims": 1,
+  "generations": 1,
+  "single_daughters": true,
+  "suffix_time": false,
+  "variants": {
+    "sim_data_setattr": {
+      "mutations": {
+        "value": [
+          {
+            "process.transcription.fraction_active_rnap_free": 0.28488178375299744,
+            "process.transcription.fraction_active_rnap_bound": 0.17931607410760939,
+            "mass.cell_dry_mass_fraction": 0.27661745630581985,
+            "process.metabolism.kinetic_objective_weight": 5.731077487882403e-08
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.36688168547989514,
+            "process.transcription.fraction_active_rnap_bound": 0.20443942523194286,
+            "mass.cell_dry_mass_fraction": 0.3007831700280889,
+            "process.metabolism.kinetic_objective_weight": 7.565860388633878e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.2945040631232694,
+            "process.transcription.fraction_active_rnap_bound": 0.14714745857616787,
+            "mass.cell_dry_mass_fraction": 0.3056658495060236,
+            "process.metabolism.kinetic_objective_weight": 2.557835509051325e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.2567026828350091,
+            "process.transcription.fraction_active_rnap_bound": 0.15277986952987088,
+            "mass.cell_dry_mass_fraction": 0.34407638713958344,
+            "process.metabolism.kinetic_objective_weight": 3.045925949733707e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.38865958302752834,
+            "process.transcription.fraction_active_rnap_bound": 0.18634948642524032,
+            "mass.cell_dry_mass_fraction": 0.31271156708783565,
+            "process.metabolism.kinetic_objective_weight": 4.319589968011678e-08
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.39249635327369947,
+            "process.transcription.fraction_active_rnap_bound": 0.15054359655460892,
+            "mass.cell_dry_mass_fraction": 0.25234004102531077,
+            "process.metabolism.kinetic_objective_weight": 5.958668260089443e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.3503834280633621,
+            "process.transcription.fraction_active_rnap_bound": 0.21216004572375669,
+            "mass.cell_dry_mass_fraction": 0.27026715065660256,
+            "process.metabolism.kinetic_objective_weight": 4.025398958179584e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.4083934799122487,
+            "process.transcription.fraction_active_rnap_bound": 0.17013670266719938,
+            "mass.cell_dry_mass_fraction": 0.26129059733841875,
+            "process.metabolism.kinetic_objective_weight": 3.6478604743881535e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.463765102444625,
+            "process.transcription.fraction_active_rnap_bound": 0.1255605312984441,
+            "mass.cell_dry_mass_fraction": 0.265395439540668,
+            "process.metabolism.kinetic_objective_weight": 9.587216032844092e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.459604071233358,
+            "process.transcription.fraction_active_rnap_bound": 0.140324594257909,
+            "mass.cell_dry_mass_fraction": 0.28427574598688454,
+            "process.metabolism.kinetic_objective_weight": 5.021942689382556e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.41358671830860627,
+            "process.transcription.fraction_active_rnap_bound": 0.17521530527963336,
+            "mass.cell_dry_mass_fraction": 0.32912299537225326,
+            "process.metabolism.kinetic_objective_weight": 1.3329561485182496e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.4416011847896859,
+            "process.transcription.fraction_active_rnap_bound": 0.19495683690217497,
+            "mass.cell_dry_mass_fraction": 0.32495050507060663,
+            "process.metabolism.kinetic_objective_weight": 6.511136406534021e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.34852077964215045,
+            "process.transcription.fraction_active_rnap_bound": 0.12081987854945783,
+            "mass.cell_dry_mass_fraction": 0.255985059518167,
+            "process.metabolism.kinetic_objective_weight": 1.5458063763003397e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.3780838374097987,
+            "process.transcription.fraction_active_rnap_bound": 0.16180743563120667,
+            "mass.cell_dry_mass_fraction": 0.29458489124519455,
+            "process.metabolism.kinetic_objective_weight": 8.163301322186419e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.33144773025712926,
+            "process.transcription.fraction_active_rnap_bound": 0.12972143865373786,
+            "mass.cell_dry_mass_fraction": 0.31874301319810644,
+            "process.metabolism.kinetic_objective_weight": 8.437640626288545e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.4372595161138628,
+            "process.transcription.fraction_active_rnap_bound": 0.13814958259725832,
+            "mass.cell_dry_mass_fraction": 0.3334285413837502,
+            "process.metabolism.kinetic_objective_weight": 8.776040777421089e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.30164430783499724,
+            "process.transcription.fraction_active_rnap_bound": 0.218718737148343,
+            "mass.cell_dry_mass_fraction": 0.3399308265128956,
+            "process.metabolism.kinetic_objective_weight": 5.662300878970035e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.31194945166854987,
+            "process.transcription.fraction_active_rnap_bound": 0.1565287687597956,
+            "mass.cell_dry_mass_fraction": 0.29931579622535825,
+            "process.metabolism.kinetic_objective_weight": 5.283004425310299e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.27105284137803826,
+            "process.transcription.fraction_active_rnap_bound": 0.1998967413320662,
+            "mass.cell_dry_mass_fraction": 0.27913862699052705,
+            "process.metabolism.kinetic_objective_weight": 9.538979195127987e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.26326540112847063,
+            "process.transcription.fraction_active_rnap_bound": 0.1658223244562099,
+            "mass.cell_dry_mass_fraction": 0.28715079395656035,
+            "process.metabolism.kinetic_objective_weight": 1.951515879980524e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.4233964461947948,
+            "process.transcription.fraction_active_rnap_bound": 0.19161112605798558,
+            "mass.cell_dry_mass_fraction": 0.3146885590959261,
+            "process.metabolism.kinetic_objective_weight": 7.204746365826621e-07
+          },
+          {
+            "process.transcription.fraction_active_rnap_free": 0.3216872516533554,
+            "process.transcription.fraction_active_rnap_bound": 0.21062400944286014,
+            "mass.cell_dry_mass_fraction": 0.3462477826663929,
+            "process.metabolism.kinetic_objective_weight": 4.5259717300866544e-07
+          }
+        ]
+      }
+    }
+  }
+}

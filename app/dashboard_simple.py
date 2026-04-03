@@ -1,11 +1,16 @@
 """
-uq_simple interactive dashboard — PCE response curves + growth-stratified sensitivity.
+uq_simple interactive dashboard — all 4 RFC006 strategies.
 
 Launch:
     uv run marimo run app/dashboard_simple.py
 
 Loads artifacts from a uq_simple pipeline export (uq_results.json +
-population_surrogate/) and provides reactive parameter exploration.
+population_surrogate/) and provides reactive parameter exploration
+across all four aggregation strategies:
+  1. Uniform (bulk) — PCE response curves + population Sobol
+  2. By generation — per-generation Sobol comparison
+  3. By lineage seed — per-seed Sobol comparison
+  4. Growth-stratified — sensitivity spectrogram + per-stage prediction
 """
 
 import marimo
@@ -264,13 +269,35 @@ def _(data, mo):
         _s_ti = _sobol.get(_name, 0)
         _rows.append(f"| `{_name}` | {_s_ti:.1%} | {_info.get('biological_role', '')} |")
 
-    param_table = mo.md(
-        "### Parameter Sensitivity (Phase 1 — Population-Averaged)\n\n"
+    _sections = [
+        "### Strategy 1 — Population-Averaged Sensitivity\n\n"
         "| Parameter | S_Ti | Biological Role |\n"
         "|-----------|------|------------------|\n"
         + "\n".join(_rows)
         + "\n\n*S_Ti = total Sobol index: fraction of output variance attributable to this parameter.*"
-    )
+    ]
+
+    # Strategy 2: by generation
+    _s2 = data.get("strategy2_by_generation", {})
+    if "generations" in _s2:
+        _s2_rows = ["### Strategy 2 — By Generation\n"]
+        for _gen in _s2["generations"]:
+            _g = _gen["generation"]
+            _top = sorted(_gen["sobol_total_order"].items(), key=lambda kv: -kv[1])[:3]
+            _s2_rows.append(f"**Gen {_g}:** " + ", ".join(f"`{n}` {v:.1%}" for n, v in _top))
+        _sections.append("\n\n".join(_s2_rows))
+
+    # Strategy 3: by seed
+    _s3 = data.get("strategy3_by_seed", {})
+    if "seeds" in _s3:
+        _s3_rows = ["### Strategy 3 — By Lineage Seed\n"]
+        for _seed in _s3["seeds"]:
+            _s = _seed["lineage_seed"]
+            _top = sorted(_seed["sobol_total_order"].items(), key=lambda kv: -kv[1])[:3]
+            _s3_rows.append(f"**Seed {_s}:** " + ", ".join(f"`{n}` {v:.1%}" for n, v in _top))
+        _sections.append("\n\n".join(_s3_rows))
+
+    param_table = mo.md("\n\n---\n\n".join(_sections))
     return (param_table,)
 
 
@@ -307,12 +334,16 @@ def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_
         mo.ui.plotly(fig_spectrogram),
     ])
 
+    _s2_status = "available" if "generations" in data.get("strategy2_by_generation", {}) else "not available"
+    _s3_status = "available" if "seeds" in data.get("strategy3_by_seed", {}) else "not available"
     _methods_md = mo.md(
         "### Methods\n"
         f"- **Sampling:** {_methods.get('sampling', 'LHS')}\n"
         f"- **Surrogate:** {_methods.get('surrogate', 'PCE')}\n"
         f"- **Sensitivity:** {_methods.get('sensitivity', 'Sobol')}\n"
         f"- **Stratification:** {_methods.get('stratification', 'growth-based')}\n"
+        f"- **Strategy 2 (by generation):** {_s2_status}\n"
+        f"- **Strategy 3 (by seed):** {_s3_status}\n"
     )
 
     mo.output.replace(mo.vstack([

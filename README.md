@@ -88,6 +88,67 @@ uv sync
 
 ---
 
+## `uq_simple` — Simplified Pipeline (RFC006 Compliant)
+
+The `uq_simple` package provides a scientifically transparent implementation of all four RFC006 aggregation strategies, built on [PyTUQ's UQPC workflow](https://sandialabs.github.io/pytuq/apps/uqpc.html) (Sandia National Labs). No Koopman spectral analysis.
+
+| Strategy | Aggregation | Purpose |
+|----------|-------------|---------|
+| 1 (Uniform) | Time-mean across all cells/times | Baseline bulk sensitivity |
+| 2 (By Generation) | Mean per generation | Controls for convergence toward steady-state growth |
+| 3 (By Lineage Seed) | Mean per lineage seed | Controls for exogenous stochastic variance |
+| 4 (Growth-Stratified) | Binned by θ = normalized log(dry_mass) | How parameter importance changes as cells grow |
+
+PCE surrogates are fitted via `pytuq.surrogates.pce.PCE` with configurable regression: `lsq` (least squares, default), `bcs` (Bayesian Compressed Sensing — sparse), or `anl` (analytical with uncertainty).
+
+### Usage
+
+```bash
+# Stage 1: generate + cache LHS samples (same as uq sample)
+uv run uq-simple sample api_simulation_default \
+    --sim-base-path /path/to/sims --cache-dir ./uq_cache \
+    --n-samples 50 --live --generations 3
+
+# Stage 2: PCE / Sobol across all 4 strategies
+uv run uq-simple quantify api_simulation_default \
+    /path/to/sims ./uq_cache ./uq_results \
+    --polynomial-order 2 --n-bins 10 --regression lsq
+
+# Stage 3: interactive dashboard
+uv run uq-simple dashboard ./uq_results/uq_results.json
+```
+
+### Python API
+
+```python
+from uq.sampling import PrecomputedCache
+from uq.pipe import initialize_datasets
+from uq_simple.pipeline import run_pipeline
+
+cache = PrecomputedCache.load("./uq_cache")
+ds = initialize_datasets(experiment_ids=["exp1"], sim_base_path="/path/to/sims")
+result = run_pipeline(
+    cache=cache,
+    param_space=ds.parameter_space,
+    export_path="./uq_results",
+    regression="lsq",  # or "bcs", "anl"
+)
+
+# Strategy 1: bulk Sobol
+result.population_sobol.total_order
+
+# Strategy 2: per-generation Sobol
+result.per_generation_sobol  # dict[int, SobolIndices]
+
+# Strategy 3: per-seed Sobol
+result.per_seed_sobol  # dict[int, SobolIndices]
+
+# Strategy 4: growth-stratified Sobol
+result.per_stage_sobol  # list[SobolIndices]
+```
+
+---
+
 ## CLI Reference
 
 The `uq` CLI exposes the following commands:

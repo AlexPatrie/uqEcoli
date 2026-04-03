@@ -197,10 +197,7 @@ class XSpaceVecoli(XSpace):
         **kwargs,
     ) -> GenericSimDataParams:
         """Convert a sample vector to a ``GenericSimDataParams`` container."""
-        values = {
-            spec.name: float(sample[i])
-            for i, spec in enumerate(self._sim_data_parameters)
-        }
+        values = {spec.name: float(sample[i]) for i, spec in enumerate(self._sim_data_parameters)}
         return GenericSimDataParams(
             parameter_specs=self._sim_data_parameters,
             values=values,
@@ -211,10 +208,7 @@ class XSpaceVecoli(XSpace):
     @override
     def params_to_sample(self, params: GenericSimDataParams) -> np.ndarray:
         """Convert a ``GenericSimDataParams`` container back to a sample array."""
-        return np.array([
-            params.values[spec.name]
-            for spec in params.parameter_specs
-        ])
+        return np.array([params.values[spec.name] for spec in params.parameter_specs])
 
     def get_uqpy_distributions(self) -> list[Any]:
         try:

@@ -78,13 +78,12 @@ from rich.table import Table
 from rich.text import Text
 
 from uq import handlers
-from uq.common import get_repo_root, PARAM_CONFIG_DEMO
+from uq.common import PARAM_CONFIG_DEMO, get_repo_root
 from uq.handlers import generate_samples, verify_out_dirs
 from uq.models import PipelineConfig, SamplingConfig
 from uq.pce.models import PCEParameterSelectionConfig
 from uq.pipe import Pipeline, execute_pipeline
 from uq.pipeline import PipelineResult
-
 
 console = Console()
 dotenv.load_dotenv()
@@ -97,19 +96,19 @@ app.add_typer(demo_app, name="demo")
 
 @app.command()
 def quantify(
-        experiment_ids: list[str],
-        outdir_root: str,
-        lb_generation: int | None = 2,
-        lb_time: float | None = 100.0,
-        n_bins: int = 10,
-        pce_polynomial_order: int = 3,
-        n_samples: int = 20,
-        expected_cycle_time: float = 3600.0,
-        pce_n_trajectories: int = 10,
-        pce_n_selected_params: int = 5,
-        export_path: str | None = None,
-        precomputed_path: str | None = None,
-        observable_columns: list[str] | None = None,
+    experiment_ids: list[str],
+    outdir_root: str,
+    lb_generation: int | None = 2,
+    lb_time: float | None = 100.0,
+    n_bins: int = 10,
+    pce_polynomial_order: int = 3,
+    n_samples: int = 20,
+    expected_cycle_time: float = 3600.0,
+    pce_n_trajectories: int = 10,
+    pce_n_selected_params: int = 5,
+    export_path: str | None = None,
+    precomputed_path: str | None = None,
+    observable_columns: list[str] | None = None,
 ) -> None:
     """Run the full RFC006 UQ pipeline."""
     pipeline: Pipeline = handlers.pipeline(
@@ -132,8 +131,8 @@ def quantify(
 
 @app.command()
 def dashboard(
-        run_mode: Literal["tk", "mo"] = "tk",
-        results_path: str | None = None,
+    run_mode: Literal["tk", "mo"] = "tk",
+    results_path: str | None = None,
 ) -> None:
     """Launch the UQ results dashboard.
 
@@ -146,32 +145,35 @@ def dashboard(
         _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
     else:
         from app.uq_daw import run_tk_dashboard
+
         run_tk_dashboard(data_path=results_path)
 
 
 @app.command(
     name="sample",
-    help=(""" \
+    help=(
+        """ \
         Generate Latin Hypercube Samples for UQ sensitivity analysis.
 
         By default, varies 5 physiologically relevant sim_data parameters.
         Use --params-file to specify custom parameters via a JSON file.
-    """)
+    """
+    ),
 )
 def sample(
-        experiment_ids: list[str],
-        sim_base_path: str | None = None,
-        cache_dir: str | None = None,
-        n_samples: int = 200,
-        seed: int = 42,
-        observable_columns: list[str] | None = None,
-        max_workers: int | None = None,
-        max_duration: float = 10800.0,
-        generations: int = 1,
-        n_init_sims: int = 1,
-        live: bool = True,
-        params_file: str | None = None,
-        batch_dir: str | None = None
+    experiment_ids: list[str],
+    sim_base_path: str | None = None,
+    cache_dir: str | None = None,
+    n_samples: int = 200,
+    seed: int = 42,
+    observable_columns: list[str] | None = None,
+    max_workers: int | None = None,
+    max_duration: float = 10800.0,
+    generations: int = 1,
+    n_init_sims: int = 1,
+    live: bool = True,
+    params_file: str | None = None,
+    batch_dir: str | None = None,
 ) -> None:
     """Generate LHS samples, evaluate simulation function, cache (X, Y).
 
@@ -260,13 +262,13 @@ def demo_sampling() -> None:
 
 @app.command(name="export-configs")
 def export_configs(
-        sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
-        batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
-        n_samples: int = 200,
-        seed: int = 42,
-        base_config_path: str | None = None,
-        generations: int = 1,
-        emitter: str = "parquet",
+    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+    batch_dir: str = typer.Argument(..., help="Output directory for batch configs"),
+    n_samples: int = 200,
+    seed: int = 42,
+    base_config_path: str | None = None,
+    generations: int = 1,
+    emitter: str = "parquet",
 ) -> None:
     """Export per-sample vEcoli configs for Nextflow/HPC batch execution.
 
@@ -287,10 +289,10 @@ def export_configs(
 
 @app.command(name="collect-results")
 def collect_results(
-        batch_dir: str = typer.Argument(..., help="Directory from export-configs"),
-        output_dir: str = typer.Argument(..., help="Root dir with per-sample Parquet outputs"),
-        observable_columns: list[str] | None = None,
-        cache_dir: str | None = None,
+    batch_dir: str = typer.Argument(..., help="Directory from export-configs"),
+    output_dir: str = typer.Argument(..., help="Root dir with per-sample Parquet outputs"),
+    observable_columns: list[str] | None = None,
+    cache_dir: str | None = None,
 ) -> None:
     """Collect completed Nextflow/HPC batch outputs into a PrecomputedCache.
 
@@ -315,7 +317,9 @@ def configure_pipeline(name: str, dest: str | None = None):
         sim_base_path=os.getenv("SIM_BASE_PATH"),
         export_path="uq_results",
         samples=SamplingConfig(
-            cache_dir="uq_cache", n_samples=22, max_workers=4,
+            cache_dir="uq_cache",
+            n_samples=22,
+            max_workers=4,
         ),
     )
     with open(d, "w") as fp:
@@ -359,29 +363,33 @@ def flow_chart(rfc_id: str = "RFC006") -> None:
     console.print(_arrow_v())
 
     # ── Step 1 ──
-    console.print(_step(
-        "STEP 1: Define Parameter Space",
-        "[bold magenta]Generic mode (default):[/bold magenta]\n"
-        "  params = [SimDataParameter(name, attr_path, bounds), ...]\n"
-        "  e.g. [cyan]\"process.transcription.fraction_active_rnap_free\"[/cyan] bounds=(0.25, 0.47)\n"
-        "  Any scalar [bold]SimulationDataEcoli[/bold] attribute by dot-path.\n"
-        "  Default: 3 params (see [cyan]DEFAULT_SIM_DATA_PARAMETERS[/cyan])\n"
-        "  Custom: [green]--params-file params.json[/green]\n\n"
-        "[dim]-> XSpaceVecoli with n parameters and bounds [a_i, b_i][/dim]",
-    ))
+    console.print(
+        _step(
+            "STEP 1: Define Parameter Space",
+            "[bold magenta]Generic mode (default):[/bold magenta]\n"
+            "  params = [SimDataParameter(name, attr_path, bounds), ...]\n"
+            '  e.g. [cyan]"process.transcription.fraction_active_rnap_free"[/cyan] bounds=(0.25, 0.47)\n'
+            "  Any scalar [bold]SimulationDataEcoli[/bold] attribute by dot-path.\n"
+            "  Default: 3 params (see [cyan]DEFAULT_SIM_DATA_PARAMETERS[/cyan])\n"
+            "  Custom: [green]--params-file params.json[/green]\n\n"
+            "[dim]-> XSpaceVecoli with n parameters and bounds [a_i, b_i][/dim]",
+        )
+    )
     console.print(_arrow())
     console.print(_arrow_v())
 
     # ── Step 2 ──
-    console.print(_step(
-        "STEP 2: Load Simulation Data",
-        "[cyan]initialize_data(experiment_ids, sim_base_path, observable_columns)[/cyan]\n"
-        "-> DatasetMultiExperiment:\n"
-        "   .x = list[ParameterDataset]  (baseline simData.cPickle per experiment)\n"
-        "   .y = Polars DataFrame from hive-partitioned Parquet\n"
-        "   .parameter_space = XSpaceVecoli\n"
-        "Outputs: transcriptome, proteome, metabolic fluxes, mass/volume/growth",
-    ))
+    console.print(
+        _step(
+            "STEP 2: Load Simulation Data",
+            "[cyan]initialize_data(experiment_ids, sim_base_path, observable_columns)[/cyan]\n"
+            "-> DatasetMultiExperiment:\n"
+            "   .x = list[ParameterDataset]  (baseline simData.cPickle per experiment)\n"
+            "   .y = Polars DataFrame from hive-partitioned Parquet\n"
+            "   .parameter_space = XSpaceVecoli\n"
+            "Outputs: transcriptome, proteome, metabolic fluxes, mass/volume/growth",
+        )
+    )
     console.print(_arrow())
     console.print(_arrow_v())
 
@@ -395,14 +403,16 @@ def flow_chart(rfc_id: str = "RFC006") -> None:
     console.print(_arrow_v())
 
     # ── Step 4 ──
-    console.print(_step(
-        "STEP 4: Variance Decomposition",
-        "Var(Y) = Var_gen + Var_seed + Var_resid\n"
-        "ANOVA-style decomposition per observable:\n"
-        "  gen_frac = Var_between_gen / Var_total\n"
-        "  residual = cell cycle + param sensitivity",
-        border="yellow",
-    ))
+    console.print(
+        _step(
+            "STEP 4: Variance Decomposition",
+            "Var(Y) = Var_gen + Var_seed + Var_resid\n"
+            "ANOVA-style decomposition per observable:\n"
+            "  gen_frac = Var_between_gen / Var_total\n"
+            "  residual = cell cycle + param sensitivity",
+            border="yellow",
+        )
+    )
 
     console.print()
     console.print("[dim cyan]              Bulk population                          Cell cycle conditioned[/dim cyan]")
@@ -462,15 +472,17 @@ def flow_chart(rfc_id: str = "RFC006") -> None:
     console.print("[dim cyan]                                            v[/dim cyan]")
 
     # ── Feedback Loop ──
-    console.print(Panel(
-        "[bold bright_yellow]FEEDBACK LOOP[/bold bright_yellow] [dim](Phase 1 -> Phase 2, RFC006 S3)[/dim]\n\n"
-        "Step 4: residual_frac per obs -> Step 5b: rank by residual, select top-K\n"
-        "-> Step 6b: Koopman DMD on selected obs -> Step 6c/6d: theta-binned aggregation\n"
-        "-> Step 7b: per-stage Sobol",
-        border_style="bright_red",
-        box=box.ROUNDED,
-        padding=(0, 1),
-    ))
+    console.print(
+        Panel(
+            "[bold bright_yellow]FEEDBACK LOOP[/bold bright_yellow] [dim](Phase 1 -> Phase 2, RFC006 S3)[/dim]\n\n"
+            "Step 4: residual_frac per obs -> Step 5b: rank by residual, select top-K\n"
+            "-> Step 6b: Koopman DMD on selected obs -> Step 6c/6d: theta-binned aggregation\n"
+            "-> Step 7b: per-stage Sobol",
+            border_style="bright_red",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
     console.print(_arrow())
     console.print(_arrow_v())
 
@@ -495,39 +507,43 @@ def flow_chart(rfc_id: str = "RFC006") -> None:
         border_style="bright_green",
         box=box.ROUNDED,
     )
-    console.print(Panel(
-        Columns([result_p1, result_p2], equal=True, expand=True),
-        title="[bold white on magenta] PipelineResult -- Complete RFC006 Output [/bold white on magenta]",
-        subtitle="[dim]Phase 1 & Phase 2 are orthogonal decompositions of the same total variance[/dim]",
-        border_style="magenta",
-        box=box.DOUBLE_EDGE,
-        padding=(0, 1),
-    ))
+    console.print(
+        Panel(
+            Columns([result_p1, result_p2], equal=True, expand=True),
+            title="[bold white on magenta] PipelineResult -- Complete RFC006 Output [/bold white on magenta]",
+            subtitle="[dim]Phase 1 & Phase 2 are orthogonal decompositions of the same total variance[/dim]",
+            border_style="magenta",
+            box=box.DOUBLE_EDGE,
+            padding=(0, 1),
+        )
+    )
     console.print(_arrow())
     console.print(_arrow_v())
 
     # ── CLI Workflow ──
-    console.print(Panel(
-        "[bold bright_yellow]TWO-STAGE WORKFLOW (CLI)[/bold bright_yellow]\n\n"
-        "[bold]Stage 1[/bold] [dim](compute-intensive, via vEcoli workflow.py + Nextflow):[/dim]\n"
-        "[green]uv run uq sample <experiment_ids>[/green] \\\n"
-        "    [green]--sim-base-path[/green] /path/to/sims \\\n"
-        "    [green]--cache-dir[/green] ./uq_cache [green]--n-samples[/green] 200 [green]--live[/green] \\\n"
-        "    [green]--params-file[/green] params.json [green]--batch-dir[/green] ./batch\n\n"
-        "[dim]Execution: LHS -> sim_data_setattr variant (op: \"zip\") ->[/dim]\n"
-        "[dim]           workflow.py -> Nextflow -> Parquet -> PrecomputedCache[/dim]\n"
-        "[dim]           No EcoliSim in UQ process memory.[/dim]\n\n"
-        "                         [bright_cyan]|[/bright_cyan]\n"
-        "                         [bright_cyan]v[/bright_cyan]  PrecomputedCache (X.npy, Y.npy, timeseries/)\n\n"
-        "[bold]Stage 2[/bold] [dim](fast, repeatable, no simulation):[/dim]\n"
-        "[green]uv run uq quantify <experiment_ids>[/green] \\\n"
-        "    [green]--sim-base-path[/green] /path/to/sims \\\n"
-        "    [green]--precomputed-path[/green] ./uq_cache [green]--export-path[/green] ./uq_results",
-        border_style="bright_cyan",
-        box=box.DOUBLE_EDGE,
-        padding=(0, 1),
-        title="[bold white on cyan] CLI [/bold white on cyan]",
-    ))
+    console.print(
+        Panel(
+            "[bold bright_yellow]TWO-STAGE WORKFLOW (CLI)[/bold bright_yellow]\n\n"
+            "[bold]Stage 1[/bold] [dim](compute-intensive, via vEcoli workflow.py + Nextflow):[/dim]\n"
+            "[green]uv run uq sample <experiment_ids>[/green] \\\n"
+            "    [green]--sim-base-path[/green] /path/to/sims \\\n"
+            "    [green]--cache-dir[/green] ./uq_cache [green]--n-samples[/green] 200 [green]--live[/green] \\\n"
+            "    [green]--params-file[/green] params.json [green]--batch-dir[/green] ./batch\n\n"
+            '[dim]Execution: LHS -> sim_data_setattr variant (op: "zip") ->[/dim]\n'
+            "[dim]           workflow.py -> Nextflow -> Parquet -> PrecomputedCache[/dim]\n"
+            "[dim]           No EcoliSim in UQ process memory.[/dim]\n\n"
+            "                         [bright_cyan]|[/bright_cyan]\n"
+            "                         [bright_cyan]v[/bright_cyan]  PrecomputedCache (X.npy, Y.npy, timeseries/)\n\n"
+            "[bold]Stage 2[/bold] [dim](fast, repeatable, no simulation):[/dim]\n"
+            "[green]uv run uq quantify <experiment_ids>[/green] \\\n"
+            "    [green]--sim-base-path[/green] /path/to/sims \\\n"
+            "    [green]--precomputed-path[/green] ./uq_cache [green]--export-path[/green] ./uq_results",
+            border_style="bright_cyan",
+            box=box.DOUBLE_EDGE,
+            padding=(0, 1),
+            title="[bold white on cyan] CLI [/bold white on cyan]",
+        )
+    )
     console.print()
 
     pass  # all rendering done above via Rich

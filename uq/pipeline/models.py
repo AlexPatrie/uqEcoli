@@ -296,6 +296,7 @@ class VariantVecoli(BaseClass):
         id: str variant module name in vecoli
         config: dict[str, Any] kwarg values to be evaluated as the `params` parameter of ecoli.variants.apply_variants()
     """
+
     # id: Literal["new_gene_internal_shift_variable_strength", "condition", "mecillinam_timeline"]
     id: str
     config: dict[str, Any]
