@@ -4,41 +4,65 @@ Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 Workflow:
       Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli
 
-      1. Define Parameter Space — param_space = XSpaceVecoli(parameters=[SimDataParameter(...)]) → n parameters with bounds
-      2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
-      3. Aggregation Strategies 1-3 — aggregator runs 3 strategies → 3 × AggregatedOutput
+      1. Define Parameter Space —
+         param_space = XSpaceVecoli(parameters=[SimDataParameter(...)]) →
+         n parameters with bounds
+      2. Load Simulation Data —
+         df = load_dataset(experiment_id, hpc_sim_base_path) →
+         Polars DataFrame from hive-partitioned Parquet
+      3. Aggregation Strategies 1-3 —
+         aggregator runs 3 strategies → 3 x AggregatedOutput
         - 3a. Strategy 1: UNIFORM — mean, std across all cells/times
         - 3b. Strategy 2: BY_GENERATION — per-gen stats (convergence)
-        - 3c. Strategy 3: BY_LINEAGE_SEED — per-seed stats (exogenous variance)
-      4. Variance Decomposition — compute_variance_decomposition(agg_uniform, agg_by_gen, agg_by_seed) → per observable:
-         generation_fraction, seed_fraction, residual_fraction (cell-cycle-related, key output)
+        - 3c. Strategy 3: BY_LINEAGE_SEED — per-seed stats (exogenous)
+      4. Variance Decomposition —
+         compute_variance_decomposition(agg_uniform, agg_by_gen,
+         agg_by_seed) → per observable: generation_fraction,
+         seed_fraction, residual_fraction (cell-cycle-related)
 
       Branches into Phase 1 and Phase 2 (parallel):
 
       Phase 1 (Strategies 1-3 GSA):
 
-      5a. Morris Prescreening → n params → K params (K << n) → selected: list[Parameter], MorrisIndices
-      6a. PCE Surrogate (Strategies 1-3) → PCESurrogate, PCEFitResult
-      7a. Sobol Indices (from PCE) — S_i, S_Ti from PCE coefficients → SobolIndices
+      5a. Morris Prescreening → n params → K params (K << n)
+          → selected: list[Parameter], MorrisIndices
+      6a. PCE Surrogate (Strategies 1-3) →
+          PCESurrogate, PCEFitResult
+      7a. Sobol Indices (from PCE) —
+          S_i, S_Ti from PCE coefficients → SobolIndices
 
       Phase 2 (Strategy 4 — Cell Cycle):
 
-      5b. GSA-Informed Observable Selection — identify_cell_cycle_relevant_observables(decomp)
-      6b. Koopman DMD — KoopmanCellCycleVariable(observable_columns=relevant_obs) → θ(x) ∈ [0, 1]
-      6c. Strategy 4 Aggregation — CellCycleAggregator — bin by θ → per-stage mean, std
-      6d. Strategy4Wrapper — f_stage4(params): raw = f(params), θ = koopman(raw), bin by θ, return stage_means
-      7b. PCE + Sobol on Strategy 4 → per-stage PCESurrogate, list[SobolIndices]
+      5b. GSA-Informed Observable Selection —
+          identify_cell_cycle_relevant_observables(decomp)
+      6b. Koopman DMD —
+          KoopmanCellCycleVariable(observable_columns=relevant_obs)
+          → theta(x) in [0, 1]
+      6c. Strategy 4 Aggregation — CellCycleAggregator —
+          bin by theta → per-stage mean, std
+      6d. Strategy4Wrapper — f_stage4(params):
+          raw = f(params), theta = koopman(raw), bin by theta,
+          return stage_means
+      7b. PCE + Sobol on Strategy 4 →
+          per-stage PCESurrogate, list[SobolIndices]
 
       Phases converge:
 
       Pipeline Outputs:
-      - From Phase 1: AggregatedOutput × 3, variance decomposition, MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
-      - From Phase 2: CellCycleResult (θ, stages), per-stage statistics, PCESurrogate (phenotypic), list[SobolIndices] (phenotypic)
-      - Feedback loop: Step 4 residual_fraction → Step 5b observable selection → Step 6b Koopman
+      - From Phase 1: AggregatedOutput x 3, variance decomposition,
+        MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
+      - From Phase 2: CellCycleResult (theta, stages), per-stage
+        statistics, PCESurrogate (phenotypic),
+        list[SobolIndices] (phenotypic)
+      - Feedback loop: Step 4 residual_fraction →
+        Step 5b observable selection → Step 6b Koopman
 
       Final user-facing outputs:
-        1. Phase 1 Sobol: "param_A drives 60% of bulk mass variance, param_B drives 25%, ..."
-        2. Phase 2 Sobol: "During C-period (DNA replication), param_B drives 80% of variance; during D-period, param_A dominates"
+        1. Phase 1 Sobol: "param_A drives 60% of bulk mass
+           variance, param_B drives 25%, ..."
+        2. Phase 2 Sobol: "During C-period (DNA replication),
+           param_B drives 80% of variance; during D-period,
+           param_A dominates"
 
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │  PIPELINE OUTPUTS                                                                   │

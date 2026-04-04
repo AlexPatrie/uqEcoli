@@ -263,7 +263,7 @@ class PCEFitResult(BaseClass):
         """Attach the fitted PyTUQ PCE object for use in to_surrogate()."""
         self._pytuq_pce = pce
 
-    def to_surrogate(self) -> "PCESurrogate":
+    def to_surrogate(self) -> "PCESurrogate":  # noqa: F821
         """Convert fit result to a PCESurrogate for prediction."""
         from libuq.sensitivity import PCESurrogate
 

@@ -764,8 +764,8 @@ class TestRFC006FullWorkflow:
         # =========================================================================
         log_section("Step 3b: Cell Cycle Variable Calculation (RFC006 Strategy 4)")
 
-        from tests.conftest import REAL_DATA_OUTDIR
         from libuq import calculate_cell_cycle
+        from tests.conftest import REAL_DATA_OUTDIR
 
         # Use the dedicated calculate_cell_cycle function from uq.cell_cycle
         # This function encapsulates the RFC006 cell cycle workflow

@@ -2,10 +2,15 @@
 Uncertainty Quantification framework execution pipeline (as proposed by RFC006)
 
 Workflow:
-      Inputs: experiment_id: str, hpc_sim_base_path: Path, param_space: XSpaceVecoli, f: Callable[[np.ndarray], np.ndarray]
+      Inputs: experiment_id: str, hpc_sim_base_path: Path,
+              param_space: XSpaceVecoli,
+              f: Callable[[np.ndarray], np.ndarray]
 
-      1. Define Parameter Space — param_space = XSpaceVecoli() → n parameters with bounds (generic SimDataParameter specs)
-      2. Load Simulation Data — df = load_dataset(experiment_id, hpc_sim_base_path) → Polars DataFrame from hive-partitioned Parquet
+      1. Define Parameter Space — param_space = XSpaceVecoli()
+         → n parameters with bounds (generic SimDataParameter specs)
+      2. Load Simulation Data —
+         df = load_dataset(experiment_id, hpc_sim_base_path)
+         → Polars DataFrame from hive-partitioned Parquet
       3. Aggregation Strategies 1-3 — aggregator runs 3 strategies → 3 × AggregatedOutput
         - 3a. Strategy 1: UNIFORM — mean, std across all cells/times
         - 3b. Strategy 2: BY_GENERATION — per-gen stats (convergence)
@@ -32,13 +37,17 @@ Workflow:
       Phases converge:
 
       Pipeline Outputs:
-      - From Phase 1: AggregatedOutput × 3, variance decomposition, MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
-      - From Phase 2: CellCycleResult (θ, stages), per-stage statistics, PCESurrogate (phenotypic), list[SobolIndices] (phenotypic)
+      - From Phase 1: AggregatedOutput × 3, variance decomposition,
+        MorrisIndices, PCESurrogate (bulk), SobolIndices (bulk)
+      - From Phase 2: CellCycleResult (θ, stages), per-stage stats,
+        PCESurrogate (phenotypic), list[SobolIndices] (phenotypic)
       - Feedback loop: Step 4 residual_fraction → Step 5b observable selection → Step 6b Koopman
 
       Final user-facing outputs:
         1. Phase 1 Sobol: "vio_expression drives 60% of bulk mass variance, mecillinam_conc drives 25%, ..."
-        2. Phase 2 Sobol: "During C-period (DNA replication), mecillinam_conc drives 80% of variance; during D-period, vio_expression dominates"
+        2. Phase 2 Sobol: "During C-period (DNA replication),
+           mecillinam_conc drives 80% of variance;
+           during D-period, vio_expression dominates"
 
   ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │  PIPELINE OUTPUTS                                                                   │

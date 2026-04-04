@@ -44,6 +44,7 @@ from libuq.koopman import (
     DynamicModeDecomposition,
     ExtendedDMD,
     KoopmanMode,
+    KoopmanSpectrum,
 )
 from libuq.pipeline.models import CellCyclePhase, CellCycleVariable
 

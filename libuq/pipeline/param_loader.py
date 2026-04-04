@@ -32,7 +32,7 @@ from libuq.pipeline.models import SimDataParameter
 _DEFAULT_PICKLE = (get_repo_root() / "sim_data" / "baseline" / "kb" / "simData.cPickle").__str__()
 
 
-# ── Default generic sim_data parameters for UQ ────────────────────────────
+# ── Default generic sim_data parameters for UQ ────────────────────────
 
 DEFAULT_SIM_DATA_PARAMETERS: list[SimDataParameter] = [
     # Bounds are ±30% around typical baseline values to avoid crashing
@@ -168,7 +168,7 @@ class ParameterDataset:
         if self.sim_data_path is not None:
             self.sim_data_path = Path(self.sim_data_path)
 
-    # ── Condition detection ──────────────────────────────────────────────
+    # ── Condition detection ──────────────────────────────────────────
 
     @property
     def condition(self) -> str:
@@ -179,12 +179,12 @@ class ParameterDataset:
                     return part
         return "baseline"
 
-    # ── Parameter space construction ─────────────────────────────────────
+    # ── Parameter space construction ─────────────────────────────────
 
     def to_parameter_space(
         self,
         parameters: list[SimDataParameter] | None = None,
-    ) -> "XSpaceVecoli":
+    ) -> "XSpaceVecoli":  # noqa: F821
         """Build an ``XSpaceVecoli`` from this dataset.
 
         Uses a list of ``SimDataParameter`` specs identifying arbitrary
@@ -229,7 +229,7 @@ class ParameterDataset:
             validated.append(p)
         return validated
 
-    # ── Serialization ────────────────────────────────────────────────────
+    # ── Serialization ──────────────────────────────────────────────────
 
     def to_payload(self) -> SimDataPayload:
         return sim_data_to_dict(self.sim_data)

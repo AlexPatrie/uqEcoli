@@ -32,7 +32,7 @@ Follows the UQPC workflow (https://sandialabs.github.io/pytuq/apps/uqpc.html):
     5. Post-processing — export to JSON + .npy artifacts
 
 Methods:
-    - Latin Hypercube Sampling (scipy.stats.qmc)
+    - PCRV.sampleGerm() — PyTUQ-native random sampling from germ measure
     - PCE surrogates via pytuq.surrogates.pce.PCE (Sandia National Labs)
     - Sobol indices from PCRV.computeSens() / computeTotSens() (Sudret, 2008)
     - Four aggregation strategies per RFC006 (no spectral decomposition)
@@ -45,6 +45,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -223,7 +224,7 @@ class SimplePipelineResult:
 
         return out
 
-    def _build_summary(self) -> dict:
+    def _build_summary(self) -> dict[str, Any]:
         """Build the comprehensive summary JSON."""
         return {
             # ── Metadata ──
@@ -233,7 +234,7 @@ class SimplePipelineResult:
                 "Ahn-Horst et al., npj Syst Biol Appl 8:30, 2022",
             ],
             "methods": {
-                "sampling": "Latin Hypercube Sampling (scipy.stats.qmc)",
+                "sampling": "PCRV.sampleGerm() (PyTUQ-native random germ sampling)",
                 "surrogate": "Polynomial Chaos Expansion (PyTUQ, Legendre basis)",
                 "sensitivity": "Variance-based Sobol indices (analytical from PCE coefficients)",
                 "stratification": (
@@ -297,7 +298,7 @@ class SimplePipelineResult:
             },
         }
 
-    def _build_generation_summary(self) -> dict:
+    def _build_generation_summary(self) -> dict[str, Any]:
         if self.per_generation_sobol is None:
             return {"status": "not_available", "reason": "No generation metadata in cache."}
         return {
@@ -318,7 +319,7 @@ class SimplePipelineResult:
             ],
         }
 
-    def _build_seed_summary(self) -> dict:
+    def _build_seed_summary(self) -> dict[str, Any]:
         if self.per_seed_sobol is None:
             return {"status": "not_available", "reason": "No lineage seed metadata in cache."}
         return {
@@ -385,7 +386,7 @@ def _fit_pce_and_sobol(
         per_output: If True, return (n_outputs, n_params) Sobol arrays
             instead of variance-weighted scalars.
     """
-    from pytuq.surrogates.pce import PCE as PyTUQ_PCE
+    from pytuq.surrogates.pce import PCE as PyTUQ_PCE  # type: ignore[import-untyped]
 
     n_params = X.shape[1]
 
@@ -743,7 +744,7 @@ def run_pipeline(
     per_stage_sobol, surrogate_cc = run_phase2(
         param_space,
         X,
-        cache.Y_timeseries,
+        cache.Y_timeseries,  # type: ignore[arg-type]
         n_bins=n_bins,
         polynomial_order=polynomial_order,
         mass_col_index=mass_col_index,

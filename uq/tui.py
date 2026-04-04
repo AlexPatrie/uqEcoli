@@ -89,7 +89,7 @@ def _json_markup(data: Any) -> Syntax:
 
 
 def _get_vecoli_root() -> str:
-    import ecoli
+    import ecoli  # type: ignore[import-not-found]
 
     root = Path(ecoli.__file__).resolve().parent.parent
     if (root / "configs" / "__init__.py").exists():
@@ -126,9 +126,9 @@ def _build_config(
 
 def _build_variants_from_samples(
     X: np.ndarray,
-    param_specs: list,
+    param_specs: list[SimDataParameter],
 ) -> dict[str, Any]:
-    """Encode N LHS samples as sim_data_setattr variants."""
+    """Encode N germ samples as sim_data_setattr variants."""
     mutations_list = []
     for i in range(X.shape[0]):
         mutations = {}
@@ -137,7 +137,7 @@ def _build_variants_from_samples(
             if hasattr(spec, "index") and spec.index is not None:
                 mutations[spec.attr_path] = {"__index__": spec.index, "__value__": val}
             else:
-                mutations[spec.attr_path] = val
+                mutations[spec.attr_path] = val  # type: ignore[assignment]
         mutations_list.append(mutations)
     return {"sim_data_setattr": {"mutations": {"value": mutations_list}}}
 
@@ -211,7 +211,7 @@ def _collect_variant_timeseries(
 
     Y_agg = np.vstack(Y_list)
     has_meta = Y_meta and any(m for m in Y_meta)
-    return Y_agg, Y_ts, Y_meta if has_meta else None
+    return Y_agg, Y_ts, Y_meta if has_meta else None  # type: ignore[return-value]
 
 
 # ── Modal ────────────────────────────────────────────────────────────
@@ -504,9 +504,7 @@ class UQPCApp(App[None]):
                 )
 
         if not active_params:
-            self.call_from_thread(
-                self.write_log, "[ansi_red]No parameters selected — check at least one[/]"
-            )
+            self.call_from_thread(self.write_log, "[ansi_red]No parameters selected — check at least one[/]")
             return
 
         try:
@@ -826,7 +824,7 @@ class UQPCApp(App[None]):
                 sim_data_path=sim_path,
                 polynomial_order=order,
                 n_bins=bins,
-                regression=reg,
+                regression=reg,  # type: ignore[arg-type]
             )
             self._result = result
 

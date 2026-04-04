@@ -581,7 +581,8 @@ class UqProfile:
 
     Attributes:
         stratification: (StratificationLens) "population" (bulk, phase1) or "cell_cycle" (tempo is theta, phase2)
-        sobol_indices: (list[SobolIndices]) For population stratification, must be len == 1, otherwise len == n_theta_bins
+        sobol_indices: (list[SobolIndices]) For population stratification,
+            must be len == 1, otherwise len == n_theta_bins
     """
 
     stratification: StratificationLens
@@ -815,7 +816,7 @@ class PipelineResult:
 
             fig = plot_koopman_spectrum(spectrum)
             fig.write_image(str(filepath))
-        except Exception:
+        except Exception:  # noqa: S110
             # Don't fail the export if PDF generation fails (missing kaleido, etc.)
             pass
 
@@ -885,7 +886,9 @@ class Pipeline:
     Attributes:
         database_id: int
         config: PipelineConfig consisting of pipeline name and dataset_id.
-        dataset: Timeseries dataset containing the following attributes: timeseries data(y), parameter dataset (x), database_id, and simulation. Simulation itself
+        dataset: Timeseries dataset containing the following attributes:
+            timeseries data(y), parameter dataset (x), database_id,
+            and simulation. Simulation itself
             has a database_id, and a config (vecoli config/api request config?)
         result: PipelineResult object containing 2 `UqProfile` instances, one for
             each stratification type (population(bulk), cell_cycle(cell, [i][j])

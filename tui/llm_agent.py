@@ -125,7 +125,8 @@ class AtlantisAgent:
         self.system_message = """You are Atlantis, an AI assistant for the SMS (Simulating Microbial Systems) API.
 You help users manage vEcoli whole-cell biological simulations.
 
-When users ask to perform operations, you MUST call the appropriate tool. Do not just describe what you would do - actually call the tool.
+When users ask to perform operations, you MUST call the appropriate tool. \
+Do not just describe what you would do - actually call the tool.
 
 Available tools:
 - list_ecoli_simulations: List all simulations
@@ -200,12 +201,12 @@ Be concise but informative. Use markdown formatting."""
             )
         except ollama.ResponseError as e:
             error_msg = f"Ollama error: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             yield error_msg
             return
         except Exception as e:
             error_msg = f"Failed to connect to Ollama: {e}"
-            logger.error(error_msg)
+            logger.exception(error_msg)
             yield error_msg
             return
 

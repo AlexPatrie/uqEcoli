@@ -1,25 +1,34 @@
 """
-Phase 1 asks: "Across all cells, all times, all generations — which parameters drive the most variance in bulk output?" This
-collapses time. It's not a "static version" of Phase 2 — it's measuring different variance. Specifically, Phase 1's three strategies
-decompose variance into generation effects (convergence), seed effects (exogenous stochasticity), and residual (everything else,
-including cell cycle).
+Phase 1 asks: "Across all cells, all times, all generations — which parameters
+drive the most variance in bulk output?" This collapses time. It's not a
+"static version" of Phase 2 — it's measuring different variance. Specifically,
+Phase 1's three strategies decompose variance into generation effects
+(convergence), seed effects (exogenous stochasticity), and residual
+(everything else, including cell cycle).
 
-Phase 2 asks: "Within a single cell cycle stage — say, during DNA replication specifically — which parameters drive variance?" This
-doesn't add temporal resolution to Phase 1's answer. It's asking about a different slice of the data that Phase 1 couldn't access at
-all, because Phase 1 had no notion of "where in the cell cycle are we."
+Phase 2 asks: "Within a single cell cycle stage — say, during DNA replication
+specifically — which parameters drive variance?" This doesn't add temporal
+resolution to Phase 1's answer. It's asking about a different slice of the
+data that Phase 1 couldn't access at all, because Phase 1 had no notion of
+"where in the cell cycle are we."
 
   A concrete example of why they're not static-vs-temporal versions of each other:
 
   - Phase 1 might say: "vio_expression explains 40% of total mass variance"
   - Phase 2 might say: "vio_expression explains 5% of mass variance during B-period, but 85% during D-period"
 
-  Phase 1's "40%" is not the time-average of Phase 2's stage-specific numbers. It's computed from a differently aggregated dataset (all
-   cells pooled uniformly vs. binned by θ). The populations being analyzed are literally different subsets organized differently.
+  Phase 1's "40%" is not the time-average of Phase 2's stage-specific
+  numbers. It's computed from a differently aggregated dataset (all
+  cells pooled uniformly vs. binned by θ). The populations being
+  analyzed are literally different subsets organized differently.
 
-  The better mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-  (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-  human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-  orthogonal decompositions.
+  The better mental model: Phase 1 gives you the population-level view
+  (bulk). Phase 2 gives you the within-cell-lifecycle view
+  (phenotypic). They decompose the same total variance into different
+  components — like how you can decompose the total variance of human
+  height into "between countries" vs "within countries." Those aren't
+  static vs temporal versions of each other; they're orthogonal
+  decompositions.
 
 
 # TODO:
@@ -142,7 +151,7 @@ def dashboard(
             opens a file picker dialog.
     """
     if run_mode == "mo":
-        _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)
+        _ = subprocess.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard.py"], check=True)  # noqa: S607
     else:
         from app.uq_daw import run_tk_dashboard
 
