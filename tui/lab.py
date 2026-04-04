@@ -17,14 +17,21 @@ def _():
 def _():
     """
     1. Sonification for Real-Time Monitoring
-    Concept: Convert simulation state variables to audio streams during execution, allowing researchers to "hear" the cell's behavior.
-    Applications:
+    Concept: Convert simulation state variables to audio streams
+    during execution, allowing researchers to "hear" the cell's
+    behavior. Applications:
 
-    Map metabolite concentrations to pitch, allowing you to detect metabolic oscillations or steady-state transitions by ear
-    Encode gene expression levels as timbres—each gene family gets an instrument, transcription events trigger notes
-    Use stereo/spatial audio to represent compartmentalization (cytoplasm left, periplasm right, membrane center)
+    Map metabolite concentrations to pitch, allowing you to detect
+    metabolic oscillations or steady-state transitions by ear.
+    Encode gene expression levels as timbres -- each gene family
+    gets an instrument, transcription events trigger notes.
+    Use stereo/spatial audio to represent compartmentalization
+    (cytoplasm left, periplasm right, membrane center).
 
-    Why it's useful: Human auditory perception excels at detecting patterns, anomalies, and periodicity that might be missed in visual dashboards. You could literally hear a simulation going wrong.
+    Why it's useful: Human auditory perception excels at detecting
+    patterns, anomalies, and periodicity that might be missed in
+    visual dashboards. You could literally hear a simulation
+    going wrong.
     """
 
     import numpy as np
@@ -95,7 +102,7 @@ def _(np):
     Apply perceptual coding concepts: compress "unimportant" state variables more aggressively
     Use predictive coding (like ADPCM) to store only prediction residuals
     """
-    from typing import List, Tuple
+    pass
 
     class DeltaStateCompressor:
         """
@@ -195,7 +202,9 @@ def _(np):
 def _(np):
     """
     5. Cross-Correlation for Subsystem Coupling Analysis
-    Concept: Use audio-style cross-correlation and coherence analysis to identify how different cellular subsystems influence each other.
+    Concept: Use audio-style cross-correlation and coherence
+    analysis to identify how different cellular subsystems
+    influence each other.
     """
     from scipy import signal
 

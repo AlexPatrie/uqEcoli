@@ -1,25 +1,40 @@
 """
-Phase 1 asks: "Across all cells, all times, all generations — which parameters drive the most variance in bulk output?" This
-collapses time. It's not a "static version" of Phase 2 — it's measuring different variance. Specifically, Phase 1's three strategies
-decompose variance into generation effects (convergence), seed effects (exogenous stochasticity), and residual (everything else,
+Phase 1 asks: "Across all cells, all times, all generations — which
+parameters drive the most variance in bulk output?" This collapses
+time. It's not a "static version" of Phase 2 — it's measuring
+different variance. Specifically, Phase 1's three strategies
+decompose variance into generation effects (convergence), seed
+effects (exogenous stochasticity), and residual (everything else,
 including cell cycle).
 
-Phase 2 asks: "Within a single cell cycle stage — say, during DNA replication specifically — which parameters drive variance?" This
-doesn't add temporal resolution to Phase 1's answer. It's asking about a different slice of the data that Phase 1 couldn't access at
-all, because Phase 1 had no notion of "where in the cell cycle are we."
+Phase 2 asks: "Within a single cell cycle stage — say, during DNA
+replication specifically — which parameters drive variance?" This
+doesn't add temporal resolution to Phase 1's answer. It's asking
+about a different slice of the data that Phase 1 couldn't access
+at all, because Phase 1 had no notion of "where in the cell cycle
+are we."
 
-  A concrete example of why they're not static-vs-temporal versions of each other:
+  A concrete example of why they're not static-vs-temporal versions
+  of each other:
 
-  - Phase 1 might say: "vio_expression explains 40% of total mass variance"
-  - Phase 2 might say: "vio_expression explains 5% of mass variance during B-period, but 85% during D-period"
+  - Phase 1 might say: "vio_expression explains 40% of total mass
+    variance"
+  - Phase 2 might say: "vio_expression explains 5% of mass variance
+    during B-period, but 85% during D-period"
 
-  Phase 1's "40%" is not the time-average of Phase 2's stage-specific numbers. It's computed from a differently aggregated dataset (all
-   cells pooled uniformly vs. binned by θ). The populations being analyzed are literally different subsets organized differently.
+  Phase 1's "40%" is not the time-average of Phase 2's
+  stage-specific numbers. It's computed from a differently
+  aggregated dataset (all cells pooled uniformly vs. binned by
+  theta). The populations being analyzed are literally different
+  subsets organized differently.
 
-  The better mental model: Phase 1 gives you the population-level view (bulk). Phase 2 gives you the within-cell-lifecycle view
-  (phenotypic). They decompose the same total variance into different components — like how you can decompose the total variance of
-  human height into "between countries" vs "within countries." Those aren't static vs temporal versions of each other; they're
-  orthogonal decompositions.
+  The better mental model: Phase 1 gives you the population-level
+  view (bulk). Phase 2 gives you the within-cell-lifecycle view
+  (phenotypic). They decompose the same total variance into
+  different components — like how you can decompose the total
+  variance of human height into "between countries" vs "within
+  countries." Those aren't static vs temporal versions of each
+  other; they're orthogonal decompositions.
 """
 
 import os
@@ -176,7 +191,8 @@ def pipeline(config: PipelineConfig | None = None, execute: bool = True, **kwarg
 #     precomputed_path: str | None = None,
 # ) -> PipelineResult:
 #     """Run the full RFC006 UQ pipeline."""
-#     param_prescreen_config = PCEParameterSelectionConfig(n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
+#     param_prescreen_config = PCEParameterSelectionConfig(
+#         n_trajectories=pce_n_trajectories, n_top=pce_n_selected_params)
 #     result: PipelineResult = execute_pipeline(
 #         experiment_ids=experiment_ids,
 #         sim_base_path=outdir_root,
@@ -508,7 +524,7 @@ def collect_results(
 def readme(rfc_id: str = "RFC006") -> None:
     txt = (
         None
-        if not rfc_id == "RFC006"
+        if rfc_id != "RFC006"
         else """
 ⏺ ┌─────────────────────────────────────────────────────────────────────────────────────┐
   │                          RFC006 FULL UQ WORKFLOW                                    │
@@ -544,5 +560,6 @@ def readme(rfc_id: str = "RFC006") -> None:
 def verify_out_dirs(sim_base_path: str, experiment_ids: list[str]) -> bool:
     if not all([(Path(sim_base_path) / p).exists() for p in experiment_ids]):
         raise ValueError(
-            f"One or more of the following experiment outdirs do not exist in the sim base path: {sim_base_path!s}:\n{experiment_ids}"
+            f"One or more of the following experiment outdirs do not exist "
+            f"in the sim base path: {sim_base_path!s}:\n{experiment_ids}"
         )

@@ -69,7 +69,7 @@ def compute_growth_fraction(
         return np.linspace(0.0, 1.0, len(mass))
 
     theta = (log_mass - lo) / span
-    return np.clip(theta, 0.0, 1.0)
+    return np.clip(theta, 0.0, 1.0)  # type: ignore[no-any-return]
 
 
 def bin_by_growth_stage(
@@ -91,4 +91,4 @@ def bin_by_growth_stage(
     """
     edges = np.linspace(0.0, 1.0, n_bins + 1)
     bins = np.digitize(theta, edges) - 1
-    return np.clip(bins, 0, n_bins - 1)
+    return np.clip(bins, 0, n_bins - 1)  # type: ignore[no-any-return]

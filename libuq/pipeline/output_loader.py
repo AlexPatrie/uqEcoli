@@ -617,7 +617,7 @@ class TimeseriesLoaderParquet:
 
         return outputs
 
-    # ── Timeseries loading (single source of truth) ────────────────────────
+    # ── Timeseries loading (single source of truth) ──────────────────
 
     def load_timeseries(
         self,
@@ -696,7 +696,7 @@ class TimeseriesLoaderParquet:
 
         return list_columns(self.conn, self.history_sql, pattern=pattern)
 
-    # ── internal helpers ─────────────────────────────────────────────────
+    # ── internal helpers ─────────────────────────────────────────────
 
     def _get_cell_density(self) -> float:
         """Return cell density in g/L (from sim_data or default)."""

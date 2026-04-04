@@ -71,13 +71,13 @@
   <!-- Arrow -->
   <line x1="360" y1="228" x2="420" y2="228" stroke="#16A085" stroke-width="2" marker-end="url(#arrowTeal)"/>
 
-  <!-- Step: LHS -->
+  <!-- Step: Germ Sampling -->
   <rect x="430" y="178" width="250" height="100" rx="10" fill="white" stroke="#1ABC9C" stroke-width="2" filter="url(#shadowLight)"/>
   <rect x="430" y="178" width="250" height="28" rx="10" fill="url(#sampleGrad)"/>
   <rect x="430" y="196" width="250" height="10" fill="url(#sampleGrad)"/>
-  <text x="555" y="197" text-anchor="middle" fill="white" font-size="12" font-weight="700">2. Latin Hypercube Sampling</text>
-  <text x="445" y="228" fill="#2C3E50" font-size="11">scipy.stats.qmc.LatinHypercube</text>
-  <text x="445" y="244" fill="#7F8C8D" font-size="10">Space-filling design in [a_i, b_i]</text>
+  <text x="555" y="197" text-anchor="middle" fill="white" font-size="12" font-weight="700">2. PCRV Germ Sampling</text>
+  <text x="445" y="228" fill="#2C3E50" font-size="11">PCRV.sampleGerm() → evalPC()</text>
+  <text x="445" y="244" fill="#7F8C8D" font-size="10">Random from germ measure [-1, 1]</text>
   <text x="445" y="258" fill="#7F8C8D" font-size="10">→ X: (n_samples × n_params)</text>
 
   <!-- Arrow -->
@@ -261,7 +261,7 @@
   <text x="812" y="1356" text-anchor="middle" fill="#6C3483" font-size="13" font-weight="700">Methods — PyTUQ UQPC Workflow</text>
 
   <text x="600" y="1380" fill="#6C3483" font-size="11" font-weight="600">Sampling:</text>
-  <text x="680" y="1380" fill="#5D6D7E" font-size="10">Latin Hypercube (scipy.stats.qmc)</text>
+  <text x="680" y="1380" fill="#5D6D7E" font-size="10">PCRV.sampleGerm() (PyTUQ-native)</text>
 
   <text x="600" y="1402" fill="#6C3483" font-size="11" font-weight="600">Surrogate:</text>
   <text x="680" y="1402" fill="#5D6D7E" font-size="10">pytuq.surrogates.pce.PCE (lsq / bcs / anl)</text>

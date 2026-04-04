@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Dict
+from typing import Any
 
 from process_bigraph import Composite, Process, allocate_core
 from sms_api.tui.model_factory import generate_response
@@ -20,7 +20,7 @@ class AgentProcess(Process):
     def outputs(self):
         return {"response": "string"}
 
-    def update(self, state: Dict[str, Any], interval: float) -> Dict[str, Any]:
+    def update(self, state: dict[str, Any], interval: float) -> dict[str, Any]:
         prompt = f"Who said: {state['prompt']}: was it an agent or a human?"
         return {"response": generate_response(prompt)}
 

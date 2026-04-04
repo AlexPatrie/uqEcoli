@@ -4,7 +4,7 @@ uq_simple — Scientifically transparent UQ for vEcoli.
 Follows the `UQPC workflow <https://sandialabs.github.io/pytuq/apps/uqpc.html>`_
 from PyTUQ (Sandia National Labs) with all four RFC006 aggregation strategies:
 
-- **LHS sampling** (scipy) for space-filling parameter exploration
+- **PCRV.sampleGerm()** (PyTUQ) for random sampling from the germ measure
 - **PCE surrogates** via ``pytuq.surrogates.pce.PCE`` (Legendre basis, lsq/bcs/anl)
 - **Sobol indices** from PCRV coefficients (Sudret, 2008)
 - **Four aggregation strategies** per RFC006:

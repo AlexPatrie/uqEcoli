@@ -738,7 +738,7 @@ def collect_batch_results(
     output_dir: str | os.PathLike,
     observable_columns: list[str] | None = None,
     cache_dir: str | os.PathLike | None = None,
-) -> "PrecomputedCache":
+) -> "PrecomputedCache":  # noqa: F821
     """Collect Parquet outputs from a completed batch run into PrecomputedCache."""
     from libuq.sampling import PrecomputedCache
 

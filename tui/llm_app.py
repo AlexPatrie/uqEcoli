@@ -243,7 +243,7 @@ class LLMSimulationAssistant:
             self._loaded = True
             logger.info("Model loaded successfully")
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
+            logger.exception("Failed to load model")
             self._loaded = False
 
     def generate_response(self, user_message: str, context: str = "") -> str:
@@ -276,7 +276,7 @@ class LLMSimulationAssistant:
 
             return outputs[0]["generated_text"][-1]["content"]
         except Exception as e:
-            logger.error(f"Error generating response: {e}")
+            logger.exception("Error generating response")
             return self._fallback_response(user_message, context)
 
     def _fallback_response(self, user_message: str, context: str = "") -> str:
@@ -436,7 +436,7 @@ Type your request below and press Enter.
             self.assistant.load_model()
             self.call_from_thread(self._update_status, f"Connected to {self.api_url}")
         except Exception as e:
-            logger.error(f"Failed to load LLM: {e}")
+            logger.exception("Failed to load LLM")
             self.call_from_thread(self._update_status, "AI model not available - using simple mode")
 
     def _update_status(self, message: str) -> None:

@@ -3,12 +3,13 @@ uq CLI — scientifically transparent UQ for vEcoli.
 
 Three commands:
 
-    uv run uq sample ...     # Stage 1: generate + cache LHS samples
+    uv run uq sample ...     # Stage 1: generate + cache samples (PCRV germ sampling)
     uv run uq quantify ...   # Stage 2: all 4 RFC006 strategies via PyTUQ PCE
     uv run uq dashboard ...  # Interactive visualization (tk or marimo)
 
-The ``sample`` command is identical to ``uq sample`` — uses LHS sampling,
-subprocess-based vEcoli execution, and PrecomputedCache.  Also caches
+The ``sample`` command is identical to ``uq sample`` — uses PCRV.sampleGerm()
+(PyTUQ-native random sampling), subprocess-based vEcoli execution, and
+PrecomputedCache.  Also caches
 per-row generation/lineage_seed metadata for strategies 2-3.
 
 The ``quantify`` command fits PCE surrogates via ``pytuq.surrogates.pce.PCE``
@@ -24,7 +25,9 @@ Regression backends (--regression): lsq (default), bcs (sparse), anl (analytical
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import typer
@@ -34,8 +37,20 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from uq.models import CliType
+
 console = Console()
 app = typer.Typer(help="Scientifically transparent UQ for vEcoli.")
+
+
+@app.command(name="help")
+def display_help() -> None:
+    """Show help for a specific subcommand, or the main CLI."""
+    import click
+
+    cmd = typer.main.get_command(app)
+    with click.Context(cmd) as ctx:
+        print(cmd.get_help(ctx))
 
 
 # ── sample: reuse uq sample directly ────────────────────────────────
@@ -151,7 +166,11 @@ def sample(
     cmd = [sys.executable, workflow_script, "--config", str(config_path)]
 
     proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=vecoli_root, env=env,
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        cwd=vecoli_root,
+        env=env,
     )
 
     with Progress(
@@ -249,7 +268,7 @@ def sample(
     if Y_ts:
         console.print(f"  [dim]Timeseries: {len(Y_ts)} samples[/dim]")
     if Y_meta:
-        console.print("  [dim]Metadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
+        console.print("  [dim]Metsucadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
 
 
 # ── quantify ─────────────────────────────────────────────────────────
@@ -302,7 +321,7 @@ def _pct(v: float) -> str:
     return f"{v * 100:.1f}%"
 
 
-def _print_report(result) -> None:
+def _print_report(result: Any) -> None:
     """Render QuantifyResult as a rich terminal report."""
     from rich.columns import Columns
 
@@ -375,7 +394,7 @@ def _print_report(result) -> None:
         )
 
 
-def _sobol_table(title: str, sobol, border: str, n_top: int = 10) -> Table:
+def _sobol_table(title: str, sobol: Any, border: str, n_top: int = 10) -> Table:
     table = Table(
         box=box.SIMPLE_HEAVY,
         show_header=True,
@@ -397,7 +416,7 @@ def _sobol_table(title: str, sobol, border: str, n_top: int = 10) -> Table:
     return table
 
 
-def _print_sobol_table(title: str, sobol, border: str) -> None:
+def _print_sobol_table(title: str, sobol: Any, border: str) -> None:
     console.print(
         Panel(
             _sobol_table(title, sobol, border),
@@ -422,11 +441,11 @@ def dashboard(
     import subprocess as _sp
 
     if run_mode == "mo":
-        _sp.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard_simple.py"], check=True)
+        _sp.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard_simple.py"], check=True)  # noqa: S607
     else:
         from app.uq_daw_simple import run_tk_dashboard_simple
 
-        run_tk_dashboard_simple(data_path=results_path)
+        run_tk_dashboard_simple(data_path=results_path)  # type: ignore[no-untyped-call]
 
 
 @app.command()
@@ -451,7 +470,7 @@ def gui() -> None:
     import subprocess as _sp
 
     _sp.run(
-        ["uv", "run", "marimo", "run", "--no-token", "app/gui.py"],
+        ["uv", "run", "marimo", "run", "--no-token", "app/gui.py"],  # noqa: S607
         check=True,
     )
 

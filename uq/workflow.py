@@ -41,11 +41,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pytuq.lreg.anl import anl
-from pytuq.lreg.bcs import bcs
-from pytuq.lreg.lreg import lsq
-from pytuq.rv.pcrv import PCRV
-from pytuq.utils.mindex import get_mi
+from pytuq.lreg.anl import anl  # type: ignore[import-untyped]
+from pytuq.lreg.bcs import bcs  # type: ignore[import-untyped]
+from pytuq.lreg.lreg import lsq  # type: ignore[import-untyped]
+from pytuq.rv.pcrv import PCRV  # type: ignore[import-untyped]
+from pytuq.utils.mindex import get_mi  # type: ignore[import-untyped]
 
 from libuq.generators.vecoli import TimeseriesGeneratorVecoli
 from libuq.inputs import XSpace
@@ -154,10 +154,10 @@ def _generate_training_samples(
     in_pcdim: int,
     seed: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate LHS training samples in germ and physical spaces.
+    """Generate training samples in germ and physical spaces via PCRV.sampleGerm().
 
     Equivalent to ``uq_pc.py`` random sampling path (``--sampl rand``).
-    RFC006 uses LHS exclusively — no quadrature.
+    Uses PyTUQ-native random sampling from the germ measure — no quadrature.
 
     Args:
         pc: Input PCRV object.
@@ -223,7 +223,7 @@ def _physical_to_germ(
     lb, ub = bounds[:, 0], bounds[:, 1]
     span = ub - lb
     span = np.where(span > 0, span, 1.0)
-    return 2.0 * (X - lb) / span - 1.0
+    return 2.0 * (X - lb) / span - 1.0  # type: ignore[no-any-return]
 
 
 # ── Step 3: Evaluate / load forward model ───────────────────────────
@@ -397,7 +397,7 @@ def _compute_relative_errors(
     """
     norms = np.linalg.norm(Y_true, axis=0)
     norms = np.where(norms > 0, norms, 1.0)
-    return np.linalg.norm(Y_true - Y_pred, axis=0) / norms
+    return np.linalg.norm(Y_true - Y_pred, axis=0) / norms  # type: ignore[no-any-return]
 
 
 # ── Step 6: Compute Sobol indices ───────────────────────────────────
@@ -532,7 +532,7 @@ def run_uqpc(
         param_space: Parameter space with names and bounds.
         Y_train: Training outputs, shape (n_samples, n_outputs).
         X_train: Training inputs in physical space, shape (n_samples, n_params).
-            If None, generates new LHS samples (but this requires Y_train
+            If None, generates new germ samples (but this requires Y_train
             to already correspond to those samples).
         polynomial_order: Output PCE order (uq_pc.py ``--outord``).
         regression: Fitting method — 'lsq', 'bcs', or 'anl'
@@ -669,13 +669,13 @@ def run_uqpc_live(
     is ``TimeseriesGeneratorVecoli.evaluate_batch()`` which runs vEcoli
     as a subprocess via ``runscripts/workflow.py``.
 
-    Steps 1-2 generate LHS samples, step 3 evaluates the model, then
-    steps 4-6 proceed as in ``run_uqpc``.
+    Steps 1-2 generate samples via PCRV.sampleGerm(), step 3 evaluates the
+    model, then steps 4-6 proceed as in ``run_uqpc``.
 
     Args:
         param_space: Parameter space with names and bounds.
         simulation_func: vEcoli simulation wrapper.
-        n_samples: Number of LHS training samples.
+        n_samples: Number of training samples (drawn from germ measure).
         polynomial_order: Output PCE order.
         regression: Fitting method.
         tolerance: BCS tolerance.
@@ -1127,7 +1127,7 @@ def _compute_growth_fraction(
     denom = log_div - log_birth
     if denom <= 0:
         return np.linspace(0, 1, len(mass))
-    return np.clip((log_mass - log_birth) / denom, 0, 1)
+    return np.clip((log_mass - log_birth) / denom, 0, 1)  # type: ignore[no-any-return]
 
 
 def _bin_by_growth_stage(
@@ -1144,7 +1144,7 @@ def _bin_by_growth_stage(
         Bin indices, shape (n_timesteps,), values in [0, n_bins-1].
     """
     edges = np.linspace(0, 1, n_bins + 1)
-    return np.clip(np.digitize(theta, edges) - 1, 0, n_bins - 1)
+    return np.clip(np.digitize(theta, edges) - 1, 0, n_bins - 1)  # type: ignore[no-any-return]
 
 
 # ═══════════════════════════════════════════════════════════════════
