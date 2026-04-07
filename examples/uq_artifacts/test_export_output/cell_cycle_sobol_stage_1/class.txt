@@ -1,1 +1,1 @@
-uq.sensitivity.SobolIndices
+libuq.sensitivity.SobolIndices

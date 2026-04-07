@@ -437,8 +437,16 @@ def dashboard(
     \b
     --run-mode tk   Tkinter DAW (default) — draggable parameter markers
     --run-mode mo   Marimo notebook — slider-reactive
+
+    If --results-path is not given, looks for ./uq_results/uq_results.json.
     """
     import subprocess as _sp
+
+    # Auto-detect results path
+    if results_path is None:
+        default = Path("./uq_results/uq_results.json")
+        if default.exists():
+            results_path = str(default)
 
     if run_mode == "mo":
         _sp.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard_simple.py"], check=True)  # noqa: S607

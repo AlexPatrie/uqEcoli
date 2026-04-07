@@ -49,21 +49,45 @@ def _(mo):
         margin=dict(l=50, r=20, t=40, b=40),
     )
 
-    file_input = mo.ui.file(filetypes=[".json"], label="Load uq_results.json from uq-simple export")
+    file_input = mo.ui.file(filetypes=[".json"], label="Load uq_results.json from uq export")
+    results_dir_input = mo.ui.text(
+        value="./uq_results",
+        label="Or enter export directory path (containing uq_results.json + population_surrogate/)",
+        full_width=True,
+    )
 
-    return COLORS, DAW, Path, PCOLORS, file_input, go, json, make_subplots, np
+    return COLORS, DAW, Path, PCOLORS, file_input, go, json, make_subplots, np, results_dir_input
 
 
 @app.cell
-def _(Path, file_input, json, np):
+def _(Path, file_input, json, np, results_dir_input):
     _data = None
     _surr = {"available": False}
 
-    if file_input.value:
+    # Try directory path input first (more reliable — finds both JSON + surrogates)
+    _dir_path = Path(results_dir_input.value).resolve() if results_dir_input.value else None
+    if _dir_path and (_dir_path / "uq_results.json").exists():
+        _data = json.loads((_dir_path / "uq_results.json").read_text())
+        _pop = _dir_path / "population_surrogate"
+        if (_pop / "coefficients.npy").exists():
+            try:
+                _surr = {
+                    "available": True,
+                    "pop_coeffs": np.load(_pop / "coefficients.npy"),
+                    "pop_mi": np.load(_pop / "multi_indices.npy"),
+                    "bounds": np.load(_pop / "input_bounds.npy"),
+                }
+            except Exception as _e:
+                _surr = {"available": False, "error": str(_e)}
+
+    # Fallback: file upload widget
+    elif file_input.value:
         _raw = file_input.value[0].contents
         _data = json.loads(_raw)
 
         for _d in [
+            Path("./uq_results"),
+            Path("./test_uq_results"),
             Path("examples/expected_output_simple/results"),
             Path("examples/expected_output/results"),
             Path("."),
@@ -302,7 +326,7 @@ def _(data, mo):
 
 
 @app.cell
-def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_table):
+def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_table, results_dir_input):
     _methods = data.get("methods", {}) if data else {}
     _refs = data.get("references", []) if data else []
     _params = list(data["parameters"].keys()) if data else []
@@ -347,7 +371,7 @@ def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_
     )
 
     mo.output.replace(mo.vstack([
-        file_input,
+        mo.hstack([results_dir_input, file_input]),
         _header,
         mo.hstack([_slider_panel, _plot_panel], widths=[1, 3]),
         _methods_md,

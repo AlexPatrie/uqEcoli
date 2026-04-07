@@ -18,12 +18,27 @@ Every computation has a direct biological or statistical interpretation
 that a domain scientist can audit.
 """
 
-from uq.growth import compute_growth_fraction
-from uq.pipeline import run_by_generation, run_by_seed, run_pipeline
+from uq.growth import bin_by_growth_stage, compute_growth_fraction
+from uq.workflow import (
+    QuantifyResult,
+    UQPCResult,
+    quantify,
+    run_strategy1_uniform,
+    run_strategy2_by_generation,
+    run_strategy3_by_seed,
+    run_strategy4_growth_stratified,
+    sample,
+)
 
 __all__ = [
+    "bin_by_growth_stage",
     "compute_growth_fraction",
-    "run_by_generation",
-    "run_by_seed",
-    "run_pipeline",
+    "quantify",
+    "QuantifyResult",
+    "run_strategy1_uniform",
+    "run_strategy2_by_generation",
+    "run_strategy3_by_seed",
+    "run_strategy4_growth_stratified",
+    "sample",
+    "UQPCResult",
 ]
