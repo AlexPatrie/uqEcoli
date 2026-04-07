@@ -1,1 +1,1 @@
-uq.sensitivity.MorrisIndices
+libuq.sensitivity.MorrisIndices

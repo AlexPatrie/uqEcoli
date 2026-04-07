@@ -1,0 +1,235 @@
+{
+  "framework": "uq (PyTUQ UQPC workflow)",
+  "parameters": {
+    "fraction_active_rnap_free": {
+      "index": 0
+    },
+    "fraction_active_rnap_bound": {
+      "index": 1
+    },
+    "basal_elongation_rate": {
+      "index": 2
+    },
+    "kinetic_objective_weight": {
+      "index": 3
+    },
+    "secretion_penalty_coeff": {
+      "index": 4
+    },
+    "cell_dry_mass_fraction": {
+      "index": 5
+    }
+  },
+  "n_parameters": 6,
+  "observable_names": [
+    "listeners__mass__dry_mass",
+    "listeners__mass__cell_mass",
+    "listeners__mass__volume",
+    "listeners__mass__growth"
+  ],
+  "phase1_population": {
+    "sobol_total_order": {
+      "fraction_active_rnap_free": 0.504538,
+      "fraction_active_rnap_bound": 0.51349,
+      "basal_elongation_rate": 0.098609,
+      "kinetic_objective_weight": 0.170913,
+      "secretion_penalty_coeff": 0.085725,
+      "cell_dry_mass_fraction": 0.321425
+    },
+    "sobol_first_order": {
+      "fraction_active_rnap_free": 0.094509,
+      "fraction_active_rnap_bound": 0.088026,
+      "basal_elongation_rate": 0.005669,
+      "kinetic_objective_weight": 0.00723,
+      "secretion_penalty_coeff": 0.000312,
+      "cell_dry_mass_fraction": 0.109554
+    }
+  },
+  "strategy2_by_generation": {
+    "n_generations": 1,
+    "generations": [
+      {
+        "generation": 1,
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.504538,
+          "fraction_active_rnap_bound": 0.51349,
+          "basal_elongation_rate": 0.098609,
+          "kinetic_objective_weight": 0.170913,
+          "secretion_penalty_coeff": 0.085725,
+          "cell_dry_mass_fraction": 0.321425
+        }
+      }
+    ]
+  },
+  "strategy3_by_seed": {
+    "n_seeds": 1,
+    "seeds": [
+      {
+        "lineage_seed": 0,
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.504538,
+          "fraction_active_rnap_bound": 0.51349,
+          "basal_elongation_rate": 0.098609,
+          "kinetic_objective_weight": 0.170913,
+          "secretion_penalty_coeff": 0.085725,
+          "cell_dry_mass_fraction": 0.321425
+        }
+      }
+    ]
+  },
+  "phase2_growth_stratified": {
+    "n_stages": 10,
+    "stages": [
+      {
+        "stage": 0,
+        "theta_range": [
+          0.0,
+          0.1
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.338181,
+          "fraction_active_rnap_bound": 0.325874,
+          "basal_elongation_rate": 0.070568,
+          "kinetic_objective_weight": 0.105639,
+          "secretion_penalty_coeff": 0.067269,
+          "cell_dry_mass_fraction": 0.551194
+        }
+      },
+      {
+        "stage": 1,
+        "theta_range": [
+          0.1,
+          0.2
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.375017,
+          "fraction_active_rnap_bound": 0.364494,
+          "basal_elongation_rate": 0.078227,
+          "kinetic_objective_weight": 0.11546,
+          "secretion_penalty_coeff": 0.074236,
+          "cell_dry_mass_fraction": 0.499839
+        }
+      },
+      {
+        "stage": 2,
+        "theta_range": [
+          0.2,
+          0.3
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.411664,
+          "fraction_active_rnap_bound": 0.402248,
+          "basal_elongation_rate": 0.081055,
+          "kinetic_objective_weight": 0.126137,
+          "secretion_penalty_coeff": 0.07727,
+          "cell_dry_mass_fraction": 0.458063
+        }
+      },
+      {
+        "stage": 3,
+        "theta_range": [
+          0.3,
+          0.4
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.452393,
+          "fraction_active_rnap_bound": 0.44862,
+          "basal_elongation_rate": 0.089611,
+          "kinetic_objective_weight": 0.13903,
+          "secretion_penalty_coeff": 0.082884,
+          "cell_dry_mass_fraction": 0.39594
+        }
+      },
+      {
+        "stage": 4,
+        "theta_range": [
+          0.4,
+          0.5
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.489303,
+          "fraction_active_rnap_bound": 0.489964,
+          "basal_elongation_rate": 0.094991,
+          "kinetic_objective_weight": 0.147717,
+          "secretion_penalty_coeff": 0.088312,
+          "cell_dry_mass_fraction": 0.345412
+        }
+      },
+      {
+        "stage": 5,
+        "theta_range": [
+          0.5,
+          0.6
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.518716,
+          "fraction_active_rnap_bound": 0.526353,
+          "basal_elongation_rate": 0.097011,
+          "kinetic_objective_weight": 0.154648,
+          "secretion_penalty_coeff": 0.087948,
+          "cell_dry_mass_fraction": 0.304813
+        }
+      },
+      {
+        "stage": 6,
+        "theta_range": [
+          0.6,
+          0.7
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.527469,
+          "fraction_active_rnap_bound": 0.54009,
+          "basal_elongation_rate": 0.096006,
+          "kinetic_objective_weight": 0.154368,
+          "secretion_penalty_coeff": 0.086823,
+          "cell_dry_mass_fraction": 0.291242
+        }
+      },
+      {
+        "stage": 7,
+        "theta_range": [
+          0.7,
+          0.8
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.485973,
+          "fraction_active_rnap_bound": 0.510357,
+          "basal_elongation_rate": 0.084716,
+          "kinetic_objective_weight": 0.143522,
+          "secretion_penalty_coeff": 0.075838,
+          "cell_dry_mass_fraction": 0.343924
+        }
+      },
+      {
+        "stage": 8,
+        "theta_range": [
+          0.8,
+          0.9
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.385462,
+          "fraction_active_rnap_bound": 0.413489,
+          "basal_elongation_rate": 0.064623,
+          "kinetic_objective_weight": 0.105153,
+          "secretion_penalty_coeff": 0.058625,
+          "cell_dry_mass_fraction": 0.473257
+        }
+      },
+      {
+        "stage": 9,
+        "theta_range": [
+          0.9,
+          1.0
+        ],
+        "sobol_total_order": {
+          "fraction_active_rnap_free": 0.255747,
+          "fraction_active_rnap_bound": 0.285772,
+          "basal_elongation_rate": 0.038859,
+          "kinetic_objective_weight": 0.064981,
+          "secretion_penalty_coeff": 0.035151,
+          "cell_dry_mass_fraction": 0.644478
+        }
+      }
+    ]
+  }
+}

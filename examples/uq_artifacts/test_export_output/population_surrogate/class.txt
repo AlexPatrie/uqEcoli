@@ -1,1 +1,1 @@
-uq.sensitivity.PCESurrogate
+libuq.sensitivity.PCESurrogate

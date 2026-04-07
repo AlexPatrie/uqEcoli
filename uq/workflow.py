@@ -1479,6 +1479,46 @@ def quantify(
 
     # ── Rebuild parameter space (same specs as sample()) ──
     ds = ParameterDataset(sim_data_path=str(sim_data_path))
+
+    # Auto-detect parameters from cache metadata when none are provided.
+    # This handles the case where the cache was built with a different set
+    # of default parameters than the current DEFAULT_SIM_DATA_PARAMETERS.
+    if parameters is None and cache.parameter_names:
+        cached_names = set(cache.parameter_names)
+        matching = [p for p in DEFAULT_SIM_DATA_PARAMETERS if p.name in cached_names]
+        if len(matching) == len(cached_names):
+            parameters = matching
+            logger.info(
+                "Auto-detected %d parameters from cache: %s",
+                len(parameters),
+                [p.name for p in parameters],
+            )
+        elif cache.metadata.get("bounds"):
+            # Reconstruct minimal SimDataParameter specs from cache metadata
+            cached_bounds = cache.metadata["bounds"]
+            all_defaults = {p.name: p for p in DEFAULT_SIM_DATA_PARAMETERS}
+            parameters = []
+            for i, name in enumerate(cache.parameter_names):
+                if name in all_defaults:
+                    p = all_defaults[name]
+                    parameters.append(SimDataParameter(
+                        name=p.name,
+                        attr_path=p.attr_path,
+                        bounds=tuple(cached_bounds[i]),
+                        index=p.index,
+                        description=p.description,
+                    ))
+                else:
+                    logger.warning(
+                        "Cache parameter %r not found in defaults, using cache bounds",
+                        name,
+                    )
+            if len(parameters) != len(cached_names):
+                raise RuntimeError(
+                    f"Cannot reconstruct parameter space: cache has {cached_names}, "
+                    f"but only matched {[p.name for p in parameters]} from defaults."
+                )
+
     param_space = ds.to_parameter_space(parameters=parameters)
 
     # ── Load germ samples (saved by sample()) ──
