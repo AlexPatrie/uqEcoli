@@ -61,6 +61,11 @@ def sample(
     sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
     cache_dir: str = typer.Option("./uq_cache", help="Cache output directory"),
     n_samples: int = 20,
+    n_test: int = typer.Option(
+        0,
+        help="Extra held-out validation samples (UQPC --ntst). Evaluated via vEcoli "
+        "alongside training samples; used by `quantify` to compute test relative errors.",
+    ),
     seed: int = 42,
     generations: int = 1,
     n_init_sims: int = 1,
@@ -74,6 +79,10 @@ def sample(
     (X, Y, timeseries) to disk as a PrecomputedCache.
 
     Use --generations >= 2 to enable Strategy 2 (by-generation GSA).
+    Use --n-test > 0 to run additional held-out validation samples
+    (PyTUQ UQPC ``--ntst``) through the same vEcoli workflow; they
+    are stored under ``X_test.npy``/``Y_test.npy`` in the cache and
+    consumed by ``quantify`` for surrogate-quality diagnostics.
     """
     import json as _json
     import os
@@ -124,6 +133,18 @@ def sample(
     X_train = input_pc.evalPC(germ_train)
     console.print(f"  [dim]X shape: {X_train.shape}[/dim]")
 
+    # UQPC ``--ntst``: draw additional held-out validation samples
+    germ_test: np.ndarray | None = None
+    X_test: np.ndarray | None = None
+    if n_test > 0:
+        np.random.seed(seed + 1)
+        germ_test = input_pc.sampleGerm(n_test)
+        X_test = input_pc.evalPC(germ_test)
+        console.print(f"  [dim]X_test shape: {X_test.shape} (held-out validation)[/dim]")
+
+    # Concatenate train + test; vEcoli evaluates all variants in one workflow.
+    X_all = np.vstack([X_train, X_test]) if X_test is not None else X_train
+
     # ── Step 3: Build config + run workflow.py ──
     batch_dir = cache_path / "_batch"
     if batch_dir.exists():
@@ -133,7 +154,7 @@ def sample(
     output_dir.mkdir(exist_ok=True)
     experiment_id = "uqpc_batch"
 
-    variants = _build_variants_from_samples(X_train, param_space._sim_data_parameters)
+    variants = _build_variants_from_samples(X_all, param_space._sim_data_parameters)
     config = _build_config(
         sim_data_path=sim_data_path,
         output_dir=str(output_dir),
@@ -151,7 +172,8 @@ def sample(
     if nf_temp.exists():
         shutil.rmtree(nf_temp)
 
-    total_sims = (n_samples + 1) * n_init_sims * generations
+    n_variants = X_all.shape[0]
+    total_sims = (n_variants + 1) * n_init_sims * generations
     history_base = output_dir / experiment_id / "history"
     ansi_re = re.compile(r"\x1b\[[\d;]*[A-Za-z]|\x1b\[\d*[A-GJK]|\x07")
 
@@ -245,7 +267,20 @@ def sample(
         "listeners__mass__volume",
         "listeners__mass__growth",
     ]
-    Y_agg, Y_ts, Y_meta = _collect_variant_timeseries(history_base, n_samples, obs)
+    Y_all, Y_ts_all, Y_meta_all = _collect_variant_timeseries(history_base, n_variants, obs)
+
+    # Split train and held-out test portions
+    Y_agg = Y_all[:n_samples]
+    Y_ts = Y_ts_all[:n_samples] if Y_ts_all else Y_ts_all
+    Y_meta = Y_meta_all[:n_samples] if Y_meta_all else Y_meta_all
+
+    Y_test_arr: np.ndarray | None = None
+    Y_test_ts: list | None = None
+    Y_test_meta: list | None = None
+    if n_test > 0:
+        Y_test_arr = Y_all[n_samples:]
+        Y_test_ts = Y_ts_all[n_samples:] if Y_ts_all else None
+        Y_test_meta = Y_meta_all[n_samples:] if Y_meta_all else None
 
     cache_path.mkdir(parents=True, exist_ok=True)
     cache = PrecomputedCache(
@@ -256,19 +291,26 @@ def sample(
         metadata={"bounds": bounds.tolist(), "seed": seed, "observable_columns": obs},
         Y_timeseries=Y_ts,
         Y_timeseries_meta=Y_meta,
+        X_test=X_test,
+        Y_test=Y_test_arr,
+        Y_test_timeseries=Y_test_ts,
+        Y_test_timeseries_meta=Y_test_meta,
     )
     cache.save()
     np.save(cache_path / "germ_train.npy", germ_train)
+    if germ_test is not None:
+        np.save(cache_path / "germ_test.npy", germ_test)
 
     console.print(
-        f"[bold green]Cached {Y_agg.shape[0]} samples[/bold green] "
-        f"({Y_agg.shape[1]} params, {Y_agg.shape[1]} outputs) "
-        f"to [cyan]{cache_path}[/cyan]"
+        f"[bold green]Cached {Y_agg.shape[0]} training samples[/bold green] "
+        f"({Y_agg.shape[1]} outputs) to [cyan]{cache_path}[/cyan]"
     )
+    if Y_test_arr is not None:
+        console.print(f"  [dim]Held-out validation: {Y_test_arr.shape[0]} samples[/dim]")
     if Y_ts:
         console.print(f"  [dim]Timeseries: {len(Y_ts)} samples[/dim]")
     if Y_meta:
-        console.print("  [dim]Metsucadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
+        console.print("  [dim]Metadata: generation/seed labels (strategies 2-3 enabled)[/dim]")
 
 
 # ── quantify ─────────────────────────────────────────────────────────
@@ -282,6 +324,7 @@ def quantify(
     n_bins: int = 10,
     polynomial_order: int = 2,
     regression: str = "lsq",
+    tol: float = typer.Option(1e-3, help="BCS sparsity tolerance (UQPC --tol, only used when --regression=bcs)"),
 ) -> None:
     """UQPC Steps 4-5: fit PCE surrogates, compute Sobol (all 4 strategies).
 
@@ -299,7 +342,9 @@ def quantify(
     """
     from uq.workflow import quantify as wf_quantify
 
-    console.print(f"[bold cyan]Quantify:[/bold cyan] order={polynomial_order}, bins={n_bins}, regression={regression}")
+    console.print(
+        f"[bold cyan]Quantify:[/bold cyan] order={polynomial_order}, bins={n_bins}, regression={regression}, tol={tol}"
+    )
 
     result = wf_quantify(
         cache_dir=cache_dir,
@@ -307,6 +352,7 @@ def quantify(
         polynomial_order=polynomial_order,
         n_bins=n_bins,
         regression=regression,
+        tolerance=tol,
         export_path=export_path,
     )
 
@@ -335,6 +381,9 @@ def _print_report(result: Any) -> None:
     console.print("[dim]  Strategies: 1=uniform, 2=by generation, 3=by seed, 4=growth-stratified (RFC006)[/dim]")
     console.print("[dim]  Refs: Macklin et al. Science 2020; Ahn-Horst et al. npj Syst Biol Appl 2022[/dim]")
     console.print()
+
+    # Surrogate quality diagnostics (UQPC step 5)
+    _print_relerr_panel(result.strategy1)
 
     # Strategy 1: population
     _print_sobol_table(
@@ -414,6 +463,40 @@ def _sobol_table(title: str, sobol: Any, border: str, n_top: int = 10) -> Table:
         name = sobol.parameter_names[i] if i < len(sobol.parameter_names) else f"x{i}"
         table.add_row(name, _pct(total[i]))
     return table
+
+
+def _print_relerr_panel(s1: Any) -> None:
+    """Show PCE surrogate relative errors (UQPC step 5 diagnostic)."""
+    table = Table(
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+        title="SURROGATE QUALITY // RELATIVE ERRORS",
+        title_style="bold magenta",
+    )
+    table.add_column("OBSERVABLE", style="bold yellow", justify="left")
+    table.add_column("TRAIN", style="bright_green", justify="right")
+    if s1.relerr_test is not None:
+        table.add_column("TEST", style="bright_cyan", justify="right")
+
+    train = s1.relerr_train
+    test = s1.relerr_test
+    n_out = len(train)
+    for i in range(n_out):
+        row = [f"output[{i}]", f"{train[i]:.3e}"]
+        if test is not None:
+            row.append(f"{test[i]:.3e}")
+        table.add_row(*row)
+
+    console.print(
+        Panel(
+            table,
+            border_style="magenta",
+            box=box.ROUNDED,
+            padding=(0, 1),
+            subtitle="[dim]||Y − Ŷ||₂ / ||Y||₂ per output column[/dim]",
+        )
+    )
 
 
 def _print_sobol_table(title: str, sobol: Any, border: str) -> None:

@@ -29,8 +29,8 @@ class PrecomputedCache:
 
     Attributes:
         cache_dir: Directory containing the cached files.
-        X: Input samples, shape (n_samples, n_params).
-        Y: Aggregated outputs, shape (n_samples, n_outputs).
+        X: Input (training) samples, shape (n_samples, n_params).
+        Y: Aggregated training outputs, shape (n_samples, n_outputs).
         parameter_names: Names of the input parameters.
         metadata: Additional metadata (bounds, polynomial_order, etc.).
         Y_timeseries: Per-sample raw timeseries for Phase 2.
@@ -40,6 +40,12 @@ class PrecomputedCache:
             List of dicts, each ``{"generation": array, "lineage_seed": array}``
             matching the rows of the corresponding ``Y_timeseries[i]``.
             None if not available (e.g. old caches or synthetic data).
+        X_test: Optional held-out validation inputs, shape (n_test, n_params).
+            Maps to the PyTUQ UQPC ``--ntst`` flag.  Used by
+            ``uq.workflow.quantify`` to compute test relative errors.
+        Y_test: Optional held-out validation outputs, shape (n_test, n_outputs).
+        Y_test_timeseries: Optional per-test-sample raw timeseries.
+        Y_test_timeseries_meta: Optional per-test-sample metadata.
     """
 
     cache_dir: Path
@@ -49,6 +55,10 @@ class PrecomputedCache:
     metadata: dict[str, Any] = field(default_factory=dict)
     Y_timeseries: list[np.ndarray] | None = None
     Y_timeseries_meta: list[dict[str, np.ndarray]] | None = None
+    X_test: np.ndarray | None = None
+    Y_test: np.ndarray | None = None
+    Y_test_timeseries: list[np.ndarray] | None = None
+    Y_test_timeseries_meta: list[dict[str, np.ndarray]] | None = None
 
     def save(self) -> None:
         """Save X.npy, Y.npy, metadata.json (and optional timeseries) to cache_dir."""
@@ -83,6 +93,24 @@ class PrecomputedCache:
                     **meta_dict,
                 )
 
+        # Save held-out test set (UQPC ``--ntst`` validation samples)
+        if self.X_test is not None and self.Y_test is not None:
+            np.save(self.cache_dir / "X_test.npy", self.X_test)
+            np.save(self.cache_dir / "Y_test.npy", self.Y_test)
+        if self.Y_test_timeseries is not None:
+            ts_test_dir = self.cache_dir / "timeseries_test"
+            ts_test_dir.mkdir(exist_ok=True)
+            for i, ts in enumerate(self.Y_test_timeseries):
+                np.save(ts_test_dir / f"sample_{i:04d}.npy", ts)
+        if self.Y_test_timeseries_meta is not None:
+            ts_test_dir = self.cache_dir / "timeseries_test"
+            ts_test_dir.mkdir(exist_ok=True)
+            for i, meta_dict in enumerate(self.Y_test_timeseries_meta):
+                np.savez(
+                    ts_test_dir / f"sample_{i:04d}_meta.npz",
+                    **meta_dict,
+                )
+
     @classmethod
     def load(cls, cache_dir: str | Path) -> PrecomputedCache:
         """Load from cache_dir."""
@@ -111,6 +139,33 @@ class PrecomputedCache:
                     npz = np.load(meta_path)
                     Y_timeseries_meta.append({k: npz[k] for k in npz.files})
 
+        # Load optional held-out test set (UQPC --ntst)
+        X_test: np.ndarray | None = None
+        Y_test: np.ndarray | None = None
+        X_test_path = cache_dir / "X_test.npy"
+        Y_test_path = cache_dir / "Y_test.npy"
+        if X_test_path.exists() and Y_test_path.exists():
+            X_test = np.load(X_test_path)
+            Y_test = np.load(Y_test_path)
+
+        Y_test_timeseries: list[np.ndarray] | None = None
+        Y_test_timeseries_meta: list[dict[str, np.ndarray]] | None = None
+        ts_test_dir = cache_dir / "timeseries_test"
+        if ts_test_dir.exists() and X_test is not None:
+            n_test = X_test.shape[0]
+            Y_test_timeseries = []
+            has_test_meta = (ts_test_dir / "sample_0000_meta.npz").exists()
+            if has_test_meta:
+                Y_test_timeseries_meta = []
+            for i in range(n_test):
+                ts_path = ts_test_dir / f"sample_{i:04d}.npy"
+                if ts_path.exists():
+                    Y_test_timeseries.append(np.load(ts_path))
+                meta_path = ts_test_dir / f"sample_{i:04d}_meta.npz"
+                if has_test_meta and meta_path.exists():
+                    npz = np.load(meta_path)
+                    Y_test_timeseries_meta.append({k: npz[k] for k in npz.files})
+
         return cls(
             cache_dir=cache_dir,
             X=X,
@@ -119,6 +174,10 @@ class PrecomputedCache:
             metadata=meta,
             Y_timeseries=Y_timeseries,
             Y_timeseries_meta=Y_timeseries_meta,
+            X_test=X_test,
+            Y_test=Y_test,
+            Y_test_timeseries=Y_test_timeseries,
+            Y_test_timeseries_meta=Y_test_timeseries_meta,
         )
 
 

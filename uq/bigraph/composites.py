@@ -135,7 +135,6 @@ def build_full_composite(
         "polynomial_order": polynomial_order,
         "n_bins": n_bins,
         "regression": regression,
-
         # Intermediate stores
         "X_train": "",
         "germ_train": "",
@@ -153,7 +152,6 @@ def build_full_composite(
         "results_json": "",
         "pipeline_complete": False,
         "summary": "",
-
         # Step 1: SetupInputs (fires immediately)
         "setup_inputs": {
             "_type": "step",
@@ -172,7 +170,6 @@ def build_full_composite(
                 "n_parameters": ["n_parameters"],
             },
         },
-
         # Step 2: RunSimulations (Process — polls at each tick)
         "run_simulations": {
             "_type": "process",
@@ -197,7 +194,6 @@ def build_full_composite(
                 "sim_stdout": ["sim_stdout"],
             },
         },
-
         # Step 3: CollectCache
         "collect_cache": {
             "_type": "step",
@@ -218,7 +214,6 @@ def build_full_composite(
                 "n_cached_samples": ["n_cached_samples"],
             },
         },
-
         # Step 4: Quantify
         "quantify": {
             "_type": "step",
@@ -238,7 +233,6 @@ def build_full_composite(
                 "results_json": ["results_json"],
             },
         },
-
         # Step 5: Export
         "export": {
             "_type": "step",
@@ -335,7 +329,6 @@ def build_quantify_composite(
         "results_json": "",
         "pipeline_complete": False,
         "summary": "",
-
         "quantify": {
             "_type": "step",
             "address": "local:Quantify",
@@ -354,7 +347,6 @@ def build_quantify_composite(
                 "results_json": ["results_json"],
             },
         },
-
         "export": {
             "_type": "step",
             "address": "local:Export",
@@ -427,11 +419,13 @@ def build_explorer_composite(
         core = get_core()
 
     import json
+
     export_dir = Path(export_path).resolve()
 
     # Auto-detect midpoints if no x given
     if x_physical is None:
         import numpy as np
+
         bounds_path = export_dir / "population_surrogate" / "input_bounds.npy"
         if bounds_path.exists():
             bounds = np.load(bounds_path)
@@ -445,7 +439,6 @@ def build_explorer_composite(
         "y_hat": 0.0,
         "sweep_curves": "{}",
         "local_sensitivity": "{}",
-
         "pce_eval": {
             "_type": "step",
             "address": "local:PCEEvaluate",

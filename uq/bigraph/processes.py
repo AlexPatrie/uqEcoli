@@ -237,8 +237,11 @@ class RunSimulations(Process):
             cmd = [sys.executable, workflow_script, "--config", str(config_path)]
 
             self._proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                cwd=vecoli_root, env=env,
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=vecoli_root,
+                env=env,
             )
             self._total_sims = (n_samples + 1) * n_init_sims * generations
             self._history_base = output_dir / experiment_id / "history"
@@ -345,10 +348,13 @@ class CollectCache(Step):
 
         cache_path.mkdir(parents=True, exist_ok=True)
         cache = PrecomputedCache(
-            cache_dir=cache_path, X=X_train, Y=Y_agg,
+            cache_dir=cache_path,
+            X=X_train,
+            Y=Y_agg,
             parameter_names=parameter_names,
             metadata={"bounds": bounds, "seed": seed, "observable_columns": obs},
-            Y_timeseries=Y_ts, Y_timeseries_meta=Y_meta,
+            Y_timeseries=Y_ts,
+            Y_timeseries_meta=Y_meta,
         )
         cache.save()
         np.save(cache_path / "germ_train.npy", germ_train)
@@ -433,6 +439,7 @@ class StrategyFit(Step):
         parameters = None
         if params_file:
             from libuq.pipeline.models import SimDataParameter
+
             raw = _json.loads(Path(params_file).read_text())
             parameters = [SimDataParameter.from_dict(p) for p in raw]
         param_space = ds.to_parameter_space(parameters=parameters)
@@ -443,22 +450,25 @@ class StrategyFit(Step):
         group_val = self.config.get("group_value", -1)
 
         if strategy == "uniform":
-            result = run_uqpc(param_space=param_space, Y_train=Y, X_train=X,
-                              polynomial_order=poly_order, regression=regression)
+            result = run_uqpc(
+                param_space=param_space, Y_train=Y, X_train=X, polynomial_order=poly_order, regression=regression
+            )
             label = "strategy1_uniform"
 
         elif strategy == "generation":
             grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "generation")
             Y_g = grouped.get(group_val, Y)
-            result = run_uqpc(param_space=param_space, Y_train=Y_g, X_train=X,
-                              polynomial_order=poly_order, regression=regression)
+            result = run_uqpc(
+                param_space=param_space, Y_train=Y_g, X_train=X, polynomial_order=poly_order, regression=regression
+            )
             label = f"strategy2_gen{group_val}"
 
         elif strategy == "seed":
             grouped = _aggregate_by_group(cache.Y_timeseries, cache.Y_timeseries_meta, "lineage_seed")
             Y_s = grouped.get(group_val, Y)
-            result = run_uqpc(param_space=param_space, Y_train=Y_s, X_train=X,
-                              polynomial_order=poly_order, regression=regression)
+            result = run_uqpc(
+                param_space=param_space, Y_train=Y_s, X_train=X, polynomial_order=poly_order, regression=regression
+            )
             label = f"strategy3_seed{group_val}"
 
         elif strategy == "growth_stage":
@@ -474,8 +484,9 @@ class StrategyFit(Step):
                     stage_means = ts[mask].mean(axis=0)
                 Y_stage_list.append(stage_means)
             Y_stage = np.vstack(Y_stage_list)
-            result = run_uqpc(param_space=param_space, Y_train=Y_stage, X_train=X,
-                              polynomial_order=poly_order, regression=regression)
+            result = run_uqpc(
+                param_space=param_space, Y_train=Y_stage, X_train=X, polynomial_order=poly_order, regression=regression
+            )
             label = f"strategy4_stage{group_val}"
         else:
             raise ValueError(f"Unknown strategy: {strategy!r}")
@@ -490,8 +501,11 @@ class StrategyFit(Step):
             "relerr_train": [round(float(e), 6) for e in result.relerr_train],
         }
 
-        logger.info("StrategyFit[%s]: done, top S_Ti=%s", label,
-                     sorted(sobol_dict["sobol_total_order"].items(), key=lambda kv: -kv[1])[:2])
+        logger.info(
+            "StrategyFit[%s]: done, top S_Ti=%s",
+            label,
+            sorted(sobol_dict["sobol_total_order"].items(), key=lambda kv: -kv[1])[:2],
+        )
 
         return {
             "sobol_json": _json.dumps(sobol_dict),
@@ -592,14 +606,14 @@ class PCEEvaluate(Step):
     def inputs(self):
         return {
             "export_path": "string",
-            "x_physical": "string",   # JSON array of param values
+            "x_physical": "string",  # JSON array of param values
         }
 
     def outputs(self):
         return {
             "y_hat": "float",
-            "sweep_curves": "string",     # JSON: {param: {x: [...], y: [...]}}
-            "local_sensitivity": "string", # JSON: {param: float}
+            "sweep_curves": "string",  # JSON: {param: {x: [...], y: [...]}}
+            "local_sensitivity": "string",  # JSON: {param: float}
         }
 
     def update(self, state: dict) -> dict:
@@ -617,7 +631,11 @@ class PCEEvaluate(Step):
         # Sweep curves
         n_sweep = self.config.get("n_sweep", 80)
         results_path = export_dir / "uq_results.json"
-        param_names = list(_json.loads(results_path.read_text())["parameters"].keys()) if results_path.exists() else [f"x{i}" for i in range(len(x))]
+        param_names = (
+            list(_json.loads(results_path.read_text())["parameters"].keys())
+            if results_path.exists()
+            else [f"x{i}" for i in range(len(x))]
+        )
 
         sweep_curves = {}
         local_sens = {}
@@ -637,9 +655,11 @@ class PCEEvaluate(Step):
             x_plus[pi] = min(x[pi] + delta, hi)
             x_minus[pi] = max(x[pi] - delta, lo)
             y_plus = _legendre_eval(
-                2.0 * (x_plus - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0, coeffs, mi)
+                2.0 * (x_plus - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0, coeffs, mi
+            )
             y_minus = _legendre_eval(
-                2.0 * (x_minus - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0, coeffs, mi)
+                2.0 * (x_minus - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0, coeffs, mi
+            )
             local_sens[pname] = float(abs(y_plus - y_minus) / (2 * delta + 1e-12))
 
         return {

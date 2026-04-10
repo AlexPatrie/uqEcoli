@@ -1,227 +1,110 @@
 Getting Started
 ===============
 
-This guide will help you get started with the vEcoli UQ Framework for uncertainty
-quantification in whole-cell simulations.
+This guide walks through the shortest path from "I have vEcoli and a
+``simData.cPickle``" to "I have PCE Sobol indices for five sim_data
+parameters."
 
 Prerequisites
 -------------
 
-Before using the UQ framework, ensure you have:
-
-1. A working vEcoli installation
-2. Simulation data in Parquet format (from ``ParquetEmitter``)
-3. A ``sim_data`` pickle file from ParCa
-
-Installation
-------------
-
-The UQ framework is included with vEcoli. Install the optional UQ dependencies:
+1. A working **vEcoli** checkout at ``../vEcoli`` (editable install).
+2. A pre-computed ``simData.cPickle`` produced by vEcoli's Parca
+   (for example ``../vEcoli/reconstruction/sim_data/kb/simData.cPickle``).
+3. ``uv`` installed (https://docs.astral.sh/uv/).
 
 .. code-block:: bash
 
-   # Install vEcoli with UQ dependencies
-   pip install -e ".[uq]"
+   git clone https://github.com/.../uqEcoli.git
+   cd uqEcoli
+   uv sync --all-groups --all-extras
 
-   # Or install UQPy separately
-   pip install UQpy>=4.1.0
+This repository depends on vEcoli as an editable package, so no further
+installation of vEcoli is needed as long as the path above is correct.
 
-Basic Concepts
---------------
+The two-stage workflow
+----------------------
 
-The UQ framework is built around four key concepts:
+``uq`` exposes the PyTUQ UQPC workflow as two commands:
 
-Input Parameters
+* ``uq sample`` — UQPC steps **1-3**: build the input PC, draw germ
+  samples, evaluate vEcoli, cache ``(X, Y, timeseries)`` to disk.
+* ``uq quantify`` — UQPC steps **4-5**: fit the PCE surrogate, compute
+  Sobol indices for all four RFC006 aggregation strategies, report
+  surrogate relative errors, and export a dashboard-ready artifact
+  directory.
+
+Stage 1 — sample
 ^^^^^^^^^^^^^^^^
 
-Input parameters define the experimental conditions being varied:
+.. code-block:: bash
 
-* **Violacein (vio) pathway**: New gene expression parameters
-* **Mecillinam**: Antibiotic stress conditions
-* **Gene knockouts**: Gene deletion experiments
+   uv run uq sample /path/to/simData.cPickle \
+       --cache-dir ./uq_cache \
+       --n-samples 50 \
+       --n-test 10 \
+       --generations 2
 
-.. code-block:: python
+What happens:
 
-   from uq import InputParameterSpaceVecoli
+1. ``ParameterDataset`` loads ``simData.cPickle`` and projects the six
+   default parameters from :py:data:`libuq.pipeline.param_loader.DEFAULT_SIM_DATA_PARAMETERS`
+   into a generic ``XSpaceVecoli`` parameter space.
+2. ``_setup_input_pc`` in :py:mod:`uq.workflow` builds a
+   ``pytuq.rv.pcrv.PCRV`` (Legendre basis, uniform priors) that encodes
+   the affine map from germ space ``[-1, 1]`` to physical bounds.
+3. ``input_pc.sampleGerm(n_samples)`` draws 50 germ samples and
+   ``evalPC`` maps them into physical parameter space.  With
+   ``--n-test 10`` an additional 10 held-out validation samples are
+   drawn (UQPC's ``--ntst``).
+4. Each row of ``X`` becomes one vEcoli variant via the **upstream**
+   ``sim_data_setattr`` variant function.  See ``SAMPLING.md`` for the
+   exact mapping.
+5. ``runscripts/workflow.py`` (from vEcoli) is spawned as a subprocess
+   with the generated workflow config.  Nextflow manages Parca skipping,
+   variant instantiation, simulation, and Parquet emission.
+6. When vEcoli finishes, hive-partitioned Parquet is collected into
+   ``libuq.sampling.PrecomputedCache`` and saved to ``./uq_cache``.
+   Test samples are sliced off and stored as ``X_test.npy`` /
+   ``Y_test.npy``.
 
-   param_space = InputParameterSpaceVecoli(
-       include_vio=True,
-       include_mecillinam=True,
-       vio_expression_bounds=(0.0, 5.0),
-       mecillinam_conc_bounds=(0.0, 10.0),
-   )
+Stage 2 — quantify
+^^^^^^^^^^^^^^^^^^
 
-Output Variables
-^^^^^^^^^^^^^^^^
+.. code-block:: bash
 
-Output variables are the simulation results being analyzed:
+   uv run uq quantify /path/to/simData.cPickle \
+       --cache-dir ./uq_cache \
+       --export-path ./uq_results \
+       --polynomial-order 3 \
+       --regression lsq
 
-* **Transcriptome**: mRNA counts per cistron
-* **Proteome**: Protein monomer counts
-* **Metabolic fluxes**: Reaction rates (especially exchange fluxes)
-* **Higher-order properties**: Mass, volume, growth rate
+What happens:
 
-.. code-block:: python
+1. The cache is loaded, parameter space is reconstructed, and germ
+   samples are read back from ``germ_train.npy``.
+2. ``run_uqpc`` fits a multi-output PCE per aggregation strategy using
+   PyTUQ's ``pcrv.evalBases``/``lsq.fita`` stack.
+3. Sobol main, total, and joint indices are computed analytically from
+   the PCE coefficients via ``PCRV.computeSens``/``computeTotSens``
+   (Sudret 2008).
+4. Relative training errors (and test errors if ``X_test``/``Y_test``
+   are in the cache) are computed per output and displayed in the Rich
+   report.
+5. A ``QuantifyResult`` is exported to ``./uq_results/`` as a dashboard
+   schema, per-strategy Sobol ``.npy`` files, and the two PCE surrogates
+   (population + growth-stratified).
 
-   from uq import OutputType
-
-   output_types = [
-       OutputType.TRANSCRIPTOME,
-       OutputType.EXCHANGE_FLUXES,
-       OutputType.HIGHER_ORDER_PROPERTIES,
-   ]
-
-Aggregation Strategies
-^^^^^^^^^^^^^^^^^^^^^^
-
-Four strategies for aggregating simulation data:
-
-1. **Uniform**: Average across all cells and times (baseline)
-2. **By Generation**: Stratify by cell generation
-3. **By Lineage Seed**: Stratify by stochastic seed
-4. **By Cell Cycle**: Stratify by cell cycle stage
-
-.. code-block:: python
-
-   from uq import AggregationStrategy
-
-   strategy = AggregationStrategy.BY_GENERATION
-
-Sensitivity Analysis
-^^^^^^^^^^^^^^^^^^^^
-
-PCE (Polynomial Chaos Expansion) surrogate method for computing Sobol indices:
-
-.. code-block:: python
-
-   from uq import SensitivityAnalyzer
-
-   analyzer = SensitivityAnalyzer(param_space, wrapper)
-   sobol, pce = analyzer.analyze_with_pce(polynomial_order=3)
-
-Morris Screening
-^^^^^^^^^^^^^^^^
-
-For high-dimensional parameter spaces, Morris screening provides an efficient pre-screening step:
-
-.. code-block:: python
-
-   from uq import SensitivityAnalyzer
-
-   morris = analyzer.analyze_with_morris(n_trajectories=20)
-   top_params = morris.get_screening_candidates(top_n=5)
-
-Your First Analysis
+Interactive clients
 -------------------
 
-Here's a complete example of running a sensitivity analysis:
-
-.. code-block:: python
-
-   from uq import (
-       InputParameterSpace,
-       WrapperConfig,
-       SimulationWrapper,
-       SensitivityAnalyzer,
-       AggregationStrategy,
-       OutputType,
-   )
-
-   # Step 1: Define parameter space
-   param_space = InputParameterSpace(
-       include_vio=True,
-       include_mecillinam=True,
-   )
-
-   # Step 2: Configure the wrapper
-   config = WrapperConfig(
-       sim_data_path="./sim_data.cPickle",
-       output_dir="./uq_analysis",
-       cache_dir="./uq_cache",
-       generations=8,
-       aggregation_strategy=AggregationStrategy.UNIFORM,
-       output_types=[
-           OutputType.EXCHANGE_FLUXES,
-           OutputType.HIGHER_ORDER_PROPERTIES,
-       ],
-       generation_lower_bound=2,  # Skip initial generations
-   )
-
-   # Step 3: Create wrapper and analyzer
-   wrapper = SimulationWrapper(config, param_space)
-   analyzer = SensitivityAnalyzer(param_space, wrapper)
-
-   # Step 4: Run sensitivity analysis
-   sobol_indices, pce_surrogate = analyzer.analyze_with_pce(
-       polynomial_order=3,
-       n_samples=100,
-   )
-
-   # Step 5: Interpret results
-   print("Parameter sensitivity ranking:")
-   for name, value in sobol_indices.get_most_influential(n=5):
-       print(f"  {name}: {value:.4f}")
-
-   print(f"\nFirst-order indices: {sobol_indices.first_order}")
-   print(f"Total-order indices: {sobol_indices.total_order}")
-
-Two-Stage Workflow
-------------------
-
-For large parameter spaces or HPC environments, split sample generation from analysis:
+All four clients wrap the same ``uq.workflow`` functions:
 
 .. code-block:: bash
 
-   # Stage 1: generate and cache (run once, can be batched on HPC)
-   uv run uq generate-samples exp1 exp2 /sims ./cache --n-samples 200
+   uv run uq tui         # Textual TUI
+   uv run uq gui         # marimo browser GUI
+   uv run uq dashboard   # tkinter DAW-style dashboard
 
-   # Stage 2: analyze from cache (fast, repeatable)
-   uv run uq demo --precomputed-path ./cache --export-path ./results
-
-Stage 1 generates LHS samples, evaluates the simulation function, and caches ``(X, Y)``
-plus per-sample timeseries to disk via ``PrecomputedCache``. Stage 2 loads the cache and
-fits PCE surrogates directly — no simulation calls needed.
-
-You can also use precomputed data programmatically:
-
-.. code-block:: python
-
-   from uq.pipe import pipeline
-
-   result = pipeline(
-       experiment_ids=["mecillinam"],
-       sim_base_path="/path/to/sims",
-       precomputed_path="./cache",
-       export_path="./results",
-   )
-
-Interactive Dashboard
---------------------
-
-After running the pipeline with ``--export-path``, explore results interactively:
-
-.. code-block:: bash
-
-   # Tkinter DAW (default) — draggable markers on response curves
-   uv run uq dashboard --results-path ./results/uq_results.json
-
-   # Marimo notebook — slider-reactive, with inline documentation
-   uv run uq dashboard --run-mode mo
-
-The dashboard loads the exported PCE surrogate coefficients and Sobol indices, then
-provides real-time parameter exploration: adjust parameter values and see response
-curves, per-stage observable waveforms, and sensitivity spectrograms update instantly.
-All computations use pipeline outputs only — no simulation re-evaluation.
-
-See ``app/README.md`` for panel descriptions and the modulation math.
-
-Next Steps
-----------
-
-* Learn about :doc:`aggregation_strategies` in detail
-* Explore :doc:`sensitivity_analysis` methods
-* Try the :doc:`tutorials/basic_sensitivity` tutorial
-* See the :doc:`api/inputs` API reference
-* See :doc:`../uq/PIPELINE` for the complete 7-step workflow
-* Run ``uv run python examples/uq_pipeline.py`` for the full RFC006 pipeline
-  (Phase 1 population GSA + Phase 2 cell-cycle-stratified GSA)
+See :doc:`cli_reference` for a per-flag breakdown of every command and
+:doc:`tutorial_workflow` for the underlying math.
