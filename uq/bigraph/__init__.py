@@ -22,6 +22,12 @@ Modules:
     composites  Pre-wired Composite builders for common workflows
 """
 
+from uq.bigraph.composites import (
+    build_explorer_composite,
+    build_full_composite,
+    build_quantify_composite,
+    get_core,
+)
 from uq.bigraph.processes import (
     CollectCache,
     Export,
@@ -30,12 +36,6 @@ from uq.bigraph.processes import (
     RunSimulations,
     SetupInputs,
     StrategyFit,
-)
-from uq.bigraph.composites import (
-    build_full_composite,
-    build_quantify_composite,
-    build_explorer_composite,
-    get_core,
 )
 
 __all__ = [

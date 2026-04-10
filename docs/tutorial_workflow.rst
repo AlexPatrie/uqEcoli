@@ -1,0 +1,280 @@
+Tutorial — the UQPC workflow, end to end
+========================================
+
+This tutorial walks through the full PyTUQ UQPC pipeline as it is
+implemented in ``uqEcoli``, explaining *why* each step is there and
+*what* it is computing.  It is intentionally long: read it once, then
+use the :doc:`cli_reference` to drive runs.
+
+The upstream reference is
+<https://sandialabs.github.io/pytuq/apps/uqpc.html>.  Every step below
+maps to exactly one block in ``uq/workflow.py``; function names are
+quoted in brackets.
+
+Notation
+--------
+
+* :math:`\mathbf{x}\in\mathbb{R}^d` — physical-space parameters.
+* :math:`\mathbf{\xi}\in[-1,1]^d` — **germ** variables (the input
+  PC variables; Legendre basis for uniform priors).
+* :math:`Y(\mathbf{x})\in\mathbb{R}^m` — time-averaged observables
+  returned by one vEcoli run.
+* :math:`\hat Y(\boldsymbol\xi) = \sum_{\alpha} c_\alpha\,\Phi_\alpha(\boldsymbol\xi)`
+  — the PCE surrogate.
+* :math:`\Phi_\alpha` — multivariate Legendre polynomial indexed by the
+  multi-index :math:`\alpha=(\alpha_1,\dots,\alpha_d)` with
+  :math:`|\alpha|\le p`.
+
+Step 1 — setup inputs  [``_setup_input_pc``]
+--------------------------------------------
+
+.. math::
+
+   \mathbf{x}(\boldsymbol\xi) = \underbrace{\frac{1}{2}(\mathbf{lb}+\mathbf{ub})}_{\text{midpoints}}
+                             + \underbrace{\tfrac{1}{2}(\mathbf{ub}-\mathbf{lb})}_{\text{half-ranges}}\,\boldsymbol\xi
+
+This is an affine map from the Legendre germ :math:`\boldsymbol\xi\in[-1,1]^d`
+to the physical parameter box :math:`[\mathbf{lb},\mathbf{ub}]`.  Encoded
+as a PCRV, the first row of the coefficient matrix holds the midpoints
+and the remaining rows form ``diag(half_ranges)``.  PyTUQ does the rest.
+
+Why Legendre?  Uniform priors on a bounded interval are exactly the
+orthogonality measure of the Legendre polynomials; we get Sobol indices
+in closed form from the PC coefficients (Sudret 2008).
+
+Step 2 — generate samples  [``_generate_training_samples``]
+-----------------------------------------------------------
+
+.. math::
+
+   \boldsymbol\xi^{(i)} \sim U\!\left([-1,1]^d\right),
+   \qquad i=1,\dots,N
+
+   \mathbf{x}^{(i)} = \mathbf{x}\!\left(\boldsymbol\xi^{(i)}\right)
+
+implemented as ``input_pc.sampleGerm(N)`` followed by
+``input_pc.evalPC``.
+
+When ``--n-test`` is nonzero, :math:`N_{\text{test}}` additional samples
+are drawn from the *same* measure and **appended** to the training
+batch before we run vEcoli — this is the PyTUQ UQPC ``--ntst`` mode.  The
+validation samples are split back off after collection, so there is one
+and only one vEcoli workflow invocation per ``uq sample`` call.
+
+.. note::
+
+   PyTUQ is the single source of truth for sampling.  There is no
+   hand-rolled LHS, Monte Carlo, or quadrature code inside ``uqEcoli``.
+
+Step 3 — evaluate vEcoli  [``uq/cli.py::sample`` + ``sim_data_setattr``]
+------------------------------------------------------------------------
+
+Each row of :math:`X` is translated into one *variant* using vEcoli's
+``sim_data_setattr`` variant function:
+
+.. code-block:: json
+
+   {
+     "variants": {
+       "sim_data_setattr": {
+         "mutations": {
+           "value": [
+             {"process.translation.basal_elongation_rate": 21.3},
+             {"process.translation.basal_elongation_rate": 19.8},
+             ...
+           ]
+         }
+       }
+     }
+   }
+
+The ``{"value": [...]}`` form is the canonical variant-expansion
+grammar documented at
+<https://covertlab.github.io/vEcoli/workflows.html#variants>
+and parsed by ``runscripts/create_variants.py::parse_variants``.  Each
+list entry becomes one pickled ``variant_sim_data_NNNN.cPickle`` that
+vEcoli then runs for the requested number of generations and lineage
+seeds.
+
+vEcoli emits hive-partitioned Parquet:
+
+.. code-block:: text
+
+   history/experiment_id=.../variant=.../lineage_seed=.../generation=.../agent_id=.../000.pq
+
+``uqEcoli`` reads this tree with
+``polars.read_parquet(..., hive_partitioning=True)`` and extracts four
+observables for each variant:
+
+* ``listeners__mass__dry_mass``
+* ``listeners__mass__cell_mass``
+* ``listeners__mass__volume``
+* ``listeners__mass__growth``
+
+The time-averaged observable vector becomes one row of :math:`Y`; the
+raw timeseries is kept under ``timeseries/`` for strategies 2-4.
+
+Step 4 — PCE surrogate fit  [``_fit_surrogate``]
+------------------------------------------------
+
+Given germ samples :math:`\Xi\in\mathbb{R}^{N\times d}` and outputs
+:math:`Y\in\mathbb{R}^{N\times m}`, we want
+
+.. math::
+
+   Y_j(\boldsymbol\xi) \;\approx\; \hat Y_j(\boldsymbol\xi)
+     \;=\; \sum_{|\alpha|\le p} c_{j,\alpha}\,\Phi_\alpha(\boldsymbol\xi)
+     \qquad j = 1,\dots,m
+
+The multi-index set comes from PyTUQ's ``get_mi(p, d)``; the design
+matrix :math:`A\in\mathbb{R}^{N\times|\alpha|}` comes from
+``pcrv.evalBases(Ξ, 0)``.  Coefficients are fit per output column using
+one of the PyTUQ regression backends:
+
+* **lsq** — ordinary least squares: :math:`c = (A^TA)^{-1}A^T y`.
+* **bcs** — Bayesian Compressed Sensing (sparse, regularized):
+  solves the :math:`\ell_1`-regularized problem with tolerance
+  ``--tol``.  Preferred when :math:`N < |\alpha|`.
+* **anl** — analytical Bayesian projection.
+
+The fitted coefficients are pushed back into the PCRV via
+``setMiCfs`` so that subsequent Sobol queries act on the surrogate.
+
+Step 5 — relative errors  [``_compute_relative_errors``]
+--------------------------------------------------------
+
+For each output column :math:`j`:
+
+.. math::
+
+   \varepsilon_j = \frac{\| Y_{:,j} - \hat Y_{:,j} \|_2}{\| Y_{:,j} \|_2}
+
+Reported on the training set (always) and the held-out test set (when
+``uq sample --n-test > 0``).  These are the numbers the ``uq quantify``
+Rich report prints under the **SURROGATE QUALITY** panel.
+
+A large training error means the PCE order is too low or the model has
+a discontinuity the smooth basis cannot capture; a large test error
+with small training error is the classic over-fit signature and is why
+``--n-test`` matters.
+
+Step 6 — Sobol decomposition  [``_compute_sobol``]
+---------------------------------------------------
+
+Because the PCE basis is orthogonal under the input measure, variance
+is a diagonal sum over coefficients:
+
+.. math::
+
+   \mathrm{Var}[\hat Y_j] = \sum_{|\alpha|\ge 1} c_{j,\alpha}^2\,\|\Phi_\alpha\|^2
+
+The first-order Sobol index for parameter :math:`i` uses only the
+multi-indices that touch dimension :math:`i` alone:
+
+.. math::
+
+   S_{i}^{(j)} = \frac{1}{\mathrm{Var}[\hat Y_j]}
+     \sum_{\alpha\in\mathcal{A}_i} c_{j,\alpha}^2\,\|\Phi_\alpha\|^2,
+     \qquad
+     \mathcal{A}_i = \{\alpha : \alpha_i>0,\ \alpha_{k\ne i}=0\}
+
+The total-order index sums over every multi-index that has a nonzero
+entry at position :math:`i`:
+
+.. math::
+
+   S_{T,i}^{(j)} = \frac{1}{\mathrm{Var}[\hat Y_j]}
+     \sum_{\alpha:\alpha_i>0} c_{j,\alpha}^2\,\|\Phi_\alpha\|^2
+
+PyTUQ implements the book-keeping in
+``PCRV.computeSens``/``computeTotSens``/``computeJointSens``.  For
+multi-output models we variance-weight across outputs:
+
+.. math::
+
+   S_i \;=\; \sum_{j=1}^{m} \frac{\mathrm{Var}[Y_{:,j}]}{\sum_k \mathrm{Var}[Y_{:,k}]}\,S_i^{(j)}
+
+so the final ``first_order`` / ``total_order`` vectors are single
+numbers per parameter that can be rendered as bar charts.
+
+Aggregation strategies (RFC006 §3)
+----------------------------------
+
+``quantify`` runs the whole steps-4-through-6 pipeline **four times**,
+on four different aggregations of the cached timeseries.  They share
+:math:`X` but differ in how :math:`Y` is computed.
+
+1. **Uniform / bulk** — :math:`Y_{i,k} = \overline{y}_{i,k}` (mean over
+   all timesteps of all cells).  Baseline global GSA.
+
+2. **By generation** — for each unique generation :math:`g` present in
+   *all* samples, :math:`Y^{(g)}_{i,k}` is the mean over only the rows
+   labelled ``generation == g``.  Tells you which parameters matter
+   *after* the population has converged to steady-state growth.
+
+3. **By lineage seed** — same idea with ``lineage_seed``.  Isolates
+   which parameters drive stochastic lineage-to-lineage variance.
+
+4. **Growth-stratified** — timesteps are binned into
+   :math:`n_{\text{bins}}` cell-cycle stages by the dimensionless
+   growth progress variable
+
+   .. math::
+
+      \theta(t) = \frac{\log m(t) - \log m_\text{birth}}{\log m_\text{div} - \log m_\text{birth}}
+
+   (monotonic in :math:`[0,1]` — no spectral decomposition required).
+   The per-stage mean observables are stacked into one big PCE output
+   and a Sobol index is extracted per stage.  This is the heatmap you
+   see in the dashboard's "Sensitivity Spectrogram" panel.
+
+Why the cache?
+--------------
+
+Steps 1-3 are expensive (one vEcoli simulation per variant).  Steps 4-6
+are essentially free (matrix math on a cached :math:`(X, Y)` pair).
+Splitting the workflow at the cache boundary means you can:
+
+* Re-fit with a higher ``--polynomial-order`` without re-simulating.
+* Swap between ``lsq``/``bcs``/``anl`` regression backends.
+* Change ``--n-bins`` for the growth-stratified strategy.
+* Rebuild the dashboard/TUI artifacts from the same cache.
+
+And you can ship the cache to another machine that does not have vEcoli
+installed — ``quantify`` only needs ``simData.cPickle`` to reconstruct
+the parameter space metadata.
+
+Reading the export directory
+----------------------------
+
+``QuantifyResult.export(path)`` writes:
+
+.. code-block:: text
+
+   uq_results/
+   ├── uq_results.json              # dashboard schema — all strategies
+   ├── population_sobol/            # strategy 1
+   │   ├── first_order.npy
+   │   └── total_order.npy
+   ├── population_surrogate/        # strategy 1 PCE coefficients
+   ├── generation_{g}_sobol/        # strategy 2 — one dir per generation
+   ├── seed_{s}_sobol/              # strategy 3 — one dir per lineage
+   ├── growth_stage_{i}_sobol/      # strategy 4 — one dir per bin
+   └── growth_stratified_surrogate/ # strategy 4 combined PCE
+
+Every ``.npy`` is a 1-D float array indexed by parameter name (which is
+also in ``uq_results.json``).  The two surrogate directories each
+contain ``coefficients.npy``, ``multi_indices.npy``, and the metadata
+needed to re-evaluate :math:`\hat Y(\boldsymbol\xi)` without ``pytuq``
+installed.
+
+Further reading
+---------------
+
+* :doc:`sensitivity_analysis` — deeper coverage of the PCE algebra.
+* :doc:`aggregation_strategies` — worked examples for strategies 2-4.
+* :doc:`cell_cycle` — background on the growth-progress variable
+  :math:`\theta(t)`.
+* :doc:`koopman` — an alternative cell-cycle decomposition that
+  ``quantify`` does **not** use in its default path (no spectral
+  decomposition, per RFC006 §3).

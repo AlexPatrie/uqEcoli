@@ -513,6 +513,8 @@ def run_uqpc(
     regression: str = "lsq",
     tolerance: float = 1e-3,
     n_test: int = 0,
+    X_test: np.ndarray | None = None,
+    Y_test: np.ndarray | None = None,
     seed: int | None = 42,
 ) -> UQPCResult:
     """Execute the full UQPC workflow for a single aggregation strategy.
@@ -538,10 +540,17 @@ def run_uqpc(
         regression: Fitting method — 'lsq', 'bcs', or 'anl'
             (uq_pc.py ``--method``).
         tolerance: BCS tolerance (uq_pc.py ``--tol``).
-        n_test: Number of test points for validation (uq_pc.py ``--ntst``).
-            Test points are sampled from the germ space; if the model is
-            not available (offline), test outputs cannot be computed and
-            test diagnostics will be skipped.
+        n_test: Number of fresh test points to sample from the germ
+            measure (uq_pc.py ``--ntst``).  If ``X_test``/``Y_test`` are
+            provided below, ``n_test`` is ignored.  Used only when the
+            model is evaluated on-line.
+        X_test: Optional pre-evaluated validation inputs (physical space),
+            shape (n_test, n_params).  When provided together with
+            ``Y_test``, the workflow will compute test predictions and
+            relative errors — the offline counterpart of UQPC's
+            ``--ntst`` flag.
+        Y_test: Optional pre-evaluated validation outputs, shape
+            (n_test, n_outputs).
         seed: Random seed (uq_pc.py ``--seed``).
 
     Returns:
@@ -578,13 +587,19 @@ def run_uqpc(
             seed=seed,
         )
 
-    # ── Step 2b: Generate test samples (if requested) ──
-    germ_test, X_test = None, None
-    if n_test > 0:
+    # ── Step 2b: Generate / ingest test samples (if requested) ──
+    germ_test: np.ndarray | None = None
+    if X_test is not None and Y_test is not None:
+        # Offline validation: caller already evaluated the model at X_test
+        if Y_test.ndim == 1:
+            Y_test = Y_test.reshape(-1, 1)
+        germ_test = _physical_to_germ(X_test, bounds)
+    elif n_test > 0:
+        # Fresh germ draws (requires online model) — no Y_test in offline mode
         germ_test, X_test = _generate_test_samples(pc, n_test, seed=seed)
 
     # ── Step 3: Outputs already provided (offline) ──
-    #   (Y_train is passed in; Y_test requires model evaluation)
+    #   (Y_train is passed in; Y_test is either passed in or stays None)
 
     # ── Step 4: Construct PC surrogate ──
     output_pcrv, linregs = _fit_surrogate(
@@ -603,8 +618,9 @@ def run_uqpc(
         n_outputs,
     )
 
-    # Predict at test points (if available — model eval not done here)
-    Y_test_pc, Y_test_pc_std, Y_test = None, None, None
+    # Predict at test points (if available)
+    Y_test_pc: np.ndarray | None = None
+    Y_test_pc_std: np.ndarray | None = None
     if germ_test is not None:
         Y_test_pc, Y_test_pc_std = _predict_and_variance(
             output_pcrv,
@@ -617,9 +633,10 @@ def run_uqpc(
     relerr_train = _compute_relative_errors(Y_train, Y_train_pc)
     logger.info("Training relative errors: %s", relerr_train)
 
-    relerr_test = None
-    # Note: test errors can only be computed if Y_test is available
-    # (requires model evaluation at test points, not done in offline mode)
+    relerr_test: np.ndarray | None = None
+    if Y_test is not None and Y_test_pc is not None:
+        relerr_test = _compute_relative_errors(Y_test, Y_test_pc)
+        logger.info("Test relative errors: %s", relerr_test)
 
     # ── Step 6: Sobol indices ──
     sobol = _compute_sobol(output_pcrv, parameter_names, Y_train)
@@ -826,6 +843,8 @@ def run_strategy1_uniform(
     polynomial_order: int = 3,
     regression: str = "lsq",
     tolerance: float = 1e-3,
+    X_test: np.ndarray | None = None,
+    Y_test: np.ndarray | None = None,
     seed: int | None = 42,
 ) -> UQPCResult:
     """Strategy 1: UQPC on uniformly aggregated (bulk) outputs.
@@ -855,6 +874,8 @@ def run_strategy1_uniform(
         polynomial_order=polynomial_order,
         regression=regression,
         tolerance=tolerance,
+        X_test=X_test,
+        Y_test=Y_test,
         seed=seed,
     )
 
@@ -1501,13 +1522,15 @@ def quantify(
             for i, name in enumerate(cache.parameter_names):
                 if name in all_defaults:
                     p = all_defaults[name]
-                    parameters.append(SimDataParameter(
-                        name=p.name,
-                        attr_path=p.attr_path,
-                        bounds=tuple(cached_bounds[i]),
-                        index=p.index,
-                        description=p.description,
-                    ))
+                    parameters.append(
+                        SimDataParameter(
+                            name=p.name,
+                            attr_path=p.attr_path,
+                            bounds=tuple(cached_bounds[i]),
+                            index=p.index,
+                            description=p.description,
+                        )
+                    )
                 else:
                     logger.warning(
                         "Cache parameter %r not found in defaults, using cache bounds",
@@ -1553,8 +1576,16 @@ def quantify(
         polynomial_order=polynomial_order,
         regression=regression,
         tolerance=tolerance,
+        X_test=cache.X_test,
+        Y_test=cache.Y_test,
         seed=seed,
     )
+    if cache.X_test is not None:
+        logger.info(
+            "Strategy 1 validated on %d held-out samples (test relerr=%s)",
+            cache.X_test.shape[0],
+            s1.relerr_test.tolist() if s1.relerr_test is not None else None,
+        )
 
     # Strategy 2: by generation
     s2: dict[int, UQPCResult] = {}

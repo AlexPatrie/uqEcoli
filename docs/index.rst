@@ -1,95 +1,68 @@
-.. vEcoli UQ Framework documentation master file
+uqEcoli — UQ for the vEcoli whole-cell model
+============================================
 
-vEcoli Uncertainty Quantification Framework
-===========================================
+``uqEcoli`` is a thin glue layer between **vEcoli**
+(<https://covertlab.github.io/vEcoli/>) and **PyTUQ's UQPC workflow**
+(<https://sandialabs.github.io/pytuq/apps/uqpc.html>).  It turns the
+six-step UQPC pipeline (setup → sample → evaluate → surrogate → error →
+Sobol) into a two-command CLI backed by vEcoli's Nextflow-driven
+simulations.
 
-A comprehensive framework for tracking prediction confidence in vEcoli whole-cell
-simulations, implementing **RFC006** requirements for **Milestone 08.4.2** (extensibility)
-and laying groundwork for **Milestone 10.2.3** (population-level perturbation analysis).
+.. important::
 
-.. note::
-   This package implements the UQ framework specified in **RFC006** (``uq/RFC006.md``).
-   See ``uq/RFC006_VERIFICATION.md`` for the compliance analysis and implementation status.
+   Every numerically-meaningful step lives in PyTUQ or vEcoli.  This
+   repository only adapts their I/O formats and adds end-user entry
+   points (CLI, TUI, GUI, marimo dashboard).  See ``SAMPLING.md`` at the
+   repo root for a full accounting of *what lives where*.
 
-Overview
---------
-
-The UQ framework addresses the need to:
-
-* **Track prediction confidence** in whole-cell model outputs
-* **Deconvolve uncertainty types**: by cell, by lineage, by generation, and across the cell cycle
-* **Map single-cell to bulk** simulations for comparison with experimental measurements
-* **Enable population-level analysis** for CD2 evaluation requirements
-
-Key Features
-------------
-
-**Input Parameters** (:doc:`api/inputs`)
-   Define scientifically relevant inputs: violacein pathway, mecillinam conditions,
-   and gene knockouts.
-
-**Output Extraction** (:doc:`api/outputs`)
-   Extract transcriptome, proteome, metabolic fluxes, and higher-order properties
-   from simulation data.
-
-**Aggregation Strategies** (:doc:`api/aggregation`)
-   Four strategies: uniform, by generation, by lineage seed, and by cell cycle stage.
-
-**Sensitivity Analysis** (:doc:`api/sensitivity`)
-   PCE surrogate method with Sobol indices using UQPy or PyTUQ libraries.
-
-**Koopman Spectral Analysis** (:doc:`api/koopman`)
-   Dynamic Mode Decomposition for extracting dynamical modes and cell cycle harmonics.
-
-Quick Start
------------
-
-.. code-block:: python
-
-   from uq import (
-       InputParameterSpace,
-       WrapperConfig,
-       SimulationWrapper,
-       SensitivityAnalyzer,
-       AggregationStrategy,
-   )
-
-   # Define parameter space
-   param_space = InputParameterSpace(
-       include_vio=True,
-       include_mecillinam=True,
-   )
-
-   # Configure wrapper
-   config = WrapperConfig(
-       sim_data_path="/path/to/sim_data.cPickle",
-       output_dir="./uq_outputs",
-       aggregation_strategy=AggregationStrategy.UNIFORM,
-   )
-
-   # Run sensitivity analysis
-   wrapper = SimulationWrapper(config, param_space)
-   analyzer = SensitivityAnalyzer(param_space, wrapper)
-   sobol_indices, pce_surrogate = analyzer.analyze_with_pce(polynomial_order=3)
-
-   # Get most influential parameters
-   for name, value in sobol_indices.get_most_influential(n=5):
-       print(f"{name}: {value:.4f}")
-
-Installation
-------------
-
-The UQ framework is included with vEcoli. For sensitivity analysis features,
-install the optional UQ dependencies:
+Two-stage workflow
+------------------
 
 .. code-block:: bash
 
-   pip install -e ".[uq]"
+   # Stage 1 — UQPC steps 1-3: germ sampling + vEcoli evaluation
+   uv run uq sample /path/to/simData.cPickle \
+       --cache-dir ./uq_cache \
+       --n-samples 200 \
+       --n-test 40 \
+       --generations 2
 
-This installs `UQPy <https://uqpyproject.readthedocs.io/>`_, the primary library
-used for PCE surrogate construction and Sobol sensitivity analysis.
+   # Stage 2 — UQPC steps 4-5: PCE surrogate fit + Sobol decomposition
+   uv run uq quantify /path/to/simData.cPickle \
+       --cache-dir ./uq_cache \
+       --export-path ./uq_results \
+       --polynomial-order 3 \
+       --regression lsq
 
-Documentation Contents
+See :doc:`cli_reference` for every flag, and :doc:`tutorial_workflow` for
+the full mathematical walkthrough.
+
+Why two stages?
+---------------
+
+The expensive operation is step 3 (running vEcoli).  Caching its output
+means you can iterate freely on PCE order, regression backend, or
+aggregation strategy without re-simulating.  The cache directory
+contains ``X.npy``, ``Y.npy``, ``germ_train.npy``, optional
+``X_test.npy``/``Y_test.npy`` (UQPC ``--ntst``), and per-sample Parquet
+timeseries — everything ``quantify`` needs.
+
+User-facing entry points
+------------------------
+
+All four clients expose the same functionality as different shells over
+the workflow in ``uq.workflow``:
+
+============  =====================================  =========================================
+Client        Command                                Best for
+============  =====================================  =========================================
+CLI (Rich)    ``uv run uq sample`` / ``quantify``    Headless runs, scripts, CI
+TUI           ``uv run uq tui``                      Terminal dashboards with live progress
+GUI (marimo)  ``uv run uq gui``                      Reactive browser notebook
+Dashboard     ``uv run uq dashboard``                Draggable DAW-style result exploration
+============  =====================================  =========================================
+
+Documentation contents
 ----------------------
 
 .. toctree::
@@ -97,32 +70,17 @@ Documentation Contents
    :caption: User Guide
 
    getting_started
+   cli_reference
+   tutorial_workflow
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Topics
+
    aggregation_strategies
    sensitivity_analysis
    cell_cycle
    koopman
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
-
-   tutorials/basic_sensitivity
-   tutorials/variance_decomposition
-   tutorials/cell_cycle_analysis
-   tutorials/koopman_analysis
-   tutorials/full_pipeline
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
-
-   api/inputs
-   api/outputs
-   api/aggregation
-   api/wrappers
-   api/sensitivity
-   api/cell_cycle
-   api/koopman
 
 .. toctree::
    :maxdepth: 1
@@ -141,7 +99,14 @@ Indices and tables
 References
 ----------
 
-* `UQPy Documentation <https://uqpyproject.readthedocs.io/>`_
-* `PyTUQ Documentation <https://sandialabs.github.io/pytuq/>`_
-* Sobol, I.M. (2001). "Global sensitivity indices for nonlinear mathematical models"
-* Xiu, D. & Karniadakis, G.E. (2002). "The Wiener-Askey polynomial chaos for stochastic differential equations"
+* PyTUQ UQPC workflow: https://sandialabs.github.io/pytuq/apps/uqpc.html
+* vEcoli workflows + variants: https://covertlab.github.io/vEcoli/workflows.html
+* Sudret, B. (2008). *Global sensitivity analysis using polynomial chaos expansions*.
+  Reliability Engineering & System Safety 93(7), 964-979.
+* Xiu, D. & Karniadakis, G.E. (2002). *The Wiener–Askey polynomial chaos for
+  stochastic differential equations*. SIAM J. Sci. Comput. 24(2), 619-644.
+* Macklin, D. N. *et al.* (2020). *Simultaneous cross-evaluation of heterogeneous
+  E. coli datasets via mechanistic simulation*. Science 369(6502).
+* Ahn-Horst, T. A. *et al.* (2022). *An expanded whole-cell model of E. coli
+  links cellular physiology with mechanisms of growth rate control*. npj
+  Systems Biology and Applications 8:30.

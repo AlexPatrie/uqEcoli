@@ -76,10 +76,10 @@ class SetupInputs(Step):
 
     def outputs(self):
         return {
-            "X_train": "string",          # JSON-serialized ndarray
-            "germ_train": "string",        # JSON-serialized ndarray
-            "parameter_names": "string",   # JSON list
-            "bounds": "string",            # JSON-serialized ndarray
+            "X_train": "string",  # JSON-serialized ndarray
+            "germ_train": "string",  # JSON-serialized ndarray
+            "parameter_names": "string",  # JSON list
+            "bounds": "string",  # JSON-serialized ndarray
             "n_parameters": "integer",
         }
 
@@ -148,9 +148,9 @@ class RunSimulations(Step):
         return {
             "sim_data_path": "string",
             "cache_dir": "string",
-            "X_train": "string",           # JSON ndarray from SetupInputs
-            "parameter_names": "string",    # JSON list from SetupInputs
-            "bounds": "string",             # JSON ndarray from SetupInputs
+            "X_train": "string",  # JSON ndarray from SetupInputs
+            "parameter_names": "string",  # JSON list from SetupInputs
+            "bounds": "string",  # JSON ndarray from SetupInputs
             "n_samples": "integer",
             "generations": "integer",
             "n_init_sims": "integer",
@@ -350,7 +350,7 @@ class Quantify(Step):
     def outputs(self):
         return {
             "quantify_complete": "boolean",
-            "results_json": "string",       # JSON-serialized summary
+            "results_json": "string",  # JSON-serialized summary
         }
 
     def update(self, state: dict) -> dict:
@@ -420,7 +420,7 @@ class Export(Step):
     def outputs(self):
         return {
             "pipeline_complete": "boolean",
-            "summary": "string",   # JSON summary
+            "summary": "string",  # JSON summary
         }
 
     def update(self, state: dict) -> dict:
@@ -536,7 +536,6 @@ def build_state(
         "polynomial_order": polynomial_order,
         "n_bins": n_bins,
         "regression": regression,
-
         # ── Intermediate stores (written by Steps) ──
         "X_train": "",
         "germ_train": "",
@@ -551,7 +550,6 @@ def build_state(
         "results_json": "",
         "pipeline_complete": False,
         "summary": "",
-
         # ── Step 1: SetupInputs ──
         "setup_inputs": {
             "_type": "step",
@@ -570,7 +568,6 @@ def build_state(
                 "n_parameters": ["n_parameters"],
             },
         },
-
         # ── Step 2: RunSimulations ──
         "run_simulations": {
             "_type": "step",
@@ -591,7 +588,6 @@ def build_state(
                 "return_code": ["return_code"],
             },
         },
-
         # ── Step 3: CollectCache ──
         "collect_cache": {
             "_type": "step",
@@ -612,7 +608,6 @@ def build_state(
                 "n_cached_samples": ["n_cached_samples"],
             },
         },
-
         # ── Step 4: Quantify ──
         "quantify": {
             "_type": "step",
@@ -632,7 +627,6 @@ def build_state(
                 "results_json": ["results_json"],
             },
         },
-
         # ── Step 5: Export ──
         "export": {
             "_type": "step",
