@@ -1,356 +1,571 @@
-# UQ Framework Tutorial
+# Tutorial: the `uq sample → uq quantify` pipeline
 
-Two-stage workflow for global sensitivity analysis of the vEcoli whole-cell
-model, following [RFC006](readmes/start/tools/RFC006.md) and the
-[PyTUQ UQPC workflow](https://sandialabs.github.io/pytuq/apps/uqpc.html).
+A fine-grained walkthrough of every step in the two-stage CLI pipeline,
+cross-referenced to **RFC006** ([`readmes/start/tools/RFC006.md`](readmes/start/tools/RFC006.md))
+and the **PyTUQ UQPC workflow** ([sandialabs.github.io/pytuq/apps/uqpc.html](https://sandialabs.github.io/pytuq/apps/uqpc.html)).
 
 ```
-  Stage 1: sample                      Stage 2: quantify
-  ┌────────────────────────────────┐   ┌─────────────────────────────────┐
-  │ UQPC Step 1: bounds → PCRV    │   │ UQPC Step 4: pc_fit (lsq/bcs/  │
-  │ UQPC Step 2: PCRV.sampleGerm  │──▶│   anl) → PCRV + Sobol          │
-  │ UQPC Step 3: vEcoli workflow.py│   │ UQPC Step 5: post-process      │
-  └────────────────────────────────┘   │   (all 4 RFC006 strategies)    │
-                                       └─────────────────────────────────┘
+  uq sample                              uq quantify
+  ┌──────────────────────────────────┐   ┌───────────────────────────────────┐
+  │ UQPC 1: bounds → Legendre PCRV  │   │ UQPC 4: pc_fit (lsq/bcs/anl)    │
+  │ UQPC 2: PCRV.sampleGerm()       │──▶│         → PCRV + Sobol            │
+  │ UQPC 3: vEcoli workflow.py      │   │ UQPC 5: relative errors, export  │
+  │         (sim_data_setattr)       │   │         (all 4 RFC006 strategies) │
+  └──────────────────────────────────┘   └───────────────────────────────────┘
 ```
-
-Three clients expose the same workflow in different formats:
-
-| Client | Launch | Format |
-|--------|--------|--------|
-| **CLI** | `uv run uq sample / quantify` | Terminal with Rich progress bar |
-| **TUI** | `uv run uq tui` | Textual interactive app |
-| **Dashboard** | `uv run marimo run app/dashboard_simple.py` | Marimo notebook |
 
 ---
 
-## Prerequisites
+## Quick reference
 
 ```bash
-uv sync
-```
-
-You need:
-- A `simData.cPickle` file (from vEcoli's parca step)
-- vEcoli installed as an editable dependency (for `runscripts/workflow.py`)
-- `ecoli/variants/sim_data_setattr.py` in the vEcoli repo
-
----
-
-## Stage 1: Sampling (UQPC Steps 1-3)
-
-Sampling follows the PyTUQ UQPC workflow:
-- **Step 1:** Load `simData.cPickle`, build parameter space, construct
-  input PCRV (Legendre basis, order 1) from bounds.
-- **Step 2:** Draw samples via `PCRV.sampleGerm()` → `PCRV.evalPC()`
-  (PyTUQ-native random sampling, not scipy LHS).
-- **Step 3:** Build a single vEcoli config JSON with `sim_data_setattr`
-  variants, launch `workflow.py` as a subprocess. Live progress shown
-  via stdout streaming + variant polling.
-
-### CLI
-
-```bash
+# Stage 1 — run vEcoli simulations + cache
 uv run uq sample /path/to/simData.cPickle \
     --cache-dir ./uq_cache \
-    --n-samples 20 \
-    --generations 2 \
-    --n-init-sims 1 \
-    --max-duration 10800
-```
+    --n-samples 50 --n-test 10 \
+    --generations 2 --n-init-sims 2
 
-The CLI shows:
-- Live Nextflow stdout (ANSI-stripped, color-coded)
-- Rich progress bar: `Simulating  5/21  [45s]  ━━━━━━━━━━━━━━── 23.8%`
-- Final summary: `Cached 20 samples (6 params, 4 outputs)`
-
-Options:
-```
---n-samples      Number of PCRV samples (= number of variants)
---generations    Generations per sim (>= 2 enables Strategy 2)
---n-init-sims    Seeds per variant (> 1 enables Strategy 3)
---max-duration   Wall-clock limit per sim in seconds
---params-file    JSON file with custom SimDataParameter specs
---cache-dir      Where to write the cache (default: ./uq_cache)
-```
-
-### TUI
-
-```bash
-uv run uq tui
-```
-
-The sidebar has a **CONFIG** section with all parameters editable:
-- `simData` path, cache dir, samples, generations, seeds
-- **VARIANT PARAMETERS** — checkboxes to toggle each of the 6 default
-  parameters on/off, with editable lo/hi bounds
-
-Click **Run Sampling** — live Nextflow output streams in the log panel
-with a progress bar showing `Launching → Variants → Simulating` phases.
-
-### Python API
-
-```python
-from uq.workflow import sample
-
-cache = sample(
-    sim_data_path="/path/to/simData.cPickle",
-    cache_dir="./uq_cache",
-    n_samples=50,
-    generations=2,
-)
-```
-
-### What gets cached
-
-```
-uq_cache/
-├── X.npy                        # (n_samples, n_params) — physical space
-├── Y.npy                        # (n_samples, n_outputs) — time-averaged
-├── germ_train.npy               # (n_samples, n_params) — germ space [-1,1]
-├── metadata.json                # parameter names, bounds, observable columns
-└── timeseries/
-    ├── sample_0000.npy          # (n_timesteps, n_obs) — raw timeseries
-    ├── sample_0000_meta.npz     # generation + lineage_seed labels per row
-    └── ...
-```
-
-### Custom parameters
-
-By default, 6 physiologically relevant parameters are varied
-(`DEFAULT_SIM_DATA_PARAMETERS`). To use custom parameters:
-
-```bash
-# CLI: pass a JSON file
-uv run uq sample /path/to/simData.cPickle --params-file params.json
-```
-
-```python
-# Python API: pass SimDataParameter objects directly
-from libuq.pipeline.models import SimDataParameter
-
-cache = sample(
-    sim_data_path="/path/to/simData.cPickle",
-    cache_dir="./uq_cache",
-    n_samples=100,
-    parameters=[
-        SimDataParameter(
-            name="kinetic_objective_weight",
-            attr_path="process.metabolism.kinetic_objective_weight",
-            bounds=(5e-8, 5e-7),
-        ),
-    ],
-)
-```
-
-In the TUI, uncheck parameters in the **VARIANT PARAMETERS** section
-and edit bounds directly in the sidebar.
-
----
-
-## Stage 2: Quantification (UQPC Steps 4-5)
-
-Load the cache from Stage 1 and run all four RFC006 strategies.
-
-### CLI
-
-```bash
+# Stage 2 — PCE fit + Sobol decomposition (no vEcoli calls)
 uv run uq quantify /path/to/simData.cPickle \
     --cache-dir ./uq_cache \
     --export-path ./uq_results \
-    --polynomial-order 2 \
-    --n-bins 10 \
-    --regression lsq
-```
-
-Prints a Rich report with Sobol tables for all 4 strategies.
-
-### TUI
-
-Click **Run Quantify** in the sidebar. Results populate the log panel
-inline, then click **S1 Population** / **S2 By Generation** / etc. to
-view detailed DataTables.
-
-### Python API
-
-```python
-from uq.workflow import quantify
-
-result = quantify(
-    cache_dir="./uq_cache",
-    sim_data_path="/path/to/simData.cPickle",
-    polynomial_order=2,
-    n_bins=10,
-    regression="lsq",
-    export_path="./uq_results",
-)
-```
-
-### Inspecting results
-
-```python
-# Strategy 1: bulk sensitivity
-for name, st in zip(result.parameter_names, result.strategy1.sobol.total_order):
-    print(f"  {name}: S_T = {st:.4f}")
-
-# Strategy 2: per-generation
-for gen, r in sorted(result.strategy2.items()):
-    print(f"\n  Generation {gen}:")
-    for name, st in zip(result.parameter_names, r.sobol.total_order):
-        print(f"    {name}: S_T = {st:.4f}")
-
-# Strategy 4: per-growth-stage
-for i, r in enumerate(result.strategy4_per_stage):
-    print(f"\n  Growth stage {i}:")
-    for name, st in zip(result.parameter_names, r.sobol.total_order):
-        print(f"    {name}: S_T = {st:.4f}")
-```
-
-### Surrogate quality
-
-```python
-s1 = result.strategy1
-print(f"Training relative error: {s1.relerr_train}")
-print(f"Mean prediction std: {s1.Y_train_pc_std.mean():.6f}")
-
-# Raw PyTUQ objects
-pcrv = s1.pcrv          # PCRV — evaluate, sample, compute moments
-linregs = s1.linregs    # per-output regression objects
-```
-
-### Export structure
-
-```
-uq_results/
-├── uq_results.json              # dashboard-compatible summary
-├── population_surrogate/        # PCE coefficients + multi-indices
-├── population_sobol/            # first_order.npy, total_order.npy
-├── generation_0_sobol/
-├── generation_1_sobol/
-├── seed_0_sobol/
-├── growth_stage_0_sobol/
-├── growth_stage_1_sobol/
-├── ...
-└── growth_stratified_surrogate/
+    --polynomial-order 2 --regression lsq
 ```
 
 ---
 
-## Full end-to-end (CLI)
+## Stage 1: `uq sample`  (UQPC steps 1-3)
+
+### Step 1 — setup inputs
+
+| What happens | Code | RFC / UQPC reference |
+|---|---|---|
+| Load `simData.cPickle` via `ParameterDataset` | `uq/cli.py:114` | RFC006 §4, activity 1: "Identify the scientifically most relevant input and output variables" |
+| Build `XSpaceVecoli` from `SimDataParameter` specs | `libuq/pipeline/param_loader.py` | RFC006 §4, activity 1: inputs include "vio pathway presence, mecillinam condition, gene knockouts" (generalised to any scalar sim_data attribute) |
+| Construct input `PCRV` (Legendre basis, order 1) | `uq/workflow.py::_setup_input_pc` | UQPC step 1 (`--pdom`): "Setup Inputs — define uncertain input parameters through marginal distributions" |
+
+<details>
+<summary><b>UQPC reference → our code (step 1)</b></summary>
+
+**What `uq_pc.py` does** (equivalent to `python uq_pc.py --pdom bounds.txt --pctype LU --pcord 1`):
+
+1. Reads a two-column parameter domain file (`--pdom`) with `[lb, ub]` per parameter.
+2. Computes midpoints and half-ranges, builds the PC coefficient matrix
+   `pcf_all` (row 0 = midpoints, rows 1..d = diag(half_ranges)).
+3. Constructs a `PCRV(ndim, npc, "LU", mi=mi, cfs=pcf_all.T)`.
+
+**Our code** (`uq/workflow.py:110-145`, function `_setup_input_pc`):
+
+```python
+# Exactly the same construction — bounds → midpoints + half_ranges → PCRV
+midpoints   = 0.5 * (bounds[:, 1] + bounds[:, 0])
+half_ranges = 0.5 * (bounds[:, 1] - bounds[:, 0])
+pcf_all     = np.vstack((midpoints, np.diag(half_ranges)))
+
+mi = get_mi(in_pcord, in_pcdim)                          # pytuq.utils.mindex.get_mi
+pc = PCRV(in_pcdim, n_params, "LU", mi=mi, cfs=pcf_all.T)  # pytuq.rv.pcrv.PCRV
+```
+
+The flag mapping is:
+
+| `uq_pc.py` flag | Our equivalent | Value |
+|---|---|---|
+| `--pdom bounds.txt` | `bounds = np.array(param_space.parameter_bounds)` | `(n_params, 2)` array |
+| `--pctype LU` | hard-coded `"LU"` in `_setup_input_pc` | Legendre — correct for uniform priors |
+| `--pcord 1` | hard-coded `in_pcord = 1` | order 1 = affine map from germ → physical |
+| `--pcdim` | `n_params = bounds.shape[0]` | auto-detected from bounds |
+
+</details>
+
+**Default parameters** (6; `DEFAULT_SIM_DATA_PARAMETERS`):
+
+| sim_data dot-path | Physical meaning |
+|---|---|
+| `process.transcription.fraction_active_rnap_free` | ppGpp-free RNAP fraction |
+| `process.transcription.fraction_active_rnap_bound` | ppGpp-bound RNAP fraction |
+| `process.translation.basal_elongation_rate` | Ribosome speed (aa/s) |
+| `process.metabolism.kinetic_objective_weight` | FBA kinetic vs homeostatic objective |
+| `process.metabolism.secretion_penalty_coeff` | Penalty on overflow secretion |
+| `mass.cell_dry_mass_fraction` | Dry mass fraction |
+
+Custom parameters: pass `--params-file params.json` (see `examples/uq_artifacts/params/params_demo.json`).
+
+**Observable presets** (`--observables`, composable):
+
+The `sample` command extracts outputs using presets that mirror the
+**cd1 analysis modules** (Vegas/Bermuda CD1 deliverables). Verified on
+real vEcoli Parquet data:
+
+| Preset | cd1 module | Features | Description |
+|---|---|---|---|
+| `mass` | cd1_higher_order_properties (raw) | 5 | dry_mass, cell_mass, volume, growth, instantaneous_growth_rate |
+| `higher_order` | cd1_higher_order_properties (derived) | 6 | doubling time (hours), growth rate (1/h), DNA/RNA/dry mass fractions, cell volume |
+| `exchange_fluxes` | cd1_exchange_fluxes | 87 | external metabolite fluxes (glucose uptake, acetate secretion, etc.) |
+| `transcriptome` | cd1_transcriptomics | 4,345 | mRNA cistron counts per gene |
+| `proteome` | cd1_proteomics | 4,309 | monomer counts per protein |
+| `fluxome` | cd1_fluxomics | 2,797 | base reaction fluxes (normalized by dry mass) |
+
+Example — run the same outputs the CD1 reports used:
 
 ```bash
-# Stage 1: sample
-uv run uq sample ./sim_data/baseline/kb/simData.cPickle \
-    --n-samples 20 --generations 1
+uv run uq sample /path/to/simData.cPickle \
+    --observables higher_order \
+    --observables exchange_fluxes \
+    --observables transcriptome \
+    --observables proteome \
+    --generation-lower-bound 2
+```
 
-# Stage 2: quantify
-uv run uq quantify ./sim_data/baseline/kb/simData.cPickle \
-    --polynomial-order 2 --regression lsq --export-path ./uq_results
+**Generation filtering** (`--generation-lower-bound N`):
 
-# View dashboard
-uv run marimo run app/dashboard_simple.py
+Skips the first N generations before aggregating Y, matching the cd1
+`generation_lower_bound` parameter.  This focuses the sensitivity
+analysis on steady-state growth, excluding transient initialization
+dynamics.
+
+---
+
+### Step 2 — generate samples
+
+| What happens | Code | RFC / UQPC reference |
+|---|---|---|
+| Draw `n_samples` germ-space realizations via `PCRV.sampleGerm()` | `uq/cli.py:128-131` | UQPC step 2 (`--sampl rand`): "Draw training realizations from the input PC" |
+| Map to physical space via `PCRV.evalPC()` | `uq/cli.py:131` | UQPC step 2: writes `ptrain.txt` / `qtrain.txt` |
+| Optionally draw `n_test` held-out validation samples | `uq/cli.py:134-138` | UQPC `--ntst`: "Testing realizations (optional)" |
+
+<details>
+<summary><b>UQPC reference → our code (step 2)</b></summary>
+
+**What `uq_pc.py` does** (equivalent to `python uq_pc.py --sampl rand --nqd 50 --ntst 10 --seed 42`):
+
+1. `germ_train = pc.sampleGerm(nqd)` — draw training germs from U(−1, 1)^d.
+2. `X_train = pc.evalPC(germ_train)` — map germ → physical.
+3. Saves `qtrain.txt` (germ) and `ptrain.txt` (physical).
+4. If `ntst > 0`: same for `germ_test`, saves `qtest.txt`, `ptest.txt`.
+
+**Our code** (`uq/cli.py:128-138`):
+
+```python
+input_pc, _, _ = _setup_input_pc(bounds)
+
+np.random.seed(seed)
+germ_train = input_pc.sampleGerm(n_samples)   # ← pc.sampleGerm(nqd)
+X_train    = input_pc.evalPC(germ_train)       # ← pc.evalPC(germ_train)
+
+if n_test > 0:
+    np.random.seed(seed + 1)
+    germ_test = input_pc.sampleGerm(n_test)    # ← UQPC --ntst
+    X_test    = input_pc.evalPC(germ_test)
+```
+
+The flag mapping:
+
+| `uq_pc.py` flag | Our equivalent | Value |
+|---|---|---|
+| `--sampl rand` | always random (no quadrature path) | `PCRV.sampleGerm` |
+| `--nqd 50` | `--n-samples 50` | number of training draws |
+| `--ntst 10` | `--n-test 10` | number of held-out validation draws |
+| `--seed 42` | `--seed 42` | RNG seed for `sampleGerm` |
+| `ptrain.txt` | `X.npy` in cache | physical-space training samples |
+| `qtrain.txt` | `germ_train.npy` in cache | germ-space training samples |
+| `ptest.txt` | `X_test.npy` in cache | held-out physical samples |
+
+</details>
+
+---
+
+### Step 3 — evaluate the model (vEcoli)
+
+| What happens | Code | RFC / UQPC reference |
+|---|---|---|
+| Encode each sample row as a `sim_data_setattr` variant | `uq/tui.py::_build_variants_from_samples` | RFC006 §4, activity 3: "Implement input→output wrapper functions that can be called from numerical libraries" |
+| Build a vEcoli workflow config JSON | `uq/tui.py::_build_config` | vEcoli variants API ([covertlab.github.io/vEcoli/workflows.html#variants](https://covertlab.github.io/vEcoli/workflows.html#variants)) |
+| Spawn `runscripts/workflow.py --config ...` as a subprocess | `uq/cli.py:175-182` | UQPC step 3 (`--regime online_bb`): "Evaluate the model" |
+| Collect hive-partitioned Parquet via Polars | `uq/tui.py::_collect_variant_timeseries` | RFC006 §4, activity 2: "Enable output of relevant variables" |
+
+<details>
+<summary><b>UQPC reference → our code (step 3)</b></summary>
+
+**What `uq_pc.py` does** (equivalent to `python uq_pc.py --regime online_bb`):
+
+1. Reads training samples from `ptrain.txt`.
+2. For each sample, calls external executable `model.x` and captures stdout → `ytrain.txt`.
+3. If test samples exist, evaluates them too → `ytest.txt`.
+
+**Our code** — vEcoli replaces `model.x`:
+
+```python
+# Build the N-variant config using vEcoli's sim_data_setattr grammar
+variants = _build_variants_from_samples(X_all, param_space._sim_data_parameters)
+# → {"sim_data_setattr": {"mutations": {"value": [dict_per_sample, ...]}}}
+
+config = _build_config(sim_data_path, output_dir, variants, ...)
+# → standard vEcoli workflow JSON (emitter=parquet, generations=G, n_init_sims=S)
+
+# Spawn vEcoli's own Nextflow runner as a subprocess
+workflow_script = os.path.join(vecoli_root, "runscripts", "workflow.py")
+cmd = [sys.executable, workflow_script, "--config", str(config_path)]
+proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, ...)
+```
+
+The equivalent of UQPC's `ytrain.txt` is our `Y.npy` (time-averaged
+observables per variant, collected from hive-partitioned Parquet).
+
+| `uq_pc.py` concept | Our equivalent |
+|---|---|
+| `model.x` (external black-box) | `runscripts/workflow.py` (vEcoli, subprocess) |
+| `ptrain.txt` → feed to model | `X_all` → encoded as `sim_data_setattr` mutations |
+| `ytrain.txt` (model output) | `Y.npy` (collected from Parquet) |
+| `ytest.txt` | `Y_test.npy` (split from same workflow run) |
+
+**Key architectural point:** we concatenate training + held-out samples
+into a *single* variant list so vEcoli runs one workflow.  The train/test
+split is applied after collection (variant indices `1..N` = train,
+`N+1..N+N_test` = test).
+
+</details>
+
+**Observables extracted** are determined by the `--observables` presets
+(see table above).  The default `mass` preset reads 5 scalar columns;
+composing all cd1 presets produces ~11,500 features covering the full
+multi-omics output space reported for CD1 (Vegas/Bermuda).
+
+These satisfy RFC006 §4 activity 1: *"Outputs: transcriptome, proteome,
+metabolic fluxes (particularly exchange fluxes), and higher order
+properties."*
+
+**What gets cached to `./uq_cache/`:**
+
+```
+uq_cache/
+├── X.npy                        # (n_samples, n_params) physical space
+├── Y.npy                        # (n_samples, n_outputs) time-averaged
+├── germ_train.npy               # (n_samples, n_params) germ space
+├── X_test.npy                   # (n_test, n_params) held-out validation
+├── Y_test.npy                   # (n_test, n_outputs) held-out outputs
+├── metadata.json                # parameter names, bounds, observables
+└── timeseries/
+    ├── sample_0000.npy          # (n_timesteps, n_obs) raw timeseries
+    ├── sample_0000_meta.npz     # generation + lineage_seed per row
+    └── ...
 ```
 
 ---
 
-## Regression methods
+## Stage 2: `uq quantify`  (UQPC steps 4-5)
 
-| Method | Flag | When to use |
-|--------|------|-------------|
-| **LSQ** | `lsq` | Default. Fast, exact on noiseless polynomial data. n_samples >> n_terms. |
-| **BCS** | `bcs` | Sparse PCE. Retains only significant terms. n_samples ≈ n_terms. |
-| **ANL** | `anl` | Analytical Bayesian. Calibrated uncertainty estimates. |
+### Step 4 — build the PCE surrogate
+
+| What happens | Code | RFC / UQPC reference |
+|---|---|---|
+| Build multi-index for output order `p` | `uq/workflow.py::_fit_surrogate` | UQPC step 4 (`--outord`): "Build the PC Surrogate" |
+| Construct output PCRV (Legendre "LU") | `uq/workflow.py:316` | UQPC step 4: "PCE, PCRV, regression classes in lreg module" |
+| Evaluate basis matrix at germ samples | `pcrv.evalBases(germ_train, 0)` | UQPC: design matrix `A ∈ ℝ^{N × |α|}` |
+| Per-output: fit coefficients via `lsq`/`bcs`/`anl` | `uq/workflow.py:326-341` | UQPC step 4 (`--method`): "lsq, bcs, anl" |
+| Sync multi-indices + coefficients → PCRV | `pcrv.setMiCfs(...)` | UQPC: "Fitted surrogate PCRV object" |
+
+<details>
+<summary><b>UQPC reference → our code (step 4)</b></summary>
+
+**What `uq_pc.py` does** (equivalent to `python uq_pc.py --method lsq --outord 2`):
+
+1. Reads training germs `qtrain.txt` and outputs `ytrain.txt`.
+2. Builds multi-index: `mi = get_mi(outord, ndim)`.
+3. Constructs output PCRV: `pcrv = PCRV(n_out, ndim, "LU", mi=mi)`.
+4. Evaluates basis matrix: `Amat = pcrv.evalBases(qtrain, 0)`.
+5. Per output column `j`:
+   - Instantiates regressor: `reg = lsq()` (or `bcs(eta=tol)`, or `anl()`).
+   - Fits: `reg.fita(Amat, ytrain[:, j])`.
+   - Records `reg.used` (active basis indices) and `reg.cf` (coefficients).
+6. Syncs into PCRV: `pcrv.setMiCfs(mindices_list, cfs_list)`.
+7. Sets evaluation function: `pcrv.setFunction()`.
+8. Pickles the result → `results.pk`.
+
+**Our code** (`uq/workflow.py:269-347`, function `_fit_surrogate`) — identical logic:
+
+```python
+# Step 1-2: Multi-index + PCRV
+mindex = get_mi(polynomial_order, n_dim)            # ← get_mi(outord, ndim)
+pcrv   = PCRV(n_out, n_dim, "LU", mi=mindex)        # ← PCRV(n_out, ndim, "LU", mi=mi)
+
+# Step 3: Basis matrix
+Amat = pcrv.evalBases(germ_train, 0)                 # ← pcrv.evalBases(qtrain, 0)
+
+# Step 4: Per-output fitting
+for j in range(n_out):
+    if regression == "bcs":
+        lreg_obj = bcs(eta=tolerance)                # ← bcs(eta=tol)
+    elif regression == "anl":
+        lreg_obj = anl()                             # ← anl()
+    else:
+        lreg_obj = lsq()                             # ← lsq()
+
+    lreg_obj.fita(Amat, Y_train[:, j])               # ← reg.fita(Amat, ytrain[:, j])
+    mindices_list.append(mindex[lreg_obj.used, :])   # ← active basis rows
+    cfs_list.append(lreg_obj.cf)                     # ← fit coefficients
+
+# Step 5-6: Sync coefficients and set evaluation function
+pcrv.setMiCfs(mindices_list, cfs_list)               # ← pcrv.setMiCfs(...)
+pcrv.setFunction()                                    # ← pcrv.setFunction()
+```
+
+The flag mapping:
+
+| `uq_pc.py` flag | Our equivalent | Value |
+|---|---|---|
+| `--method lsq` | `--regression lsq` | `pytuq.lreg.lreg.lsq` |
+| `--method bcs` | `--regression bcs` | `pytuq.lreg.bcs.bcs` |
+| `--method anl` | `--regression anl` | `pytuq.lreg.anl.anl` |
+| `--outord 2` | `--polynomial-order 2` | output PCE order |
+| `--tol 1e-3` | `--tol 1e-3` | BCS sparsity tolerance |
+| `results.pk` | `QuantifyResult.export(...)` | our export is a directory, not a pickle |
+
+</details>
+
+The PCE approximates each observable output `Y_j` as:
+
+```
+Ŷ_j(ξ) = Σ_{|α|≤p} c_{j,α} · Φ_α(ξ)
+```
+
+where `Φ_α` are multivariate Legendre polynomials and `c_{j,α}` are fit
+coefficients.  `|α|` is the total polynomial degree; for 6 parameters and
+order 2 there are `C(8,2) = 28` basis terms.
+
+**Regression backends** (`--regression`):
+
+| Flag | PyTUQ class | When to use |
+|---|---|---|
+| `lsq` | `pytuq.lreg.lreg.lsq` | Default. OLS. Need `n_samples > 2 × n_terms`. |
+| `bcs` | `pytuq.lreg.bcs.bcs` | Sparse. Retains only significant terms. OK when `n_samples ≈ n_terms`. Sparsity tolerance: `--tol`. |
+| `anl` | `pytuq.lreg.anl.anl` | Analytical Bayesian. Calibrated prediction variance. |
 
 Rule of thumb: PCE terms = `C(n_params + order, order)`.
 For 6 params, order 2 → 28 terms → need ≥ 56 samples for stable LSQ.
 
 ---
 
-## Interpreting Sobol indices
+### Step 5 — post-processing: relative errors + Sobol
 
-- **S_i (first-order):** Fraction of output variance explained by parameter `i` alone.
-- **S_Ti (total-order):** Fraction explained by `i` plus all its interactions.
-- For additive models: `sum(S_i) ≈ 1` and `S_Ti ≈ S_i`.
-- Large `S_Ti - S_i` indicates the parameter participates in interactions.
+| What happens | Code | RFC / UQPC reference |
+|---|---|---|
+| Predict at training points, compute `‖Y − Ŷ‖₂ / ‖Y‖₂` per output | `uq/workflow.py::_compute_relative_errors` | UQPC step 5: "relative model-surrogate errors" |
+| If held-out test data in cache, compute test relative errors | `uq/workflow.py:630-632` | UQPC `--ntst`: "Testing relative errors" |
+| Compute Sobol main, total, and joint indices from PCRV | `uq/workflow.py::_compute_sobol` | UQPC step 5: "Sobol main and total indices" |
+| Variance-weight across outputs for multi-output models | `uq/workflow.py:444-462` | Standard multi-output extension (Sudret 2008) |
 
-Example:
+<details>
+<summary><b>UQPC reference → our code (step 5)</b></summary>
+
+**What `uq_pc.py` does:**
+
+1. Predicts at training points: `Y_pc = pcrv.function(qtrain)`.
+2. Computes per-output relative error: `‖ytrain − Y_pc‖₂ / ‖ytrain‖₂`.
+3. If test data exists: same at test points.
+4. Computes Sobol indices from PCRV coefficients:
+   - `allsens_main  = pcrv.computeSens()`     — first-order S_i
+   - `allsens_total = pcrv.computeTotSens()`  — total-order S_Ti
+   - `allsens_joint = pcrv.computeJointSens()` — second-order S_ij
+5. Pickles everything into `results.pk`.
+
+**Our code:**
+
+```python
+# Predict at training points
+Y_train_pc = output_pcrv.function(germ_train)         # ← pcrv.function(qtrain)
+
+# Relative errors (UQPC step 5)
+norms = np.linalg.norm(Y_true, axis=0)
+relerr = np.linalg.norm(Y_true - Y_pred, axis=0) / norms  # per-output ε
+
+# If test data from --n-test:
+if Y_test is not None and Y_test_pc is not None:
+    relerr_test = _compute_relative_errors(Y_test, Y_test_pc)
+
+# Sobol indices — exactly the same PCRV methods
+allsens_main  = output_pcrv.computeSens()              # ← pcrv.computeSens()
+allsens_total = output_pcrv.computeTotSens()           # ← pcrv.computeTotSens()
+allsens_joint = output_pcrv.computeJointSens()         # ← pcrv.computeJointSens()
 ```
-  fraction_active_rnap_free:    S_T = 45.2%   ← controls ~half of bulk variance
-  basal_elongation_rate:        S_T = 30.1%   ← translation speed matters
-  kinetic_objective_weight:     S_T = 12.3%   ← FBA tuning is secondary
-  cell_dry_mass_fraction:       S_T =  8.7%   ← composition matters less
-  secretion_penalty_coeff:      S_T =  3.1%   ← overflow metabolism is minor
-  fraction_active_rnap_bound:   S_T =  0.6%   ← ppGpp-bound RNAP negligible
+
+The only addition beyond the reference `uq_pc.py` is **variance-weighted
+aggregation across outputs** for multi-output models (our Y has 4 mass/growth
+observables, not 1):
+
+```python
+# Weight each output's Sobol indices by its fraction of total variance
+output_vars = np.var(Y_train, axis=0)
+weights = output_vars / output_vars.sum()
+first_order = sum(weights[j] * allsens_main[j] for j in range(n_outputs))
+total_order = sum(weights[j] * allsens_total[j] for j in range(n_outputs))
 ```
+
+| `uq_pc.py` output | Our equivalent |
+|---|---|
+| `results.pk["pcrv"]` | `UQPCResult.pcrv` |
+| `results.pk["sensitivities"]` | `UQPCResult.sobol` (as `SobolIndices` dataclass) |
+| `results.pk["relerr_train"]` | `UQPCResult.relerr_train` |
+| `results.pk["relerr_test"]` | `UQPCResult.relerr_test` |
+| `plot.py sens total` | `uq quantify` Rich report's Sobol table |
+
+</details>
+
+Sobol indices are computed **analytically from PCE coefficients** — no
+additional model evaluations.  Because the Legendre basis is orthonormal
+under the input measure, variance decomposes as:
+
+```
+Var[Ŷ_j] = Σ_{|α|≥1} c²_{j,α} · ‖Φ_α‖²
+
+S_i   = (1/Var) Σ_{α ∈ A_i}    c²_α ‖Φ_α‖²     (first-order)
+S_Ti  = (1/Var) Σ_{α: α_i > 0} c²_α ‖Φ_α‖²     (total-order)
+```
+
+where `A_i = {α : α_i > 0, α_{k≠i} = 0}`.
+
+> **Reference:** Sudret, B. (2008). *Global sensitivity analysis using
+> polynomial chaos expansions.* Reliability Engineering & System Safety
+> 93(7), 964-979.
 
 ---
 
-## Regarding Strategies 1-4
+### How the 4 RFC006 strategies work
 
-The PCE fitting and Sobol computation are identical across all four
-strategies — same `_fit_surrogate` → `_compute_sobol` path, same PyTUQ
-PCRV + lsq/bcs/anl machinery. The only thing that changes is how you
-aggregate the raw timeseries into the Y matrix that gets fed to `run_uqpc`.
+`quantify` runs steps 4-5 **four times** on four different aggregations of
+the cached timeseries.  They share X; they differ only in how Y is computed
+from the raw data.
 
-### Raw data shape from a batch run:
+| Strategy | RFC006 §1 requirement | What is collapsed to form Y | Y shape | Code entry point |
+|---|---|---|---|---|
+| 1: Uniform | "Uniformly across all simulated cells and times (baseline)" | seeds, generations, agents, timesteps → mean per variant | `(N, n_obs)` | `run_strategy1_uniform` |
+| 2: By generation | "Stratified by generation (control of convergence towards steady-state growth)" | seeds, agents, timesteps → mean per variant **per generation** | `(N, n_obs)` × one PCE per gen | `run_strategy2_by_generation` |
+| 3: By lineage seed | "Stratified by lineage seed (control of exogenous variance)" | generations, agents, timesteps → mean per variant **per seed** | `(N, n_obs)` × one PCE per seed | `run_strategy3_by_seed` |
+| 4: Growth-stratified | "Stratified by cell cycle stage, according to a physiological variable" | timesteps binned by θ = normalised log(dry_mass) → per-stage means | `(N, n_bins × n_obs)` + per-stage PCE | `run_strategy4_growth_stratified` |
 
-`(n_variants, n_lineage_seeds, n_generations, n_agents, n_timesteps, n_observables)`
+The `N`-variants axis is always the row dimension — that is what PCE
+regresses over.  The strategies only change what is in the columns.
 
-where `n_agents` per generation = 1 (single daughters, `generation=3/agent_id=000`).
-
-### Each strategy collapses different axes before PCE sees it:
+**Strategy 4's cell-cycle variable** is:
 
 ```
-┌──────────┬──────────────────────────────────────┬─────────────────────────────────────────┬──────────────────────────────────────┐
-│ Strategy │ What gets collapsed                  │ Y shape into PCE                        │ Lens                                 │
-├──────────┼──────────────────────────────────────┼─────────────────────────────────────────┼──────────────────────────────────────┤
-│ 1        │ seeds, gens, agents, timesteps        │ (n_variants, n_obs)                     │ Everything averaged                  │
-│ 2        │ seeds, agents, timesteps (per gen)    │ (n_variants, n_obs) × per generation    │ Hold generation fixed                │
-│ 3        │ gens, agents, timesteps (per seed)    │ (n_variants, n_obs) × per seed          │ Hold seed fixed                      │
-│ 4        │ nothing temporally — binned by θ      │ (n_variants, n_bins×n_obs) × per stage  │ Hold cell-cycle stage fixed           │
-└──────────┴──────────────────────────────────────┴─────────────────────────────────────────┴──────────────────────────────────────┘
+θ(t) = [log m(t) − log m_birth] / [log m_div − log m_birth]
 ```
 
-The `n_variants` axis is always the row dimension — that's what PCE
-regresses over. The strategies just change what's in the columns.
+A monotonic, model-free proxy for cell-cycle progress: θ = 0 at birth,
+θ = 1 at division.  Timesteps are binned into `n_bins` uniform intervals
+of θ.  This satisfies RFC006 §3: "the definition of a low-dimensional
+(possibly scalar) cell cycle variable computed from omics variables …
+deterministically binning simulation data into cell stages."
+
+**How `--generations` and `--n-init-sims` interact with `--n-samples`:**
+
+`--n-samples 50` controls one thing: how many points `PCRV.sampleGerm(50)`
+draws.  Each becomes one `sim_data_setattr` variant.  PCE always sees 50
+training rows.
+
+`--generations 2 --n-init-sims 2` controls how many simulations vEcoli
+runs **per variant**: `(50 + 1 baseline) × 2 seeds × 2 gens = 204 total
+simulations`.  These extra simulations do not increase the PCE sample
+count; they increase the statistical richness *within* each sample,
+enabling strategies 2 and 3:
+
+- Strategy 2: partitions each variant's timeseries rows by `generation`, computes
+  per-generation means, fits a separate PCE per generation.  With `generations=1`
+  there is only one group → strategy 2 = strategy 1.
+- Strategy 3: same idea with `lineage_seed`.  With `n_init_sims=1` → strategy 3 = strategy 1.
+- Strategy 4: bins by θ regardless of `generations`/`n_init_sims` — works even
+  with `generations=1, n_init_sims=1`.
 
 ---
 
-### Sampling
+## RFC006 §4 activities → pipeline mapping
+
+| RFC006 activity | Status | Pipeline component |
+|---|---|---|
+| **1.** Identify scientifically relevant I/O | ✅ | `DEFAULT_SIM_DATA_PARAMETERS` (6 params), 4 mass/growth observables; configurable via `--params-file` |
+| **2.** Enable output via emitter | ✅ | vEcoli's Parquet emitter + hive partitioning; collected by `_collect_variant_timeseries` |
+| **3.** Input→output wrapper functions | ✅ | `sim_data_setattr` variant function (vEcoli upstream) + vEcoli `workflow.py` subprocess |
+| **4.** GSA for strategies 1-3 via PCE | ✅ | `run_strategy1_uniform`, `run_strategy2_by_generation`, `run_strategy3_by_seed` in `uq/workflow.py` |
+| **5.** Report on representative simulations | ✅ | `uq quantify` Rich report + exported `uq_results.json` + dashboard |
+| **6.** Cell-cycle stratification strategy | ✅ | θ = normalised log(dry_mass) in `_compute_growth_fraction` |
+| **7.** Implement + apply cell-cycle GSA | ✅ | `run_strategy4_growth_stratified` — per-stage PCE + Sobol |
+
+---
+
+## PyTUQ UQPC workflow → pipeline mapping
+
+| UQPC step | `uq_pc.py` flag | Pipeline function | Location |
+|---|---|---|---|
+| 1. Setup inputs | `--pdom`, `--pctype LU`, `--pcord 1` | `_setup_input_pc` → `PCRV(…, "LU", mi=get_mi(1, d), cfs=…)` | `uq/workflow.py:110-145` |
+| 2. Generate samples | `--sampl rand`, `--nqd N`, `--ntst N_t`, `--seed` | `PCRV.sampleGerm(N)` → `PCRV.evalPC(germ)` | `uq/cli.py:128-138` |
+| 3. Evaluate model | `--regime online_bb` | `subprocess.Popen(workflow.py)` + `sim_data_setattr` variants | `uq/cli.py:175-182` |
+| 4. Build surrogate | `--method lsq\|bcs\|anl`, `--outord p`, `--tol` | `get_mi` → `PCRV.evalBases` → `lsq().fita` → `PCRV.setMiCfs` → `setFunction` | `uq/workflow.py:269-347` |
+| 5. Post-process | — | `PCRV.function` → `relerr` + `computeSens/TotSens/JointSens` | `uq/workflow.py:383-469` |
+
+---
+
+## Interpreting the output
+
+### Sobol indices
+
+- **S_i (first-order):** fraction of output variance explained by parameter `i` alone.
+- **S_Ti (total-order):** fraction explained by `i` plus all its interactions with other parameters.
+- `Σ S_i ≈ 1` for additive models; `S_Ti − S_i` measures interaction strength.
+
+### Surrogate quality
+
+- **Training relative error** (`relerr_train`): `‖Y − Ŷ‖₂ / ‖Y‖₂` per output.
+  Small = good fit.  Large = PCE order too low, or the model has discontinuities
+  the smooth basis cannot capture.
+- **Test relative error** (`relerr_test`, when `--n-test > 0`): same metric on
+  held-out data.  Large test error with small training error = overfitting —
+  reduce `--polynomial-order` or increase `--n-samples`.
+
+### Regression choice
+
+| Method | Flag | Best for |
+|---|---|---|
+| LSQ | `--regression lsq` | Default. Fast, exact on smooth polynomial data. `n_samples ≫ n_terms`. |
+| BCS | `--regression bcs` | Sparse PCE. Retains only significant terms. OK when `n_samples ≈ n_terms`. Use `--tol` to tune sparsity. |
+| ANL | `--regression anl` | Analytical Bayesian. Calibrated uncertainty on predictions. |
+
+---
+
+## Export structure
 
 ```
---n-samples 50 controls ONE thing: how many points PCRV.sampleGerm(50) draws from germ space. Each point becomes one sim_data_setattr mutation dict in the
-  variants section of the config JSON. So there are exactly 50 variants (plus 1 baseline = variant 0).
-
-  --generations 2 and --n-init-sims 2 control how many simulations vEcoli runs per variant. Each variant gets n_init_sims × generations simulations:
-
-  Total simulations = (50 variants + 1 baseline) × 2 seeds × 2 generations = 204
-
-  But the number of samples for PCE is still 50. Here's why:
-
-  The collection step (_collect_variant_timeseries) iterates for i in range(n_samples) — it reads variant 1 through variant 50 from the Parquet. For each
-  variant, it grabs ALL rows (across all seeds, generations, agents) and computes ts.mean(axis=0) to get one aggregated output vector. So variant 1's output is
-  the mean across its 2 seeds × 2 generations × however many timesteps = one row in Y.
-
-  The output arrays are:
-  - X.shape = (50, 6) — 50 parameter vectors, 6 params each
-  - Y.shape = (50, 4) — 50 time-averaged output vectors, 4 observables each
-  - Y_timeseries — 50 arrays, each containing ALL rows from that variant (across seeds/gens)
-  - Y_timeseries_meta — 50 dicts, each with generation and lineage_seed arrays labeling every row
-
-  So n_samples = number of PCE training points = number of variants = rows in X and Y.
-
-  generations and n_init_sims don't increase the PCE sample count — they increase the statistical richness within each sample, which enables strategies 2 and 3:
-
-  - Strategy 2 (by generation): partitions each variant's timeseries rows by the generation label, computes per-generation means, fits a separate PCE per
-  generation. With generations=1, there's only one group — strategy 2 is identical to strategy 1 (which is exactly what you saw).
-  - Strategy 3 (by seed): same idea, partitions by lineage_seed. With n_init_sims=1, only one seed — strategy 3 = strategy 1.
-  - Strategy 4 (by growth stage): partitions by θ (growth progress). This works even with generations=1, n_init_sims=1 because the binning is across timesteps
-  within each variant's timeseries.
-
-  So --n-samples 50 --generations 2 --n-init-sims 2 means:
-  - PCE sees 50 training points (enough for order-2 with 6 params: 28 terms, 50 > 2×28 ✓)
-  - Strategy 2 gets 2 generation groups to compare
-  - Strategy 3 gets 2 seed groups to compare
-  - 204 total vEcoli simulations (Nextflow runs them concurrently)
+uq_results/
+├── uq_results.json              # all strategies in a dashboard-compatible schema
+├── population_surrogate/        # PCE coefficients + multi-indices (strategy 1)
+│   ├── coefficients.npy
+│   ├── multi_indices.npy
+│   └── input_bounds.npy
+├── population_sobol/            # strategy 1 Sobol npy
+│   ├── first_order.npy
+│   └── total_order.npy
+├── generation_0_sobol/          # strategy 2
+├── generation_1_sobol/
+├── seed_0_sobol/                # strategy 3
+├── growth_stage_0_sobol/        # strategy 4
+├── growth_stage_1_sobol/
+├── ...
+└── growth_stratified_surrogate/ # strategy 4 combined PCE
 ```
+
+`uq_results.json` is the single file the dashboard consumes.  It contains
+the per-strategy Sobol indices as `{parameter_name: float}` dicts, plus
+metadata (framework label, observable names, stage θ-ranges).
+
+---
+
+## Entry points
+
+All four clients expose the same `uq.workflow.sample` → `uq.workflow.quantify`
+pipeline in different presentation formats:
+
+| Client | Command | Best for |
+|---|---|---|
+| CLI (Rich) | `uv run uq sample` / `uv run uq quantify` | Scripts, CI, headless runs |
+| TUI (Textual) | `uv run uq tui` | Interactive terminal with live progress |
+| GUI (marimo) | `uv run uq gui` | Reactive browser notebook |
+| Dashboard (tkinter) | `uv run uq dashboard` | DAW-style result exploration |

@@ -103,13 +103,24 @@ vEcoli emits hive-partitioned Parquet:
    history/experiment_id=.../variant=.../lineage_seed=.../generation=.../agent_id=.../000.pq
 
 ``uqEcoli`` reads this tree with
-``polars.read_parquet(..., hive_partitioning=True)`` and extracts four
-observables for each variant:
+``polars.read_parquet(..., hive_partitioning=True)`` and extracts
+observables according to the ``--observables`` presets.  Each preset
+mirrors a cd1 analysis module from the Vegas/Bermuda CD1 deliverables:
 
-* ``listeners__mass__dry_mass``
-* ``listeners__mass__cell_mass``
-* ``listeners__mass__volume``
-* ``listeners__mass__growth``
+================  ================================================  ========
+Preset            cd1 module                                         Features
+================  ================================================  ========
+``mass``          cd1_higher_order_properties (raw)                  5
+``higher_order``  cd1_higher_order_properties (derived)              6
+``exchange_fluxes`` cd1_exchange_fluxes                              ~87
+``transcriptome`` cd1_transcriptomics                                ~4,300
+``proteome``      cd1_proteomics                                     ~4,300
+``fluxome``       cd1_fluxomics (dry-mass normalized)                ~2,800
+================  ================================================  ========
+
+``--generation-lower-bound N`` filters early generations before
+aggregation (same SQL logic as the cd1 ``generation_lower_bound``
+parameter).
 
 The time-averaged observable vector becomes one row of :math:`Y`; the
 raw timeseries is kept under ``timeseries/`` for strategies 2-4.

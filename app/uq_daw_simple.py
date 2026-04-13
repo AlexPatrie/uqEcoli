@@ -1,21 +1,36 @@
 """
-UQ Simple DAW — Tkinter dashboard for the uq_simple pipeline.
+UQ Simple DAW — Tkinter dashboard for ``uq.workflow`` + ``uq.workflow_spectral``.
 
-Provides DAW-style interactive visualization of all 4 RFC006 strategies:
-  1. Uniform (bulk) — PCE response curves with draggable markers
-  2. By generation — per-generation Sobol bar comparison
-  3. By lineage seed — per-seed Sobol bar comparison
-  4. Growth-stratified — sensitivity spectrogram + per-stage prediction
+Provides DAW-style interactive visualization of:
+
+  1. Uniform (bulk)          — PCE response curves with draggable markers
+  2. By generation            — per-generation Sobol bar comparison
+  3. By lineage seed          — per-seed Sobol bar comparison
+  4. Growth-stratified        — sensitivity spectrogram + per-stage prediction
+  5. **Koopman synth**       — pitches/dampings/amplitudes of Koopman partials,
+     live-modulated by the PCE knobs, plus a Sobol modulation-matrix heatmap,
+     a resynthesized-waveform oscilloscope, and an inverse-design button.
+
+The spectral section is the genuine audio-DAW lens (Koopman diagonalizes the
+cell-level dynamics, PCE parametrizes the diagonalization, Sobol becomes the
+modulation matrix — every symbol has matching physical units on both sides).
+It is enabled whenever the loaded results directory contains a ``spectral/``
+sub-directory produced by :meth:`uq.workflow_spectral.SpectralDAWResult.export`.
+If the sub-directory is missing the DAW falls back to strategies 1-4 only.
 
 Launch:
     uv run python app/uq_daw_simple.py [path/to/uq_results.json]
 """
 
+from __future__ import annotations
+
 import json
 import sys
 import tkinter as tk
+from dataclasses import dataclass, field
 from pathlib import Path
 from tkinter import filedialog, ttk
+from typing import Any
 
 import numpy as np
 
@@ -66,6 +81,271 @@ def legendre_eval(x_norm, coeffs, multi_indices):
 def normalize_to_germ(x, bounds):
     """Scale physical parameters to [-1, 1]."""
     return 2.0 * (x - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0
+
+
+# -- Spectral (Koopman-PCE) data layer ----------------------------------------
+#
+# Everything below is UI-free: it can be imported, loaded, and exercised
+# without instantiating a single Tk widget.  The canvases further down wrap
+# these helpers but do not duplicate any math.
+
+
+@dataclass
+class SpectralBundle:
+    """Loaded contents of a ``SpectralDAWResult.export(...)`` directory.
+
+    This is the DAW-side mirror of :class:`uq.workflow_spectral.SpectralDAWResult`:
+    it holds just enough to evaluate the PCE live and render the panels.
+    """
+
+    export_dir: Path
+    parameter_names: list[str]
+    feature_names: list[str]
+    input_bounds: np.ndarray  # (n_params, 2)
+    pce_coefficients: np.ndarray  # (n_features, n_basis)
+    multi_indices: np.ndarray  # (n_basis, n_params)
+    modulation_matrix: np.ndarray  # (n_features, n_params) Sobol S_Ti
+    modulation_matrix_first: np.ndarray | None = None
+    relerr_train: np.ndarray | None = None
+    relerr_test: np.ndarray | None = None
+    training_features: np.ndarray | None = None  # (N_samples, n_features)
+    summary: dict[str, Any] = field(default_factory=dict)
+
+    # --- derived shape helpers ---
+
+    @property
+    def n_parameters(self) -> int:
+        return int(self.input_bounds.shape[0])
+
+    @property
+    def n_features(self) -> int:
+        return int(self.pce_coefficients.shape[0])
+
+    @property
+    def n_modes(self) -> int:
+        # Features are laid out as (ω_k, σ_k, |a_k|) triples
+        return self.n_features // 3
+
+    @property
+    def dt(self) -> float:
+        try:
+            return float(self.summary.get("dt", 1.0))
+        except Exception:
+            return 1.0
+
+
+def load_spectral_bundle(export_dir: str | Path) -> SpectralBundle | None:
+    """Load a spectral artifact directory.
+
+    Returns ``None`` if any required file is missing — the DAW will then
+    silently fall back to strategies 1-4 only.
+
+    Args:
+        export_dir: Path to the directory written by
+            :meth:`uq.workflow_spectral.SpectralDAWResult.export`.
+    """
+    export_dir = Path(export_dir)
+    required = [
+        "pce_coefficients.npy",
+        "multi_indices.npy",
+        "input_bounds.npy",
+        "modulation_matrix.npy",
+        "feature_names.json",
+        "parameter_names.json",
+    ]
+    if not all((export_dir / f).exists() for f in required):
+        return None
+
+    feature_names = json.loads((export_dir / "feature_names.json").read_text())
+    parameter_names = json.loads((export_dir / "parameter_names.json").read_text())
+
+    bundle = SpectralBundle(
+        export_dir=export_dir,
+        parameter_names=list(parameter_names),
+        feature_names=list(feature_names),
+        input_bounds=np.load(export_dir / "input_bounds.npy"),
+        pce_coefficients=np.load(export_dir / "pce_coefficients.npy"),
+        multi_indices=np.load(export_dir / "multi_indices.npy"),
+        modulation_matrix=np.load(export_dir / "modulation_matrix.npy"),
+    )
+
+    opt = {
+        "modulation_matrix_first": "modulation_matrix_first.npy",
+        "relerr_train": "relerr_train.npy",
+        "relerr_test": "relerr_test.npy",
+        "training_features": "spectral_features.npy",
+    }
+    for attr, fname in opt.items():
+        p = export_dir / fname
+        if p.exists():
+            setattr(bundle, attr, np.load(p))
+
+    summary_path = export_dir / "spectral_summary.json"
+    if summary_path.exists():
+        bundle.summary = json.loads(summary_path.read_text())
+
+    return bundle
+
+
+def evaluate_multi_output_pce(
+    x_norm: np.ndarray,
+    coeffs_matrix: np.ndarray,
+    multi_indices: np.ndarray,
+) -> np.ndarray:
+    """Evaluate a multi-output Legendre PCE at a single germ-space point.
+
+    Args:
+        x_norm: Germ-space parameter vector, shape ``(n_params,)``.
+        coeffs_matrix: ``(n_features, n_basis)`` coefficient matrix (shared basis).
+        multi_indices: ``(n_basis, n_params)`` multi-index table.
+
+    Returns:
+        Length-``n_features`` prediction vector (one value per PCE output).
+    """
+    max_ord = int(multi_indices.max()) if multi_indices.size else 0
+    n_params = multi_indices.shape[1]
+
+    # Precompute Legendre polynomials at x_norm up to max_ord for each dim
+    P = np.zeros((max_ord + 1, n_params))
+    P[0, :] = 1.0
+    if max_ord >= 1:
+        P[1, :] = x_norm
+    for n in range(2, max_ord + 1):
+        P[n, :] = ((2 * n - 1) * x_norm * P[n - 1, :] - (n - 1) * P[n - 2, :]) / n
+
+    # term_vals[t] = product over params of P[alpha_t, p]
+    n_basis = multi_indices.shape[0]
+    term_vals = np.ones(n_basis)
+    for t in range(n_basis):
+        for p in range(n_params):
+            term_vals[t] *= P[multi_indices[t, p], p]
+
+    # One dot product per output feature — much faster than a Python inner loop
+    return coeffs_matrix @ term_vals
+
+
+def predict_spectral_features(
+    bundle: SpectralBundle,
+    x: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Evaluate the Koopman-output PCE at a physical parameter setting.
+
+    Returns the same dict shape as
+    :meth:`uq.workflow_spectral.SpectralDAWResult.predict`:
+    ``{"omega", "sigma", "amp", "freq_hz", "features"}``.
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    if x.shape[0] != bundle.n_parameters:
+        raise ValueError(
+            f"predict_spectral_features: x has {x.shape[0]} params, "
+            f"bundle has {bundle.n_parameters}"
+        )
+    x_norm = normalize_to_germ(x, bundle.input_bounds)
+    y = evaluate_multi_output_pce(x_norm, bundle.pce_coefficients, bundle.multi_indices)
+    K = bundle.n_modes
+    omega = y[0::3][:K]
+    sigma = y[1::3][:K]
+    amp = y[2::3][:K]
+    return {
+        "features": y,
+        "omega": omega,
+        "sigma": sigma,
+        "amp": amp,
+        "freq_hz": omega / (2 * np.pi),
+    }
+
+
+def resynthesize_waveform(
+    bundle: SpectralBundle,
+    x: np.ndarray,
+    t: np.ndarray,
+    dc: float = 0.0,
+) -> np.ndarray:
+    """Reconstruct a 1-D observable from PCE-predicted Koopman modes.
+
+    Mirrors :meth:`uq.workflow_spectral.SpectralDAWResult.resynthesize` but
+    operates on a saved :class:`SpectralBundle` so the DAW does not require
+    a live Python object.
+    """
+    pred = predict_spectral_features(bundle, x)
+    omega, sigma, amp = pred["omega"], pred["sigma"], pred["amp"]
+    t = np.asarray(t, dtype=float)
+    y = np.full_like(t, fill_value=float(dc))
+    for k in range(len(omega)):
+        y += amp[k] * np.exp(sigma[k] * t) * np.cos(omega[k] * t)
+    return y
+
+
+def inverse_design_bundle(
+    bundle: SpectralBundle,
+    target: dict[str, np.ndarray],
+    n_restarts: int = 8,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """L-BFGS-B multi-start inverse design on top of a :class:`SpectralBundle`.
+
+    The DAW uses this to implement the "inverse design" toolbar button.  It
+    is identical in spirit to
+    :meth:`uq.workflow_spectral.SpectralDAWResult.inverse_design` but takes
+    a bundle instead of the live result — so it works from a saved export.
+    """
+    from scipy.optimize import minimize
+
+    K = bundle.n_modes
+    target_vec = np.zeros(3 * K)
+    mask = np.zeros(3 * K, dtype=bool)
+
+    if "freq_hz" in target:
+        for k, v in enumerate(np.asarray(target["freq_hz"], dtype=float)[:K]):
+            target_vec[3 * k] = float(v) * (2 * np.pi)
+            mask[3 * k] = True
+    if "omega" in target:
+        for k, v in enumerate(np.asarray(target["omega"], dtype=float)[:K]):
+            target_vec[3 * k] = float(v)
+            mask[3 * k] = True
+    if "sigma" in target:
+        for k, v in enumerate(np.asarray(target["sigma"], dtype=float)[:K]):
+            target_vec[3 * k + 1] = float(v)
+            mask[3 * k + 1] = True
+    if "amp" in target:
+        for k, v in enumerate(np.asarray(target["amp"], dtype=float)[:K]):
+            target_vec[3 * k + 2] = float(v)
+            mask[3 * k + 2] = True
+
+    w = mask.astype(float)
+
+    def loss(x_phys: np.ndarray) -> float:
+        pred = predict_spectral_features(bundle, x_phys)["features"]
+        diff = w * (pred - target_vec)
+        return float(np.dot(diff, diff))
+
+    lb = bundle.input_bounds[:, 0]
+    ub = bundle.input_bounds[:, 1]
+    box = list(zip(lb.tolist(), ub.tolist()))
+
+    rng = np.random.default_rng(seed)
+    best_x: np.ndarray | None = None
+    best_loss = np.inf
+    for _ in range(max(1, n_restarts)):
+        x0 = lb + rng.random(len(lb)) * (ub - lb)
+        try:
+            res = minimize(loss, x0=x0, method="L-BFGS-B", bounds=box)
+        except Exception:
+            continue
+        if res.fun < best_loss:
+            best_loss = float(res.fun)
+            best_x = np.asarray(res.x)
+
+    if best_x is None:
+        raise RuntimeError("inverse_design_bundle: all optimizer restarts failed")
+
+    return {
+        "x": best_x,
+        "loss": best_loss,
+        "prediction": predict_spectral_features(bundle, best_x),
+        "target": target_vec,
+        "mask": mask,
+    }
 
 
 # -- Canvas widgets -----------------------------------------------------------
@@ -423,6 +703,201 @@ class StrategyBarCanvas(tk.Canvas):
         self.create_text(w // 2, 10, text=self._title, fill=C["text"], font=("Menlo", 10, "bold"))
 
 
+# -- Spectral / Koopman-synth canvases ----------------------------------------
+
+
+class SpectralSynthCanvas(tk.Canvas):
+    """Per-partial bars for pitch (Hz), damping (1/s), and amplitude.
+
+    Updated live as the user drags PCE knobs.  Three colour-coded rows;
+    each column is one Koopman mode.  Frequency bars are in Hz so users can
+    read them exactly the same way as an Ableton spectrum analyser.
+    """
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._prediction: dict[str, np.ndarray] | None = None
+        self._bundle: SpectralBundle | None = None
+
+    def set_prediction(self, bundle: SpectralBundle | None, pred: dict | None):
+        self._bundle = bundle
+        self._prediction = pred
+        self.redraw()
+
+    def _draw_row(self, y0, y1, label, values, color, fmt):
+        self.create_text(12, (y0 + y1) // 2, text=label, fill=color, font=("Menlo", 9, "bold"), anchor="w")
+        if values is None or len(values) == 0:
+            return
+        w = self.winfo_width()
+        x0 = 110
+        x1 = w - 20
+        col_w = max(1, (x1 - x0) / len(values))
+        vmax = float(max(np.abs(values).max(), 1e-12))
+        row_h = y1 - y0 - 14
+        for k, v in enumerate(values):
+            cx0 = x0 + int(k * col_w) + 2
+            cx1 = x0 + int((k + 1) * col_w) - 2
+            # Center the bar vertically at the midline so negative σ bars
+            # hang below.
+            mid_y = (y0 + y1) // 2
+            h_px = int((abs(v) / vmax) * row_h / 2)
+            bar_top = mid_y - h_px if v >= 0 else mid_y
+            bar_bot = mid_y if v >= 0 else mid_y + h_px
+            self.create_rectangle(cx0, bar_top, cx1, bar_bot, fill=color, outline="")
+            self.create_text((cx0 + cx1) // 2, y1 - 2, text=fmt.format(v), fill=C["text_dim"], font=("Menlo", 7))
+            self.create_text((cx0 + cx1) // 2, y0 + 2, text=f"k{k}", fill=C["text_dim"], font=("Menlo", 7))
+
+    def redraw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+        self.create_text(w // 2, 10, text="KOOPMAN SYNTH // per-partial spectrum", fill=C["text"], font=("Menlo", 10, "bold"))
+        if self._prediction is None:
+            self.create_text(w // 2, h // 2, text="(no spectral bundle loaded)", fill=C["text_dim"], font=("Menlo", 9))
+            return
+
+        band_top = 26
+        band_h = (h - band_top - 10) / 3
+        self._draw_row(
+            band_top, int(band_top + band_h),
+            "Hz", self._prediction["freq_hz"], C["accent1"], "{:.3e}",
+        )
+        self._draw_row(
+            int(band_top + band_h), int(band_top + 2 * band_h),
+            "σ (1/s)", self._prediction["sigma"], C["accent4"], "{:.2e}",
+        )
+        self._draw_row(
+            int(band_top + 2 * band_h), int(band_top + 3 * band_h),
+            "|a|", self._prediction["amp"], C["accent3"], "{:.2e}",
+        )
+
+
+class ModulationMatrixCanvas(tk.Canvas):
+    """Heatmap of the Sobol total-order matrix (features × parameters).
+
+    This is the *modulation routing* panel of the synth: row = Koopman
+    feature, column = physical knob, cell colour = S_Ti.
+    """
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._bundle: SpectralBundle | None = None
+
+    def set_bundle(self, bundle: SpectralBundle | None):
+        self._bundle = bundle
+        self.redraw()
+
+    def _val_to_color(self, v):
+        v = max(0.0, min(float(v) / 0.7, 1.0))
+        if v < 0.33:
+            t = v / 0.33
+            r, g, b = int(13 + t * 29), int(13 + t * 167), 222
+        elif v < 0.66:
+            t = (v - 0.33) / 0.33
+            r, g, b = int(42 + t * 213), int(180 - t * 10), int(222 - t * 222)
+        else:
+            t = (v - 0.66) / 0.34
+            r, g, b = 255, int(170 - t * 119), int(t * 102)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def redraw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+        self.create_text(w // 2, 10, text="MODULATION MATRIX // Sobol S_Ti", fill=C["text"], font=("Menlo", 10, "bold"))
+        if self._bundle is None:
+            self.create_text(w // 2, h // 2, text="(no spectral bundle loaded)", fill=C["text_dim"], font=("Menlo", 9))
+            return
+
+        pad_l, pad_r, pad_t, pad_b = 95, 25, 26, 20
+        plot_w = w - pad_l - pad_r
+        plot_h = h - pad_t - pad_b
+        mod = self._bundle.modulation_matrix
+        n_feat, n_par = mod.shape
+        if n_feat == 0 or n_par == 0:
+            return
+        cell_w = plot_w / n_par
+        cell_h = plot_h / n_feat
+
+        for fi, fname in enumerate(self._bundle.feature_names):
+            self.create_text(
+                pad_l - 5,
+                pad_t + int(cell_h * (fi + 0.5)),
+                text=fname,
+                fill=C["text_dim"],
+                font=("Menlo", 7),
+                anchor="e",
+            )
+            for pi in range(n_par):
+                x0 = pad_l + int(pi * cell_w)
+                y0 = pad_t + int(fi * cell_h)
+                x1 = x0 + int(cell_w)
+                y1 = y0 + int(cell_h)
+                self.create_rectangle(
+                    x0, y0, x1, y1, fill=self._val_to_color(mod[fi, pi]), outline=C["border"]
+                )
+        for pi, pname in enumerate(self._bundle.parameter_names):
+            short = pname.replace("fraction_active_", "").replace("cell_dry_mass_fraction", "dry_mass")
+            self.create_text(
+                pad_l + int(cell_w * (pi + 0.5)),
+                pad_t + plot_h + 10,
+                text=short,
+                fill=C["text_dim"],
+                font=("Menlo", 7),
+            )
+
+
+class ResynthOscilloscope(tk.Canvas):
+    """Oscilloscope showing the resynthesized 1-D waveform at current knobs."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._signal: np.ndarray | None = None
+
+    def set_signal(self, signal: np.ndarray | None):
+        self._signal = signal
+        self.redraw()
+
+    def redraw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+        self.create_text(w // 2, 10, text="RESYNTH // reconstructed waveform", fill=C["text"], font=("Menlo", 10, "bold"))
+        if self._signal is None or len(self._signal) == 0:
+            self.create_text(w // 2, h // 2, text="(move a knob to synthesize)", fill=C["text_dim"], font=("Menlo", 9))
+            return
+
+        sig = np.asarray(self._signal, dtype=float)
+        pad = 22
+        plot_w = w - 2 * pad
+        plot_h = h - pad - 14
+        ymin, ymax = float(sig.min()), float(sig.max())
+        if ymax - ymin < 1e-9:
+            ymax = ymin + 1e-9
+        zero_y = pad + int(plot_h * (ymax / (ymax - ymin)))
+
+        # Zero line
+        self.create_line(pad, zero_y, pad + plot_w, zero_y, fill=C["grid"], width=1)
+
+        points = []
+        n = len(sig)
+        for i in range(n):
+            px = pad + int((i / max(1, n - 1)) * plot_w)
+            py = pad + int((1 - (sig[i] - ymin) / (ymax - ymin)) * plot_h)
+            points.extend([px, py])
+        if len(points) >= 4:
+            self.create_line(points, fill=C["accent3"], width=2, smooth=True)
+
+
 # -- Main Application ---------------------------------------------------------
 
 
@@ -438,8 +913,11 @@ class UQDawSimpleApp:
 
         self.data = None
         self.surr_data = None
+        self.spectral_bundle: SpectralBundle | None = None
         self.selected_param = tk.StringVar()
         self.param_colors = {}
+        self._resynth_n_samples = 400
+        self._resynth_t_max = 200.0
 
         self._build_ui()
 
@@ -458,6 +936,11 @@ class UQDawSimpleApp:
             top, text="Load JSON", command=self._open_file,
             bg=C["panel_light"], fg=C["text"], font=("Menlo", 10), relief="flat", cursor="hand2",
         ).pack(side="right", padx=10)
+
+        tk.Button(
+            top, text="Inverse Design", command=self._run_inverse_design,
+            bg=C["panel_light"], fg=C["accent3"], font=("Menlo", 10), relief="flat", cursor="hand2",
+        ).pack(side="right", padx=4)
 
         self.status_label = tk.Label(top, text="No data loaded", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9))
         self.status_label.pack(side="right", padx=10)
@@ -523,8 +1006,24 @@ class UQDawSimpleApp:
         self.seed_canvas.pack(side="right", fill="both", expand=True, padx=(1, 0))
 
         # Bottom: sensitivity spectrogram (strategy 4)
-        self.heatmap_canvas = HeatmapCanvas(self.bottom_frame, height=200)
-        self.heatmap_canvas.pack(fill="both", expand=True, padx=2, pady=(1, 2))
+        self.heatmap_canvas = HeatmapCanvas(self.bottom_frame, height=180)
+        self.heatmap_canvas.pack(fill="x", padx=2, pady=(1, 2))
+
+        # Bottom: Koopman spectral section (workflow_spectral)
+        spectral_row = tk.Frame(self.bottom_frame, bg=C["bg"])
+        spectral_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
+
+        self.synth_canvas = SpectralSynthCanvas(spectral_row, height=180)
+        self.synth_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
+
+        right_col = tk.Frame(spectral_row, bg=C["bg"])
+        right_col.pack(side="left", fill="both", expand=True, padx=(1, 0))
+
+        self.modulation_canvas = ModulationMatrixCanvas(right_col, height=120)
+        self.modulation_canvas.pack(fill="both", expand=True, padx=0, pady=(0, 1))
+
+        self.resynth_canvas = ResynthOscilloscope(right_col, height=60)
+        self.resynth_canvas.pack(fill="both", expand=True, padx=0, pady=(1, 0))
 
     def _open_file(self):
         path = filedialog.askopenfilename(title="Load UQ Results", filetypes=[("JSON", "*.json"), ("All", "*.*")])
@@ -542,6 +1041,12 @@ class UQDawSimpleApp:
 
         export_dir = path.parent
         self.surr_data = self._load_surrogates(export_dir)
+        # Try to load the companion Koopman-PCE bundle (workflow_spectral export).
+        self.spectral_bundle = load_spectral_bundle(export_dir / "spectral")
+        if self.spectral_bundle is None:
+            # Also check the export dir itself in case the user passed the
+            # spectral directory directly.
+            self.spectral_bundle = load_spectral_bundle(export_dir)
 
         params = list(self.data["parameters"].keys())
         self.param_colors = {p: DEFAULT_PARAM_COLORS[i % len(DEFAULT_PARAM_COLORS)] for i, p in enumerate(params)}
@@ -641,7 +1146,15 @@ class UQDawSimpleApp:
         n_stages = self.data.get("phase2_growth_stratified", {}).get("n_stages", "?")
         s2_text = f"{s2.get('n_generations', 0)} gen" if "generations" in s2 else "N/A"
         s3_text = f"{s3.get('n_seeds', 0)} seeds" if "seeds" in s3 else "N/A"
-        self.strategy_label.config(text=f"S1: bulk | S2: {s2_text} | S3: {s3_text} | S4: {n_stages} stages")
+        parts = [
+            f"S1: bulk",
+            f"S2: {s2_text}",
+            f"S3: {s3_text}",
+            f"S4: {n_stages} stages",
+        ]
+        if self.spectral_bundle is not None:
+            parts.append(f"Spectral: {self.spectral_bundle.n_modes} partials")
+        self.strategy_label.config(text=" | ".join(parts))
 
     def _update_all_viz(self):
         if self.data is None:
@@ -756,6 +1269,84 @@ class UQDawSimpleApp:
                 stage_predictions[si] = pop_y + contrib
 
         self.heatmap_canvas.set_data(stage_data, params, selected, stage_predictions=stage_predictions)
+
+        # ── Spectral / Koopman synth section ────────────────────────
+        self._update_spectral_panels(x)
+
+    def _update_spectral_panels(self, x: np.ndarray) -> None:
+        """Refresh the Koopman-synth / modulation-matrix / resynth canvases.
+
+        Called from :meth:`_update_response_curves` whenever a knob moves.
+        Safe to call when no spectral bundle is loaded — the canvases just
+        render their "no data" placeholders.
+        """
+        bundle = self.spectral_bundle
+        if bundle is None:
+            self.synth_canvas.set_prediction(None, None)
+            self.modulation_canvas.set_bundle(None)
+            self.resynth_canvas.set_signal(None)
+            return
+
+        # The spectral bundle may be built from a different parameter set
+        # than the Phase-1 surrogate.  Reorder x to match bundle order by
+        # parameter name; fall back to midpoints for unknown entries.
+        spec_x = np.zeros(bundle.n_parameters)
+        data_params = list(self.data["parameters"].keys()) if self.data else []
+        name_to_x = dict(zip(data_params, x))
+        for i, pname in enumerate(bundle.parameter_names):
+            if pname in name_to_x:
+                spec_x[i] = float(name_to_x[pname])
+            else:
+                spec_x[i] = 0.5 * (bundle.input_bounds[i, 0] + bundle.input_bounds[i, 1])
+
+        try:
+            pred = predict_spectral_features(bundle, spec_x)
+        except Exception:
+            self.synth_canvas.set_prediction(None, None)
+            self.modulation_canvas.set_bundle(bundle)
+            self.resynth_canvas.set_signal(None)
+            return
+
+        self.synth_canvas.set_prediction(bundle, pred)
+        self.modulation_canvas.set_bundle(bundle)
+
+        t = np.linspace(0, self._resynth_t_max, self._resynth_n_samples)
+        try:
+            sig = resynthesize_waveform(bundle, spec_x, t)
+        except Exception:
+            sig = None
+        self.resynth_canvas.set_signal(sig)
+
+    def _run_inverse_design(self) -> None:
+        """Toolbar-triggered inverse design from the current knob setting.
+
+        Uses the current knob values as the *target* and searches for a new
+        parameter vector that hits the same spectrum.  The result is
+        written back into the sliders.
+        """
+        bundle = self.spectral_bundle
+        if bundle is None or not self.sliders:
+            return
+        try:
+            x_current = np.array([float(self.sliders[p].get()) for p in bundle.parameter_names])
+        except Exception:
+            return
+        current = predict_spectral_features(bundle, x_current)
+        try:
+            out = inverse_design_bundle(
+                bundle,
+                target={"freq_hz": current["freq_hz"], "sigma": current["sigma"]},
+                n_restarts=10,
+                seed=0,
+            )
+        except Exception as e:
+            self.status_label.config(text=f"Inverse design failed: {e}")
+            return
+        x_new = out["x"]
+        for i, pname in enumerate(bundle.parameter_names):
+            if pname in self.sliders:
+                self.sliders[pname].set(float(x_new[i]))
+        self.status_label.config(text=f"Inverse design: loss={out['loss']:.3e}")
 
 
 # -- Entry point --------------------------------------------------------------

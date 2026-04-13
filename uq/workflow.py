@@ -1349,6 +1349,9 @@ def sample(
             with ``parameters``.
         observable_columns: Which Parquet columns to extract.
             Defaults to dry_mass, cell_mass, volume, growth.
+            For richer observables, use ``uq.observables.collect_observables``
+            via the CLI ``--observables`` presets (higher_order,
+            exchange_fluxes, transcriptome, proteome, fluxome).
         max_duration: vEcoli simulation wall-clock limit (seconds).
         generations: Number of cell generations per simulation.
             Use >= 2 to enable Strategy 2 (by-generation GSA).

@@ -23,3 +23,10 @@
     > RFC006 aggregation strategies).
 
 - [ ] 4. I noticed that the app.uq_daw has a nice feature that tracks a dot moving through the spectrogram heatmap as one changes the PCE response curves. Can we have that in app.uq_daw_simple? I want it to be just like that, even with a different pipeline
+
+- [x] 5a. show me the full config json used that is passed to vEcoli when uq sample is run.
+    > Added `uq show-config` CLI command — generates the full vEcoli workflow config JSON
+    > (sim_data_path, emitter, variants section with per-sample sim_data_setattr mutations,
+    > generations, n_init_sims, max_duration) without running anything. Syntax-highlighted
+    > with line numbers via Rich. Optionally writes to file with `--output-file`.
+    > Also: `uq sample` now prints the config path (`Config JSON: <path>`) during step 3.

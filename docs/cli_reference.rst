@@ -70,6 +70,37 @@ Options:
     default six sim_data parameters.  See
     ``examples/uq_artifacts/params/params_demo.json``.
 
+``--observables TEXT`` (repeatable)
+    Observable presets to extract from vEcoli Parquet output, matching
+    the cd1 analysis modules used for Vegas/Bermuda CD1 deliverables.
+    Pass multiple times to compose presets.  Default ``mass``.
+
+    ================  ================================================  ========
+    Preset            cd1 module equivalent                              Features
+    ================  ================================================  ========
+    ``mass``          cd1_higher_order_properties (raw scalars)          5
+    ``higher_order``  cd1_higher_order_properties (derived metrics)      6
+    ``exchange_fluxes`` cd1_exchange_fluxes                              ~87
+    ``transcriptome`` cd1_transcriptomics                                ~4,300
+    ``proteome``      cd1_proteomics                                     ~4,300
+    ``fluxome``       cd1_fluxomics (dry-mass normalized)                ~2,800
+    ================  ================================================  ========
+
+    Example — all CD1 analyses at once::
+
+        uv run uq sample simData.cPickle \
+            --observables higher_order \
+            --observables exchange_fluxes \
+            --observables transcriptome \
+            --observables proteome \
+            --observables fluxome
+
+``--generation-lower-bound INTEGER``
+    Skip generations below this value when aggregating observables.
+    Mirrors the cd1 ``generation_lower_bound`` parameter — filters
+    early transient dynamics so the sensitivity analysis focuses on
+    steady-state growth.  Default ``0`` (keep all).
+
 ``uq quantify``
 ---------------
 
@@ -121,6 +152,28 @@ The Rich report now includes (from top to bottom):
 4. **Strategy 3** — per-lineage-seed Sobol (requires ``--n-init-sims >= 2``).
 5. **Strategy 4** — growth-stratified Sobol across ``n-bins`` cell-cycle
    stages.
+
+``uq show-config``
+------------------
+
+Generates the full vEcoli workflow config JSON that ``uq sample`` would
+pass to ``runscripts/workflow.py``, **without running anything**.  Useful
+for stakeholder review, debugging, or manual execution.
+
+.. code-block:: text
+
+   uv run uq show-config SIM_DATA_PATH [OPTIONS]
+
+Options:
+
+``--n-samples INTEGER``
+    Number of variants to include in the config.  Default ``5``.
+
+``--output-file PATH``
+    Write JSON to a file instead of printing to stdout.
+
+All other flags (``--seed``, ``--generations``, ``--n-init-sims``,
+``--max-duration``, ``--params-file``) mirror ``uq sample``.
 
 ``uq dashboard``
 ----------------

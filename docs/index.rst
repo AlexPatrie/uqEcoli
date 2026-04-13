@@ -25,7 +25,11 @@ Two-stage workflow
        --cache-dir ./uq_cache \
        --n-samples 200 \
        --n-test 40 \
-       --generations 2
+       --generations 2 \
+       --observables higher_order \
+       --observables exchange_fluxes \
+       --observables transcriptome \
+       --generation-lower-bound 2
 
    # Stage 2 — UQPC steps 4-5: PCE surrogate fit + Sobol decomposition
    uv run uq quantify /path/to/simData.cPickle \

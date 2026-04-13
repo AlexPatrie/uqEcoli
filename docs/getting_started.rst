@@ -43,28 +43,30 @@ Stage 1 — sample
        --cache-dir ./uq_cache \
        --n-samples 50 \
        --n-test 10 \
-       --generations 2
+       --generations 2 \
+       --observables higher_order \
+       --observables exchange_fluxes \
+       --observables transcriptome \
+       --generation-lower-bound 2
 
 What happens:
 
 1. ``ParameterDataset`` loads ``simData.cPickle`` and projects the six
-   default parameters from :py:data:`libuq.pipeline.param_loader.DEFAULT_SIM_DATA_PARAMETERS`
-   into a generic ``XSpaceVecoli`` parameter space.
-2. ``_setup_input_pc`` in :py:mod:`uq.workflow` builds a
-   ``pytuq.rv.pcrv.PCRV`` (Legendre basis, uniform priors) that encodes
-   the affine map from germ space ``[-1, 1]`` to physical bounds.
-3. ``input_pc.sampleGerm(n_samples)`` draws 50 germ samples and
-   ``evalPC`` maps them into physical parameter space.  With
-   ``--n-test 10`` an additional 10 held-out validation samples are
-   drawn (UQPC's ``--ntst``).
-4. Each row of ``X`` becomes one vEcoli variant via the **upstream**
-   ``sim_data_setattr`` variant function.  See ``SAMPLING.md`` for the
-   exact mapping.
-5. ``runscripts/workflow.py`` (from vEcoli) is spawned as a subprocess
-   with the generated workflow config.  Nextflow manages Parca skipping,
-   variant instantiation, simulation, and Parquet emission.
-6. When vEcoli finishes, hive-partitioned Parquet is collected into
-   ``libuq.sampling.PrecomputedCache`` and saved to ``./uq_cache``.
+   default parameters into a generic ``XSpaceVecoli`` parameter space.
+2. ``_setup_input_pc`` builds a ``pytuq.rv.pcrv.PCRV`` (Legendre basis,
+   uniform priors) encoding the affine germ-to-physical map.
+3. ``PCRV.sampleGerm(n_samples)`` draws 50 germ samples; ``evalPC``
+   maps them to physical space.  ``--n-test 10`` adds 10 held-out
+   validation samples (UQPC ``--ntst``).
+4. Each row of ``X`` becomes one vEcoli variant via the upstream
+   ``sim_data_setattr`` variant function.
+5. ``runscripts/workflow.py`` is spawned as a subprocess.  Nextflow
+   manages variant instantiation, simulation, and Parquet emission.
+6. Observables are extracted from hive-partitioned Parquet using the
+   selected ``--observables`` presets (see :doc:`cli_reference` for the
+   full preset table).  Each preset mirrors a cd1 analysis module.
+   ``--generation-lower-bound`` filters early transient generations.
+7. Results are saved to ``./uq_cache`` as a ``PrecomputedCache``.
    Test samples are sliced off and stored as ``X_test.npy`` /
    ``Y_test.npy``.
 

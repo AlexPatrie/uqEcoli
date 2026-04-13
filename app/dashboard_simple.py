@@ -11,6 +11,12 @@ across all four aggregation strategies:
   2. By generation — per-generation Sobol comparison
   3. By lineage seed — per-seed Sobol comparison
   4. Growth-stratified — sensitivity spectrogram + per-stage prediction
+
+The observable set is determined by the ``--observables`` presets
+passed to ``uq sample`` (mass, higher_order, exchange_fluxes,
+transcriptome, proteome, fluxome — see ``uq/observables.py``).
+The dashboard is observable-agnostic: it reads whatever Sobol indices
+and surrogate coefficients ``quantify`` exported.
 """
 
 import marimo
