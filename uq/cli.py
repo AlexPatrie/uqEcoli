@@ -40,17 +40,13 @@ from rich.text import Text
 from uq.models import CliType
 
 console = Console()
-app = typer.Typer(help="Scientifically transparent UQ for vEcoli.")
-
-
-@app.command(name="help")
-def display_help() -> None:
-    """Show help for a specific subcommand, or the main CLI."""
-    import click
-
-    cmd = typer.main.get_command(app)
-    with click.Context(cmd) as ctx:
-        print(cmd.get_help(ctx))
+app = typer.Typer(
+    help=(
+        "Scientifically transparent UQ for vEcoli.\n\n"
+        "Tip: every subcommand accepts a trailing ``help`` word as an alias "
+        "for ``--help``, e.g. ``uq sample help``, ``uq quantify help``."
+    ),
+)
 
 
 # ── sample: reuse uq sample directly ────────────────────────────────
@@ -71,6 +67,18 @@ def sample(
     n_init_sims: int = 1,
     max_duration: float = 10800.0,
     params_file: str | None = None,
+    observables: list[str] = typer.Option(
+        ["mass"],
+        help="Observable presets to extract (cd1 analysis modules). "
+        "Options: mass, higher_order, exchange_fluxes, transcriptome, "
+        "proteome, fluxome. Pass multiple: --observables higher_order "
+        "--observables exchange_fluxes",
+    ),
+    generation_lower_bound: int = typer.Option(
+        0,
+        help="Skip generations below this value when aggregating Y "
+        "(cd1 generation_lower_bound). 0 = keep all.",
+    ),
 ) -> None:
     """UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli workflow.py.
 
@@ -78,11 +86,17 @@ def sample(
     vEcoli as a subprocess via runscripts/workflow.py, and caches
     (X, Y, timeseries) to disk as a PrecomputedCache.
 
+    \b
     Use --generations >= 2 to enable Strategy 2 (by-generation GSA).
-    Use --n-test > 0 to run additional held-out validation samples
-    (PyTUQ UQPC ``--ntst``) through the same vEcoli workflow; they
-    are stored under ``X_test.npy``/``Y_test.npy`` in the cache and
-    consumed by ``quantify`` for surrogate-quality diagnostics.
+    Use --n-test > 0 for held-out validation (UQPC --ntst).
+    Use --observables to select cd1-style observable categories:
+      mass             Raw mass/growth scalars (default)
+      higher_order     Derived metrics: doubling time, biomass composition
+      exchange_fluxes  External metabolite fluxes (~87)
+      transcriptome    mRNA cistron counts (~4300 genes)
+      proteome         Protein monomer counts (~4300 monomers)
+      fluxome          Base reaction fluxes (~2800, dry-mass normalized)
+    Use --generation-lower-bound N to skip early generations.
     """
     import json as _json
     import os
@@ -166,6 +180,7 @@ def sample(
     )
     config_path = batch_dir / "workflow_config.json"
     config_path.write_text(_json.dumps(config, indent=2))
+    console.print(f"  [dim]Config JSON: {config_path}[/dim]")
 
     vecoli_root = _get_vecoli_root()
     nf_temp = Path(vecoli_root) / "nextflow_temp" / experiment_id
@@ -261,13 +276,15 @@ def sample(
         if candidates:
             history_base = candidates[0]
 
-    obs = [
-        "listeners__mass__dry_mass",
-        "listeners__mass__cell_mass",
-        "listeners__mass__volume",
-        "listeners__mass__growth",
-    ]
-    Y_all, Y_ts_all, Y_meta_all = _collect_variant_timeseries(history_base, n_variants, obs)
+    from uq.observables import collect_observables
+
+    console.print(f"[dim]Observables: {observables}, gen_lower_bound={generation_lower_bound}[/dim]")
+    Y_all, obs, Y_ts_all, Y_meta_all = collect_observables(
+        history_base,
+        n_variants,
+        presets=observables,
+        generation_lower_bound=generation_lower_bound,
+    )
 
     # Split train and held-out test portions
     Y_agg = Y_all[:n_samples]
@@ -566,7 +583,84 @@ def gui() -> None:
     )
 
 
+@app.command(name="show-config")
+def show_config(
+    sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
+    n_samples: int = 5,
+    seed: int = 42,
+    generations: int = 1,
+    n_init_sims: int = 1,
+    max_duration: float = 10800.0,
+    params_file: str | None = None,
+    output_file: str | None = typer.Option(None, help="Write JSON to this file instead of stdout"),
+) -> None:
+    """Show the full vEcoli workflow config JSON that `sample` would pass.
+
+    \b
+    Generates the config without running vEcoli — useful for review,
+    debugging, or manual execution via workflow.py --config.
+    """
+    import json as _json
+
+    from libuq.pipeline.models import SimDataParameter
+    from libuq.pipeline.param_loader import ParameterDataset
+    from uq.tui import _build_config, _build_variants_from_samples
+    from uq.workflow import _setup_input_pc
+
+    sim_data_path = str(Path(sim_data_path).resolve())
+    ds = ParameterDataset(sim_data_path=sim_data_path)
+    if params_file is not None:
+        raw = _json.loads(Path(params_file).read_text())
+        parameters = [SimDataParameter.from_dict(p) for p in raw]
+    else:
+        parameters = None
+    param_space = ds.to_parameter_space(parameters=parameters)
+    bounds = np.array(param_space.parameter_bounds)
+
+    input_pc, _, _ = _setup_input_pc(bounds)
+    np.random.seed(seed)
+    germ = input_pc.sampleGerm(n_samples)
+    X = input_pc.evalPC(germ)
+
+    variants = _build_variants_from_samples(X, param_space._sim_data_parameters)
+    config = _build_config(
+        sim_data_path=sim_data_path,
+        output_dir="<OUTPUT_DIR>",
+        variants_section=variants,
+        n_init_sims=n_init_sims,
+        generations=generations,
+        max_duration=max_duration,
+    )
+
+    text = _json.dumps(config, indent=2)
+    if output_file:
+        Path(output_file).write_text(text)
+        console.print(f"[green]Config written to {output_file}[/green]")
+    else:
+        from rich.syntax import Syntax
+
+        console.print(Syntax(text, "json", theme="monokai", line_numbers=True))
+
+    console.print(f"\n[dim]{n_samples} variants × {n_init_sims} seeds × {generations} gens "
+                  f"= {(n_samples + 1) * n_init_sims * generations} total sims[/dim]")
+
+
+_HELP_SUBCOMMAND_ALIASES = {"help", "--help", "-h"}
+
+
 def main() -> None:
+    """Entry point.
+
+    Rewrites ``uq <cmd> ... help`` → ``uq <cmd> ... --help`` so users can
+    discover flags with a trailing ``help`` word on any subcommand
+    (``uq sample help``, ``uq quantify help``, ``uq tui help``, …)
+    in addition to the standard ``uq <cmd> --help`` form.
+    """
+    import sys
+
+    argv = sys.argv
+    if len(argv) >= 3 and argv[-1] in _HELP_SUBCOMMAND_ALIASES:
+        argv[-1] = "--help"
     app()
 
 

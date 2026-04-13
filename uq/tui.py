@@ -75,6 +75,12 @@ DEFAULT_OBS = [
     "listeners__mass__growth",
 ]
 
+# Observable presets (cd1 analysis modules) — see uq/observables.py
+try:
+    from uq.observables import PRESETS as _OBS_PRESETS
+except ImportError:
+    _OBS_PRESETS = {}  # type: ignore[assignment]
+
 
 def _json_markup(data: Any) -> Syntax:
     return Syntax(

@@ -29,7 +29,7 @@ dependencies = [
 
 [project.scripts]
 uq-ultra = "libuq.cli:app"
-uq = "uq.cli:app"
+uq = "uq.cli:main"
 
 [tool.hatch.build.targets.sdist]
 include = [
