@@ -566,6 +566,50 @@ pipeline in different presentation formats:
 | Client | Command | Best for |
 |---|---|---|
 | CLI (Rich) | `uv run uq sample` / `uv run uq quantify` | Scripts, CI, headless runs |
+| CLI (inspect) | `uv run uq show-config` | Preview the vEcoli config JSON |
 | TUI (Textual) | `uv run uq tui` | Interactive terminal with live progress |
 | GUI (marimo) | `uv run uq gui` | Reactive browser notebook |
 | Dashboard (tkinter) | `uv run uq dashboard` | DAW-style result exploration |
+
+---
+
+## Verified end-to-end run
+
+The following was run on 2026-04-13 and produced the artifacts in
+`uq_cache_e2e/` and `uq_results_e2e/`:
+
+```bash
+# Preview config (no vEcoli execution)
+uv run uq show-config sim_data/baseline/kb/simData.cPickle \
+    --n-samples 10 --output-file ./uq_cache/preview_config.json
+
+# Stage 1: sample (10 variants, 6 params, ~4.5 min on M1)
+uv run uq sample sim_data/baseline/kb/simData.cPickle \
+    --cache-dir ./uq_cache_e2e \
+    --n-samples 10 --seed 42
+
+# Stage 2: quantify (instant — all matrix algebra)
+uv run uq quantify sim_data/baseline/kb/simData.cPickle \
+    --cache-dir ./uq_cache_e2e \
+    --export-path ./uq_results_e2e \
+    --polynomial-order 2 --regression lsq --n-bins 5
+```
+
+Results (strategy 1 — population-averaged Sobol S_Ti):
+
+```
+basal_elongation_rate        28.5%
+fraction_active_rnap_bound   25.2%
+cell_dry_mass_fraction       23.6%
+fraction_active_rnap_free    13.6%
+secretion_penalty_coeff      13.4%
+kinetic_objective_weight     11.5%
+```
+
+Surrogate quality: training relative errors ~1e-15 (machine precision —
+10 samples, 28 PCE terms, underdetermined but LSQ still fits exactly
+for this smooth problem).
+
+Strategy 4 shows `cell_dry_mass_fraction` dominates early in the cell
+cycle (θ 0–20%: 28.8%) but declines toward division (θ 80–100%: 18.9%),
+while `fraction_active_rnap_bound` increases (23.4% → 28.8%).

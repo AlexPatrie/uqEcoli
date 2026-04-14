@@ -96,10 +96,16 @@ uv run uq quantify /path/to/simData.cPickle \
 All four clients wrap the same two-stage workflow — pick your surface:
 
 ```bash
+uv run uq show-config /path/to/simData.cPickle   # preview the vEcoli config JSON
 uv run uq tui         # Textual terminal dashboard with live progress
 uv run uq gui         # marimo browser notebook
 uv run uq dashboard   # tkinter DAW-style result explorer
 ```
+
+A verified end-to-end run (10 variants, 6 params, `mass` preset) is
+documented in [`TUTORIAL.md`](TUTORIAL.md#verified-end-to-end-run) with
+cached artifacts in `uq_cache_e2e/` and exported results in
+`uq_results_e2e/`.
 
 Full per-flag documentation lives in [`docs/cli_reference.rst`](docs/cli_reference.rst).
 
