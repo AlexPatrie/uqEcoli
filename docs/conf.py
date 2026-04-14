@@ -18,6 +18,31 @@ author = "Alex Patrie"
 release = "0.1.0"
 version = "0.1.0"
 
+# -- Mock imports for ReadTheDocs builds ------------------------------------
+# RTD doesn't have vEcoli, PyTUQ, or other heavy dependencies installed.
+# Mock them so autodoc can still parse type annotations and docstrings.
+autodoc_mock_imports = [
+    "ecoli",
+    "pytuq",
+    "pydmd",
+    "polars",
+    "duckdb",
+    "scipy",
+    "plotly",
+    "textual",
+    "typer",
+    "click",
+    "rich",
+    "bigraph_schema",
+    "process_bigraph",
+    "vivarium",
+    "ray",
+    "salib",
+    "marimo",
+    "libuq",
+    "uq",
+]
+
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
