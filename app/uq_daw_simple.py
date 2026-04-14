@@ -56,6 +56,34 @@ C = {
 DEFAULT_PARAM_COLORS = [C["accent1"], C["accent4"], C["accent2"], C["accent3"], C["accent5"]]
 
 
+# -- Observable labels + units (biologist-facing) ------------------------------
+#
+# Maps Parquet column tails to (short label, unit string, python format spec).
+# Falls back to the raw column name if not found.
+
+OBSERVABLE_UNITS: dict[str, tuple[str, str, str]] = {
+    "dry_mass": ("Dry mass", "fg", ".1f"),
+    "cell_mass": ("Cell mass", "fg", ".1f"),
+    "volume": ("Volume", "\u00b5m\u00b3", ".3f"),
+    "growth": ("Mass growth", "fg/s", ".4f"),
+    "instantaneous_growth_rate": ("Growth rate", "s\u207b\u00b9", ".2e"),
+    "growth_rate_per_hour": ("Growth rate", "hr\u207b\u00b9", ".3f"),
+    "doubling_time_hours": ("Doubling time", "hr", ".2f"),
+    "dna_fraction_g_per_g_dw": ("DNA fraction", "g/g DW", ".4f"),
+    "rna_fraction_g_per_g_dw": ("RNA fraction", "g/g DW", ".4f"),
+    "dry_mass_fraction": ("Dry mass frac", "", ".3f"),
+    "cell_volume_um3": ("Volume", "\u00b5m\u00b3", ".3f"),
+}
+
+
+def _obs_label(name: str) -> tuple[str, str, str]:
+    """Return (short_label, unit, fmt) for an observable name."""
+    tail = name.split("__")[-1] if "__" in name else name
+    if tail in OBSERVABLE_UNITS:
+        return OBSERVABLE_UNITS[tail]
+    return (tail, "", ".4f")
+
+
 # -- Legendre PCE evaluation --------------------------------------------------
 
 
@@ -375,15 +403,21 @@ class ResponseCurveCanvas(tk.Canvas):
         self._y_max = 1
         self._dragging = None
         self._hovering = None
+        self._baseline: float | None = None
+        self._obs_label = ""
+        self._obs_unit = ""
 
     def _on_resize(self, event):
         self.redraw()
 
-    def set_curves(self, curves, markers, selected, y_range):
+    def set_curves(self, curves, markers, selected, y_range, baseline=None, obs_label="", obs_unit=""):
         self._curves = curves
         self._markers = markers
         self._selected = selected
         self._y_min, self._y_max = y_range
+        self._baseline = baseline
+        self._obs_label = obs_label
+        self._obs_unit = obs_unit
         self.redraw()
 
     def _plot_geometry(self):
@@ -464,7 +498,9 @@ class ResponseCurveCanvas(tk.Canvas):
             self.create_line(x, pt, x, pt + plot_h, fill=C["grid"], width=1)
 
         self.create_text(w // 2, h - 8, text="Normalized parameter [0=min, 1=max]", fill=C["text_dim"], font=("Menlo", 9))
-        self.create_text(12, h // 2, text="\u0176", fill=C["text_dim"], font=("Menlo", 10), angle=90)
+        _y_label = self._obs_label or "\u0176"
+        _y_unit = f" ({self._obs_unit})" if self._obs_unit else ""
+        self.create_text(12, h // 2, text=f"{_y_label}{_y_unit}", fill=C["text_dim"], font=("Menlo", 9), angle=90)
 
         # Y-axis ticks
         for i in range(5):
@@ -472,6 +508,15 @@ class ResponseCurveCanvas(tk.Canvas):
             y = pt + int(plot_h * (1 - frac))
             val = self._y_min + y_span * frac
             self.create_text(pl - 5, y, text=f"{val:.2f}", fill=C["text_dim"], font=("Menlo", 8), anchor="e")
+
+        # Baseline reference line (wild-type / midpoint)
+        if self._baseline is not None and self._y_min <= self._baseline <= self._y_max:
+            _, _bl_py = self._to_px(0, self._baseline)
+            self.create_line(pl, _bl_py, w - pr, _bl_py, fill=C["accent2"], width=1, dash=(6, 4))
+            self.create_text(
+                w - pr + 2, _bl_py, text=f"baseline {self._baseline:.2f}",
+                fill=C["accent2"], font=("Menlo", 7), anchor="w",
+            )
 
         # Draw curves
         param_list = list(self._curves.keys())
@@ -513,7 +558,8 @@ class ResponseCurveCanvas(tk.Canvas):
                 self.create_text(px, py - size - 8, text=f"\u0176={my:.3f}", fill=color, font=("Menlo", 9, "bold"))
 
         drag_hint = "  [drag dots]" if self._markers else ""
-        self.create_text(w // 2, 14, text=f"PCE RESPONSE CURVES{drag_hint}", fill=C["text"], font=("Menlo", 11, "bold"))
+        _title_obs = f" // {self._obs_label}" if self._obs_label else ""
+        self.create_text(w // 2, 14, text=f"PCE RESPONSE CURVES{_title_obs}{drag_hint}", fill=C["text"], font=("Menlo", 11, "bold"))
 
 
 class HeatmapCanvas(tk.Canvas):
@@ -556,9 +602,7 @@ class HeatmapCanvas(tk.Canvas):
         if w < 10 or h < 10:
             return
 
-        has_preds = self._stage_predictions is not None and len(self._stage_predictions) > 0
-        pred_h = 55 if has_preds else 0
-        pad_l, pad_r, pad_t, pad_b = 90, 45, 30, 20 + pred_h
+        pad_l, pad_r, pad_t, pad_b = 90, 45, 30, 20
         plot_w = w - pad_l - pad_r
         plot_h = h - pad_t - pad_b
         n_stages = len(stages)
@@ -603,56 +647,6 @@ class HeatmapCanvas(tk.Canvas):
                 _dot_x - _r, _dot_y - _r, _dot_x + _r, _dot_y + _r,
                 fill="#ffffff", outline=_color, width=2,
             )
-
-        if has_preds:
-            preds = np.asarray(self._stage_predictions)
-            pred_top = heatmap_bottom + 20
-            pred_bottom = h - 5
-            pred_plot_h = max(pred_bottom - pred_top, 10)
-            p_min, p_max = float(preds.min()), float(preds.max())
-            p_span = p_max - p_min or 1.0
-
-            self.create_rectangle(pad_l, pred_top - 2, pad_l + plot_w, pred_bottom + 2, fill=C["panel_light"], outline=C["border"])
-
-            # Grid lines
-            for _gi in range(3):
-                _gy = pred_top + int(pred_plot_h * _gi / 2)
-                self.create_line(pad_l, _gy, pad_l + plot_w, _gy, fill=C["grid"], width=1, dash=(2, 4))
-
-            # Y-axis ticks
-            for _gi in range(3):
-                _frac = _gi / 2
-                _gy = pred_top + int(pred_plot_h * (1 - _frac))
-                _val = p_min + p_span * _frac
-                self.create_text(pad_l - 5, _gy, text=f"{_val:.2f}", fill=C["accent3"], font=("Menlo", 7), anchor="e")
-
-            points = []
-            for si in range(n_stages):
-                px = pad_l + int(cell_w * (si + 0.5))
-                py = pred_top + int((1 - (preds[si] - p_min) / p_span) * pred_plot_h)
-                points.extend([px, py])
-            if len(points) >= 4:
-                self.create_line(points, fill=C["accent3"], width=2, smooth=True)
-            for si in range(n_stages):
-                px = pad_l + int(cell_w * (si + 0.5))
-                py = pred_top + int((1 - (preds[si] - p_min) / p_span) * pred_plot_h)
-                self.create_oval(px - 3, py - 3, px + 3, py + 3, fill=C["accent3"], outline="")
-
-            # ── Peak stage indicator ──
-            _peak = int(np.argmax(preds))
-            _peak_px = pad_l + int(cell_w * (_peak + 0.5))
-            _peak_py = pred_top + int((1 - (preds[_peak] - p_min) / p_span) * pred_plot_h)
-            self.create_oval(
-                _peak_px - 6, _peak_py - 6, _peak_px + 6, _peak_py + 6,
-                fill=C["accent3"], outline="#ffffff", width=2,
-            )
-            self.create_text(
-                _peak_px, _peak_py - 12,
-                text=f"\u03b8{_peak}={preds[_peak]:.3f}",
-                fill=C["accent3"], font=("Menlo", 8, "bold"),
-            )
-
-            self.create_text(pad_l + 3, pred_top - 8, text="\u0176 per stage (cell cycle surrogate)", fill=C["accent3"], font=("Menlo", 7, "bold"), anchor="w")
 
         # Colorbar
         cb_x = w - pad_r + 8
@@ -943,6 +937,177 @@ class ResynthOscilloscope(tk.Canvas):
             self.create_line(points, fill=C["accent3"], width=2, smooth=True)
 
 
+class PredictedProfileCanvas(tk.Canvas):
+    """Per-observable predicted profile across the cell cycle (θ-bins).
+
+    Shows one line per observable, X = θ (growth progress), Y = predicted
+    value from the per-stage PCE surrogate.  The selected observable is
+    drawn bold with units on the Y-axis; all others are dimmed.  When
+    "(aggregate)" is selected, all observables are shown as % deviation
+    from baseline on a common axis.
+
+    This is the panel that lets biologists tune parameter knobs and
+    directly see the predicted effect on familiar output observables.
+    """
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=C["panel"], highlightthickness=0, **kwargs)
+        self.bind("<Configure>", lambda e: self.redraw())
+        self._profiles: dict[str, np.ndarray] | None = None  # obs_name → (n_stages,)
+        self._baselines: dict[str, float] = {}
+        self._selected_obs: str = "(aggregate)"
+        self._obs_colors: list[str] = []
+
+    def set_profiles(
+        self,
+        profiles: dict[str, np.ndarray] | None,
+        baselines: dict[str, float],
+        selected_obs: str = "(aggregate)",
+    ):
+        self._profiles = profiles
+        self._baselines = baselines
+        self._selected_obs = selected_obs
+        self.redraw()
+
+    def redraw(self):
+        self.delete("all")
+        _w = self.winfo_width()
+        _h = self.winfo_height()
+        if _w < 10 or _h < 10:
+            return
+
+        self.create_text(
+            _w // 2, 12,
+            text="PREDICTED OBSERVABLE PROFILE // per cell-cycle stage",
+            fill=C["text"], font=("Menlo", 10, "bold"),
+        )
+
+        if not self._profiles:
+            self.create_text(
+                _w // 2, _h // 2,
+                text="Re-run: uv run uq quantify ... --export-path ./uq_results\n"
+                "then reload the uq_results.json to see predicted profiles.\n"
+                "(requires growth_stratified_surrogate/coefficients_per_output.npy)",
+                fill=C["text_dim"], font=("Menlo", 8), justify="center",
+            )
+            return
+
+        _pad_l, _pad_r, _pad_t, _pad_b = 65, 20, 28, 30
+        _pw = _w - _pad_l - _pad_r
+        _ph = _h - _pad_t - _pad_b
+        if _pw < 10 or _ph < 10:
+            return
+
+        _sel = self._selected_obs
+        _is_aggregate = _sel == "(aggregate)"
+        _all_names = list(self._profiles.keys())
+        _n_stages = len(next(iter(self._profiles.values())))
+        _colors = DEFAULT_PARAM_COLORS
+
+        if _is_aggregate:
+            # Show all as % deviation from baseline
+            _y_label = "Δ from baseline (%)"
+            _all_vals: list[float] = []
+            _lines: list[tuple[str, np.ndarray, str, int]] = []
+            for _i, _name in enumerate(_all_names):
+                _prof = self._profiles[_name]
+                _bl = self._baselines.get(_name, 0.0)
+                if abs(_bl) > 1e-15:
+                    _pct = (_prof - _bl) / abs(_bl) * 100.0
+                else:
+                    _pct = np.zeros_like(_prof)
+                _all_vals.extend(_pct.tolist())
+                _color = _colors[_i % len(_colors)]
+                _lines.append((_name, _pct, _color, 2))
+
+            if not _all_vals:
+                return
+            _y_min = min(_all_vals) - 0.5
+            _y_max = max(_all_vals) + 0.5
+            if _y_max - _y_min < 1:
+                _y_min, _y_max = -1, 1
+        else:
+            # Single observable in actual units
+            _lbl, _unit, _fmt = _obs_label(_sel)
+            _y_label = f"{_lbl} ({_unit})" if _unit else _lbl
+            _prof = self._profiles.get(_sel)
+            if _prof is None:
+                return
+            _margin = max(abs(_prof.max() - _prof.min()) * 0.15, 1e-6)
+            _y_min = float(_prof.min()) - _margin
+            _y_max = float(_prof.max()) + _margin
+
+            _sel_idx = _all_names.index(_sel) if _sel in _all_names else 0
+            _lines = []
+            # Dim lines for other observables (normalized to this y range for shape)
+            for _i, _name in enumerate(_all_names):
+                if _name == _sel:
+                    _lines.append((_name, _prof, _colors[_i % len(_colors)], 4))
+                else:
+                    _other = self._profiles[_name]
+                    # Rescale other observable to fit in the same Y range (show shape)
+                    _o_min, _o_max = float(_other.min()), float(_other.max())
+                    _o_span = _o_max - _o_min or 1.0
+                    _rescaled = _y_min + (_other - _o_min) / _o_span * (_y_max - _y_min)
+                    _lines.append((_name, _rescaled, _colors[_i % len(_colors)], 2))
+
+        _y_span = _y_max - _y_min or 1.0
+
+        # Grid + Y-axis
+        for _gi in range(5):
+            _gy = _pad_t + int(_ph * _gi / 4)
+            self.create_line(_pad_l, _gy, _w - _pad_r, _gy, fill=C["grid"], width=1, dash=(2, 4))
+            _val = _y_max - _y_span * _gi / 4
+            self.create_text(_pad_l - 5, _gy, text=f"{_val:.2f}", fill=C["text_dim"], font=("Menlo", 7), anchor="e")
+
+        # Y-axis label
+        self.create_text(10, (_pad_t + _pad_t + _ph) // 2, text=_y_label, fill=C["text_dim"], font=("Menlo", 8), angle=90)
+
+        # X-axis labels
+        for _si in range(_n_stages):
+            _x = _pad_l + int(_pw * (_si + 0.5) / _n_stages)
+            _lo_pct = int(100 * _si / _n_stages)
+            _hi_pct = int(100 * (_si + 1) / _n_stages)
+            self.create_text(_x, _h - 10, text=f"{_lo_pct}-{_hi_pct}%", fill=C["text_dim"], font=("Menlo", 7))
+        self.create_text(_w // 2, _h - 2, text="\u03b8 (cell cycle progress)", fill=C["text_dim"], font=("Menlo", 7))
+
+        # Baseline reference
+        if not _is_aggregate:
+            _bl = self._baselines.get(_sel, 0.0)
+            if _y_min <= _bl <= _y_max:
+                _bl_py = _pad_t + int((1 - (_bl - _y_min) / _y_span) * _ph)
+                self.create_line(_pad_l, _bl_py, _w - _pad_r, _bl_py, fill=C["accent2"], width=1, dash=(6, 4))
+                self.create_text(_w - _pad_r + 2, _bl_py, text="baseline", fill=C["accent2"], font=("Menlo", 7), anchor="w")
+
+        # Draw lines
+        for _name, _vals, _color, _width in _lines:
+            _pts: list[int] = []
+            for _si in range(_n_stages):
+                _px = _pad_l + int(_pw * (_si + 0.5) / _n_stages)
+                _py = _pad_t + int((1 - (_vals[_si] - _y_min) / _y_span) * _ph)
+                _pts.extend([_px, _py])
+            if len(_pts) >= 4:
+                _stipple = "" if _width > 1 else "gray50"
+                self.create_line(_pts, fill=_color, width=_width, smooth=True, stipple=_stipple)
+            # Dots
+            for _si in range(_n_stages):
+                _px = _pad_l + int(_pw * (_si + 0.5) / _n_stages)
+                _py = _pad_t + int((1 - (_vals[_si] - _y_min) / _y_span) * _ph)
+                _r = 5 if _width > 2 else 3
+                self.create_oval(_px - _r, _py - _r, _px + _r, _py + _r, fill=_color, outline="")
+
+        # Legend (top right)
+        _lx = _w - _pad_r - 10
+        _n_names = len(_all_names)
+        for _i, _name in enumerate(reversed(_all_names)):
+            _ci = (_n_names - 1 - _i) % len(_colors)
+            _color = _colors[_ci]
+            _short_lbl, _, _ = _obs_label(_name)
+            _ly = _pad_t + 2 + _i * 12
+            self.create_rectangle(_lx - 50, _ly, _lx - 42, _ly + 8, fill=_color, outline="")
+            self.create_text(_lx - 40, _ly + 4, text=_short_lbl, fill=_color, font=("Menlo", 7), anchor="w")
+
+
 # -- Main Application ---------------------------------------------------------
 
 
@@ -958,11 +1123,11 @@ class UQDawSimpleApp:
 
         self.data = None
         self.surr_data = None
-        self.spectral_bundle: SpectralBundle | None = None
         self.selected_param = tk.StringVar()
+        self.selected_observable = tk.StringVar(value="(aggregate)")
         self.param_colors = {}
-        self._resynth_n_samples = 400
-        self._resynth_t_max = 200.0
+        self._baselines: dict[str, float] = {}  # obs_short_name → PCE(midpoint)
+        self._observable_full_names: list[str] = []
 
         self._build_ui()
 
@@ -1022,6 +1187,14 @@ class UQDawSimpleApp:
         self.param_menu.pack(fill="x", padx=8, pady=8)
         self.selected_param.trace_add("write", lambda *_: self._on_param_change())
 
+        # -- Left: Observable selector --
+        obs_frame = tk.LabelFrame(self.left_frame, text="OBSERVABLE", bg=C["panel"], fg=C["accent4"], font=("Menlo", 10, "bold"), labelanchor="n")
+        obs_frame.pack(fill="x", padx=4, pady=4)
+
+        self.obs_menu = ttk.Combobox(obs_frame, textvariable=self.selected_observable, state="readonly", font=("Menlo", 9))
+        self.obs_menu.pack(fill="x", padx=8, pady=8)
+        self.selected_observable.trace_add("write", lambda *_: self._on_param_change())
+
         # -- Left: PCE sliders --
         slider_frame = tk.LabelFrame(self.left_frame, text="PCE SURROGATE KNOBS", bg=C["panel"], fg=C["accent3"], font=("Menlo", 10, "bold"), labelanchor="n")
         slider_frame.pack(fill="x", padx=4, pady=4)
@@ -1065,35 +1238,13 @@ class UQDawSimpleApp:
         )
         self.response_canvas.pack(fill="both", expand=True, padx=2, pady=2)
 
-        # Bottom: strategies 2-3 side by side, then spectrogram full-width
-        _strat_row = tk.Frame(self.bottom_frame, bg=C["bg"])
-        _strat_row.pack(fill="x", padx=2, pady=(2, 1))
-
-        self.gen_canvas = StrategyBarCanvas(_strat_row, title="STRATEGY 2 // BY GENERATION", bar_color=C["accent_blue"], height=160)
-        self.gen_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
-
-        self.seed_canvas = StrategyBarCanvas(_strat_row, title="STRATEGY 3 // BY LINEAGE SEED", bar_color=C["accent_gold"], height=160)
-        self.seed_canvas.pack(side="right", fill="both", expand=True, padx=(1, 0))
-
         # Bottom: sensitivity spectrogram (strategy 4)
         self.heatmap_canvas = HeatmapCanvas(self.bottom_frame, height=180)
-        self.heatmap_canvas.pack(fill="x", padx=2, pady=(1, 2))
+        self.heatmap_canvas.pack(fill="x", padx=2, pady=(1, 1))
 
-        # Bottom: Koopman spectral section (workflow_spectral)
-        spectral_row = tk.Frame(self.bottom_frame, bg=C["bg"])
-        spectral_row.pack(fill="both", expand=True, padx=2, pady=(1, 2))
-
-        self.synth_canvas = SpectralSynthCanvas(spectral_row, height=180)
-        self.synth_canvas.pack(side="left", fill="both", expand=True, padx=(0, 1))
-
-        right_col = tk.Frame(spectral_row, bg=C["bg"])
-        right_col.pack(side="left", fill="both", expand=True, padx=(1, 0))
-
-        self.modulation_canvas = ModulationMatrixCanvas(right_col, height=120)
-        self.modulation_canvas.pack(fill="both", expand=True, padx=0, pady=(0, 1))
-
-        self.resynth_canvas = ResynthOscilloscope(right_col, height=60)
-        self.resynth_canvas.pack(fill="both", expand=True, padx=0, pady=(1, 0))
+        # Bottom: predicted observable profile (per-stage PCE) — main output panel
+        self.profile_canvas = PredictedProfileCanvas(self.bottom_frame, height=280)
+        self.profile_canvas.pack(fill="both", expand=True, padx=2, pady=(1, 4))
 
     def _open_file(self):
         path = filedialog.askopenfilename(title="Load UQ Results", filetypes=[("JSON", "*.json"), ("All", "*.*")])
@@ -1111,12 +1262,6 @@ class UQDawSimpleApp:
 
         export_dir = path.parent
         self.surr_data = self._load_surrogates(export_dir)
-        # Try to load the companion Koopman-PCE bundle (workflow_spectral export).
-        self.spectral_bundle = load_spectral_bundle(export_dir / "spectral")
-        if self.spectral_bundle is None:
-            # Also check the export dir itself in case the user passed the
-            # spectral directory directly.
-            self.spectral_bundle = load_spectral_bundle(export_dir)
 
         params = list(self.data["parameters"].keys())
         self.param_colors = {p: DEFAULT_PARAM_COLORS[i % len(DEFAULT_PARAM_COLORS)] for i, p in enumerate(params)}
@@ -1125,6 +1270,32 @@ class UQDawSimpleApp:
 
         self.param_menu["values"] = params
         self.selected_param.set(params[0])
+
+        # Populate observable selector
+        obs_names = self.data.get("observable_names", [])
+        obs_choices = ["(aggregate)"] + [
+            n.split("__")[-1] if "__" in n else n for n in obs_names
+        ]
+        self.obs_menu["values"] = obs_choices
+        self.selected_observable.set("(aggregate)")
+        self._observable_full_names = obs_names
+
+        # Compute baselines (PCE at parameter midpoints)
+        self._baselines = {}
+        if self.surr_data and self.surr_data.get("bounds") is not None:
+            bounds = self.surr_data["bounds"]
+            mid = 0.5 * (bounds[:, 0] + bounds[:, 1])
+            mid_norm = normalize_to_germ(mid, bounds)
+            self._baselines["(aggregate)"] = float(
+                legendre_eval(mid_norm, self.surr_data["pop_coeffs"], self.surr_data["pop_mi"])
+            )
+            per_out = self.surr_data.get("pop_coeffs_per_output")
+            if per_out is not None:
+                for _i, _name in enumerate(obs_names):
+                    _short = _name.split("__")[-1] if "__" in _name else _name
+                    self._baselines[_short] = float(
+                        legendre_eval(mid_norm, per_out[_i], self.surr_data["pop_mi"])
+                    )
 
         self._build_sliders(params)
         self._update_strategy_info()
@@ -1142,6 +1313,24 @@ class UQDawSimpleApp:
             }
             bounds_path = pop_dir / "input_bounds.npy"
             result["bounds"] = np.load(bounds_path) if bounds_path.exists() else None
+
+            # Per-output coefficients (for observable selector)
+            per_out_path = pop_dir / "coefficients_per_output.npy"
+            result["pop_coeffs_per_output"] = (
+                np.load(per_out_path) if per_out_path.exists() else None
+            )
+
+            # Per-stage coefficients (for exact growth-stratified prediction)
+            gs_dir = export_dir / "growth_stratified_surrogate"
+            gs_per_out = gs_dir / "coefficients_per_output.npy"
+            gs_mi = gs_dir / "multi_indices.npy"
+            if gs_per_out.exists() and gs_mi.exists():
+                result["gs_coeffs_per_output"] = np.load(gs_per_out)
+                result["gs_mi"] = np.load(gs_mi)
+            else:
+                result["gs_coeffs_per_output"] = None
+                result["gs_mi"] = None
+
             return result
         except Exception:
             return None
@@ -1216,43 +1405,15 @@ class UQDawSimpleApp:
         n_stages = self.data.get("phase2_growth_stratified", {}).get("n_stages", "?")
         s2_text = f"{s2.get('n_generations', 0)} gen" if "generations" in s2 else "N/A"
         s3_text = f"{s3.get('n_seeds', 0)} seeds" if "seeds" in s3 else "N/A"
-        parts = [
-            f"S1: bulk",
-            f"S2: {s2_text}",
-            f"S3: {s3_text}",
-            f"S4: {n_stages} stages",
-        ]
-        if self.spectral_bundle is not None:
-            parts.append(f"Spectral: {self.spectral_bundle.n_modes} partials")
-        self.strategy_label.config(text=" | ".join(parts))
+        self.strategy_label.config(
+            text=f"S1: bulk | S2: {s2_text} | S3: {s3_text} | S4: {n_stages} stages"
+        )
 
     def _update_all_viz(self):
         if self.data is None:
             return
         selected = self.selected_param.get()
         params = list(self.data["parameters"].keys())
-
-        # Strategy 2: by generation
-        s2 = self.data.get("strategy2_by_generation", {})
-        if "generations" in s2:
-            gen_groups = [
-                {"label": f"Gen {g['generation']}", "sobol_total_order": g["sobol_total_order"]}
-                for g in s2["generations"]
-            ]
-            self.gen_canvas.set_data(gen_groups)
-        else:
-            self.gen_canvas.set_data(None)
-
-        # Strategy 3: by seed
-        s3 = self.data.get("strategy3_by_seed", {})
-        if "seeds" in s3:
-            seed_groups = [
-                {"label": f"Seed {s['lineage_seed']}", "sobol_total_order": s["sobol_total_order"]}
-                for s in s3["seeds"]
-            ]
-            self.seed_canvas.set_data(seed_groups)
-        else:
-            self.seed_canvas.set_data(None)
 
         # Strategy 4: spectrogram
         stages = self.data.get("phase2_growth_stratified", {}).get("stages", [])
@@ -1274,8 +1435,39 @@ class UQDawSimpleApp:
         selected = self.selected_param.get()
         x = np.array([float(self.sliders[p].get()) for p in params])
         x_norm = normalize_to_germ(x, bounds)
-        pop_y = legendre_eval(x_norm, self.surr_data["pop_coeffs"], self.surr_data["pop_mi"])
-        self.readout_label.config(text=f"\u0176 = {pop_y:.4f}")
+
+        # Resolve which coefficients to use based on observable selector
+        obs_choice = self.selected_observable.get()
+        coeffs = self.surr_data["pop_coeffs"]  # default: aggregate
+        mi = self.surr_data["pop_mi"]
+        obs_label = "\u0176"
+
+        per_out = self.surr_data.get("pop_coeffs_per_output")
+        if per_out is not None and obs_choice != "(aggregate)":
+            obs_names = getattr(self, "_observable_full_names", [])
+            short_names = [n.split("__")[-1] if "__" in n else n for n in obs_names]
+            if obs_choice in short_names:
+                obs_idx = short_names.index(obs_choice)
+                coeffs = per_out[obs_idx]
+                obs_label = obs_choice
+
+        pop_y = legendre_eval(x_norm, coeffs, mi)
+
+        # Format readout with units + baseline delta
+        _lbl, _unit, _fmt = _obs_label(obs_label if obs_label != "\u0176" else "(aggregate)")
+        _val_str = f"{pop_y:{_fmt}}"
+        _baseline_key = obs_label if obs_label != "\u0176" else "(aggregate)"
+        _baseline = self._baselines.get(_baseline_key)
+        if _baseline is not None and _baseline != 0:
+            _delta_pct = (pop_y - _baseline) / abs(_baseline) * 100
+            _sign = "+" if _delta_pct >= 0 else ""
+            _unit_str = f" {_unit}" if _unit else ""
+            self.readout_label.config(
+                text=f"{_lbl} = {_val_str}{_unit_str}  ({_sign}{_delta_pct:.1f}%)"
+            )
+        else:
+            _unit_str = f" {_unit}" if _unit else ""
+            self.readout_label.config(text=f"{_lbl} = {_val_str}{_unit_str}")
 
         n_sweep = 80
         curves = {}
@@ -1293,7 +1485,7 @@ class UQDawSimpleApp:
                 x_sw = x.copy()
                 x_sw[pi] = v
                 x_sw_n = normalize_to_germ(x_sw, bounds)
-                sy.append(legendre_eval(x_sw_n, self.surr_data["pop_coeffs"], self.surr_data["pop_mi"]))
+                sy.append(legendre_eval(x_sw_n, coeffs, mi))
             sy = np.array(sy)
             curves[pname] = (sv_norm, sy)
             all_y.extend(sy.tolist())
@@ -1307,8 +1499,8 @@ class UQDawSimpleApp:
             x_plus[pi] = min(x[pi] + delta, hi)
             x_minus = x.copy()
             x_minus[pi] = max(x[pi] - delta, lo)
-            y_plus = legendre_eval(normalize_to_germ(x_plus, bounds), self.surr_data["pop_coeffs"], self.surr_data["pop_mi"])
-            y_minus = legendre_eval(normalize_to_germ(x_minus, bounds), self.surr_data["pop_coeffs"], self.surr_data["pop_mi"])
+            y_plus = legendre_eval(normalize_to_germ(x_plus, bounds), coeffs, mi)
+            y_minus = legendre_eval(normalize_to_germ(x_minus, bounds), coeffs, mi)
             local_sensitivity[pname] = abs(y_plus - y_minus) / (2 * delta + 1e-12)
 
         if all_y:
@@ -1320,12 +1512,45 @@ class UQDawSimpleApp:
         else:
             y_min, y_max = -1, 1
 
-        self.response_canvas.set_curves(curves, markers, selected, (y_min, y_max))
+        _baseline_key = obs_label if obs_label != "\u0176" else "(aggregate)"
+        _baseline_val = self._baselines.get(_baseline_key)
+        _lbl, _unit, _ = _obs_label(_baseline_key)
+        self.response_canvas.set_curves(
+            curves, markers, selected, (y_min, y_max),
+            baseline=_baseline_val,
+            obs_label=_lbl,
+            obs_unit=_unit,
+        )
 
         # Per-stage predictions for spectrogram
         stage_data = self.data.get("phase2_growth_stratified", {}).get("stages", [])
         stage_predictions = None
-        if stage_data and local_sensitivity:
+        gs_per_out = self.surr_data.get("gs_coeffs_per_output") if self.surr_data else None
+        gs_mi = self.surr_data.get("gs_mi") if self.surr_data else None
+        n_obs = len(getattr(self, "_observable_full_names", [])) or 1
+
+        if stage_data and gs_per_out is not None and gs_mi is not None:
+            # Exact per-stage PCE evaluation using growth_stratified_surrogate
+            n_stages = len(stage_data)
+            stage_predictions = np.zeros(n_stages)
+
+            # Resolve which observable column to show
+            obs_choice = self.selected_observable.get()
+            obs_idx = 0  # default: first observable
+            if obs_choice != "(aggregate)":
+                obs_names = getattr(self, "_observable_full_names", [])
+                short_names = [n.split("__")[-1] if "__" in n else n for n in obs_names]
+                if obs_choice in short_names:
+                    obs_idx = short_names.index(obs_choice)
+
+            for si in range(n_stages):
+                # The combined PCE output layout is: stage0_obs0, stage0_obs1, ..., stage1_obs0, ...
+                col_idx = si * n_obs + obs_idx
+                if col_idx < gs_per_out.shape[0]:
+                    stage_predictions[si] = legendre_eval(x_norm, gs_per_out[col_idx], gs_mi)
+
+        elif stage_data and local_sensitivity:
+            # Fallback: linear approximation (old behavior)
             n_stages = len(stage_data)
             stage_predictions = np.zeros(n_stages)
             param_effects = {}
@@ -1346,52 +1571,38 @@ class UQDawSimpleApp:
             param_positions=param_positions,
         )
 
-        # ── Spectral / Koopman synth section ────────────────────────
-        self._update_spectral_panels(x)
+        # ── Predicted observable profile (per-stage PCE for all observables) ──
+        self._update_predicted_profile(x_norm, stage_data)
 
-    def _update_spectral_panels(self, x: np.ndarray) -> None:
-        """Refresh the Koopman-synth / modulation-matrix / resynth canvases.
+    def _update_predicted_profile(self, x_norm: np.ndarray, stage_data: list) -> None:
+        """Compute per-observable predicted profiles across θ-bins.
 
-        Called from :meth:`_update_response_curves` whenever a knob moves.
-        Safe to call when no spectral bundle is loaded — the canvases just
-        render their "no data" placeholders.
+        Uses the per-stage per-output coefficients from
+        ``growth_stratified_surrogate/coefficients_per_output.npy``.
         """
-        bundle = self.spectral_bundle
-        if bundle is None:
-            self.synth_canvas.set_prediction(None, None)
-            self.modulation_canvas.set_bundle(None)
-            self.resynth_canvas.set_signal(None)
+        gs_per_out = self.surr_data.get("gs_coeffs_per_output") if self.surr_data else None
+        gs_mi = self.surr_data.get("gs_mi") if self.surr_data else None
+        obs_names = getattr(self, "_observable_full_names", [])
+
+        if gs_per_out is None or gs_mi is None or not stage_data or not obs_names:
+            self.profile_canvas.set_profiles(None, {})
             return
 
-        # The spectral bundle may be built from a different parameter set
-        # than the Phase-1 surrogate.  Reorder x to match bundle order by
-        # parameter name; fall back to midpoints for unknown entries.
-        spec_x = np.zeros(bundle.n_parameters)
-        data_params = list(self.data["parameters"].keys()) if self.data else []
-        name_to_x = dict(zip(data_params, x))
-        for i, pname in enumerate(bundle.parameter_names):
-            if pname in name_to_x:
-                spec_x[i] = float(name_to_x[pname])
-            else:
-                spec_x[i] = 0.5 * (bundle.input_bounds[i, 0] + bundle.input_bounds[i, 1])
+        n_stages = len(stage_data)
+        n_obs = len(obs_names)
+        profiles: dict[str, np.ndarray] = {}
 
-        try:
-            pred = predict_spectral_features(bundle, spec_x)
-        except Exception:
-            self.synth_canvas.set_prediction(None, None)
-            self.modulation_canvas.set_bundle(bundle)
-            self.resynth_canvas.set_signal(None)
-            return
+        for _oi, _full_name in enumerate(obs_names):
+            _short = _full_name.split("__")[-1] if "__" in _full_name else _full_name
+            _vals = np.zeros(n_stages)
+            for _si in range(n_stages):
+                _col = _si * n_obs + _oi
+                if _col < gs_per_out.shape[0]:
+                    _vals[_si] = legendre_eval(x_norm, gs_per_out[_col], gs_mi)
+            profiles[_short] = _vals
 
-        self.synth_canvas.set_prediction(bundle, pred)
-        self.modulation_canvas.set_bundle(bundle)
-
-        t = np.linspace(0, self._resynth_t_max, self._resynth_n_samples)
-        try:
-            sig = resynthesize_waveform(bundle, spec_x, t)
-        except Exception:
-            sig = None
-        self.resynth_canvas.set_signal(sig)
+        _obs_sel = self.selected_observable.get()
+        self.profile_canvas.set_profiles(profiles, self._baselines, selected_obs=_obs_sel)
 
     # ── Patch save/load ────────────────────────────────────────────
 
