@@ -1216,6 +1216,18 @@ class QuantifyResult:
         # Population surrogate (dashboard expects population_surrogate/)
         s1.surrogate.export(out / "population_surrogate")
 
+        # Per-output PCE coefficients (for observable selector in DAW)
+        pop_surr_dir = out / "population_surrogate"
+        if s1.pcrv.coefs and s1.pcrv.mindices:
+            _n_out = len(s1.pcrv.coefs)
+            _mi0 = np.asarray(s1.pcrv.mindices[0])
+            _n_basis = _mi0.shape[0]
+            _coefs_matrix = np.zeros((_n_out, _n_basis))
+            for _j, _c in enumerate(s1.pcrv.coefs):
+                _c_arr = np.asarray(_c)
+                _coefs_matrix[_j, : len(_c_arr)] = _c_arr
+            np.save(pop_surr_dir / "coefficients_per_output.npy", _coefs_matrix)
+
         # Population Sobol .npy
         pop_dir = out / "population_sobol"
         pop_dir.mkdir(exist_ok=True)
@@ -1243,6 +1255,19 @@ class QuantifyResult:
             np.save(d / "first_order.npy", r.sobol.first_order)
             np.save(d / "total_order.npy", r.sobol.total_order)
         self.strategy4_combined.surrogate.export(out / "growth_stratified_surrogate")
+
+        # Per-stage PCE coefficients (for exact prediction curve in DAW)
+        gs_dir = out / "growth_stratified_surrogate"
+        _s4c = self.strategy4_combined
+        if _s4c.pcrv.coefs and _s4c.pcrv.mindices:
+            _n_s4_out = len(_s4c.pcrv.coefs)
+            _mi_s4 = np.asarray(_s4c.pcrv.mindices[0])
+            _n_s4_basis = _mi_s4.shape[0]
+            _s4_matrix = np.zeros((_n_s4_out, _n_s4_basis))
+            for _j, _c in enumerate(_s4c.pcrv.coefs):
+                _c_arr = np.asarray(_c)
+                _s4_matrix[_j, : len(_c_arr)] = _c_arr
+            np.save(gs_dir / "coefficients_per_output.npy", _s4_matrix)
 
         # Summary JSON — dashboard-compatible format
         n_bins = len(self.strategy4_per_stage)
