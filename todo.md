@@ -22,7 +22,16 @@
     > `docs/tutorial_workflow.rst` (6-step UQPC walkthrough with the Legendre/PCE math and the four
     > RFC006 aggregation strategies).
 
-- [ ] 4. I noticed that the app.uq_daw has a nice feature that tracks a dot moving through the spectrogram heatmap as one changes the PCE response curves. Can we have that in app.uq_daw_simple? I want it to be just like that, even with a different pipeline
+- [x] 4. I noticed that the app.uq_daw has a nice feature that tracks a dot moving through the spectrogram heatmap as one changes the PCE response curves. Can we have that in app.uq_daw_simple? I want it to be just like that, even with a different pipeline
+    > Added to `app/uq_daw_simple.py::HeatmapCanvas`:
+    > (a) **Tracking dots** — one white dot per parameter row, positioned at the slider's
+    > normalized [0,1] position. Dots move left/right as the user drags sliders, showing
+    > WHERE in the sensitivity landscape the current setting is. Selected param gets a
+    > larger dot (r=6 vs r=4) with colored outline.
+    > (b) **Peak stage indicator** — the max-prediction stage gets a highlighted dot with
+    > a `θN=value` label, matching `uq_daw.py`'s behavior.
+    > (c) **Y-axis ticks + grid** on the prediction curve for readability.
+    > 4 headless tests in `tests/test_heatmap_tracking_dot.py`, all passing.
 
 - [x] 5a. show me the full config json used that is passed to vEcoli when uq sample is run.
     > Added `uq show-config` CLI command — generates the full vEcoli workflow config JSON

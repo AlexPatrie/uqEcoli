@@ -525,10 +525,12 @@ class HeatmapCanvas(tk.Canvas):
         self._data = None
         self._param_colors = param_colors or {}
         self._stage_predictions = None
+        self._param_positions: dict[str, float] = {}
 
-    def set_data(self, stages, params, selected, stage_predictions=None):
+    def set_data(self, stages, params, selected, stage_predictions=None, param_positions=None):
         self._data = (stages, params, selected)
         self._stage_predictions = stage_predictions
+        self._param_positions = param_positions or {}
         self.redraw()
 
     def _val_to_color(self, v):
@@ -585,6 +587,23 @@ class HeatmapCanvas(tk.Canvas):
             x = pad_l + int(cell_w * (si + 0.5))
             self.create_text(x, heatmap_bottom + 10, text=f"\u03b8{si}", fill=C["text_dim"], font=("Menlo", 7))
 
+        # ── Tracking dots: slider position cursors on each param row ──
+        # Each dot shows WHERE in the sensitivity landscape the current
+        # knob setting is, moving left/right as the user drags sliders.
+        for _pname, _pos in self._param_positions.items():
+            if _pname not in params:
+                continue
+            _pi = params.index(_pname)
+            _is_sel = _pname == selected
+            _color = self._param_colors.get(_pname, C["text_dim"])
+            _dot_x = pad_l + int(_pos * plot_w)
+            _dot_y = pad_t + int(cell_h * (_pi + 0.5))
+            _r = 6 if _is_sel else 4
+            self.create_oval(
+                _dot_x - _r, _dot_y - _r, _dot_x + _r, _dot_y + _r,
+                fill="#ffffff", outline=_color, width=2,
+            )
+
         if has_preds:
             preds = np.asarray(self._stage_predictions)
             pred_top = heatmap_bottom + 20
@@ -594,6 +613,18 @@ class HeatmapCanvas(tk.Canvas):
             p_span = p_max - p_min or 1.0
 
             self.create_rectangle(pad_l, pred_top - 2, pad_l + plot_w, pred_bottom + 2, fill=C["panel_light"], outline=C["border"])
+
+            # Grid lines
+            for _gi in range(3):
+                _gy = pred_top + int(pred_plot_h * _gi / 2)
+                self.create_line(pad_l, _gy, pad_l + plot_w, _gy, fill=C["grid"], width=1, dash=(2, 4))
+
+            # Y-axis ticks
+            for _gi in range(3):
+                _frac = _gi / 2
+                _gy = pred_top + int(pred_plot_h * (1 - _frac))
+                _val = p_min + p_span * _frac
+                self.create_text(pad_l - 5, _gy, text=f"{_val:.2f}", fill=C["accent3"], font=("Menlo", 7), anchor="e")
 
             points = []
             for si in range(n_stages):
@@ -607,7 +638,21 @@ class HeatmapCanvas(tk.Canvas):
                 py = pred_top + int((1 - (preds[si] - p_min) / p_span) * pred_plot_h)
                 self.create_oval(px - 3, py - 3, px + 3, py + 3, fill=C["accent3"], outline="")
 
-            self.create_text(pad_l + 3, pred_top - 8, text="\u0176 per stage", fill=C["accent3"], font=("Menlo", 7, "bold"), anchor="w")
+            # ── Peak stage indicator ──
+            _peak = int(np.argmax(preds))
+            _peak_px = pad_l + int(cell_w * (_peak + 0.5))
+            _peak_py = pred_top + int((1 - (preds[_peak] - p_min) / p_span) * pred_plot_h)
+            self.create_oval(
+                _peak_px - 6, _peak_py - 6, _peak_px + 6, _peak_py + 6,
+                fill=C["accent3"], outline="#ffffff", width=2,
+            )
+            self.create_text(
+                _peak_px, _peak_py - 12,
+                text=f"\u03b8{_peak}={preds[_peak]:.3f}",
+                fill=C["accent3"], font=("Menlo", 8, "bold"),
+            )
+
+            self.create_text(pad_l + 3, pred_top - 8, text="\u0176 per stage (cell cycle surrogate)", fill=C["accent3"], font=("Menlo", 7, "bold"), anchor="w")
 
         # Colorbar
         cb_x = w - pad_r + 8
@@ -1212,6 +1257,7 @@ class UQDawSimpleApp:
         markers = {}
         all_y = []
         local_sensitivity = {}
+        param_positions = {}  # normalized slider positions for heatmap tracking dots
 
         for pi, pname in enumerate(params):
             lo, hi = float(bounds[pi, 0]), float(bounds[pi, 1])
@@ -1229,6 +1275,7 @@ class UQDawSimpleApp:
 
             cur_norm = (x[pi] - lo) / (hi - lo + 1e-12)
             markers[pname] = (cur_norm, pop_y)
+            param_positions[pname] = cur_norm
 
             delta = (hi - lo) * 0.005
             x_plus = x.copy()
@@ -1268,7 +1315,11 @@ class UQDawSimpleApp:
                 )
                 stage_predictions[si] = pop_y + contrib
 
-        self.heatmap_canvas.set_data(stage_data, params, selected, stage_predictions=stage_predictions)
+        self.heatmap_canvas.set_data(
+            stage_data, params, selected,
+            stage_predictions=stage_predictions,
+            param_positions=param_positions,
+        )
 
         # ── Spectral / Koopman synth section ────────────────────────
         self._update_spectral_panels(x)

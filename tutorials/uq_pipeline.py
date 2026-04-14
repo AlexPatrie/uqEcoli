@@ -43,9 +43,9 @@ def _():
 
     # ── Edit these before running ──
     SIM_DATA_PATH = "sim_data/baseline/kb/simData.cPickle"
-    CACHE_DIR = "./uq_cache"
-    EXPORT_DIR = "./uq_results"
-    N_SAMPLES = 20
+    CACHE_DIR = "./uq_cache_e2e"   # verified run from 2026-04-13
+    EXPORT_DIR = "./uq_results_e2e"
+    N_SAMPLES = 10
     POLYNOMIAL_ORDER = 2
     REGRESSION = "lsq"  # lsq | bcs | anl
     SEED = 42
