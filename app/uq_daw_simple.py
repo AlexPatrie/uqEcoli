@@ -987,6 +987,16 @@ class UQDawSimpleApp:
             bg=C["panel_light"], fg=C["accent3"], font=("Menlo", 10), relief="flat", cursor="hand2",
         ).pack(side="right", padx=4)
 
+        tk.Button(
+            top, text="Save Patch", command=self._save_patch,
+            bg=C["panel_light"], fg=C["accent4"], font=("Menlo", 10), relief="flat", cursor="hand2",
+        ).pack(side="right", padx=4)
+
+        tk.Button(
+            top, text="Load Patch", command=self._load_patch,
+            bg=C["panel_light"], fg=C["accent4"], font=("Menlo", 10), relief="flat", cursor="hand2",
+        ).pack(side="right", padx=4)
+
         self.status_label = tk.Label(top, text="No data loaded", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9))
         self.status_label.pack(side="right", padx=10)
 
@@ -1025,6 +1035,21 @@ class UQDawSimpleApp:
         # -- Left: Prediction readout --
         self.readout_label = tk.Label(self.left_frame, text="\u0176 = ---", bg=C["panel"], fg=C["accent3"], font=("Menlo", 16, "bold"))
         self.readout_label.pack(fill="x", padx=4, pady=(4, 2))
+
+        # -- Left: Target mode --
+        target_frame = tk.LabelFrame(self.left_frame, text="TARGET \u0176", bg=C["panel"], fg=C["accent2"], font=("Menlo", 10, "bold"), labelanchor="n")
+        target_frame.pack(fill="x", padx=4, pady=4)
+
+        _tf_row = tk.Frame(target_frame, bg=C["panel"])
+        _tf_row.pack(fill="x", padx=4, pady=4)
+
+        self.target_entry = tk.Entry(_tf_row, bg=C["panel_light"], fg=C["accent2"], font=("Menlo", 12), width=10, insertbackground=C["accent2"])
+        self.target_entry.pack(side="left", padx=4)
+
+        tk.Button(
+            _tf_row, text="Find", command=self._find_target,
+            bg=C["panel_light"], fg=C["accent2"], font=("Menlo", 10, "bold"), relief="flat", cursor="hand2",
+        ).pack(side="left", padx=4)
 
         # -- Left: Strategy info --
         self.strategy_label = tk.Label(self.left_frame, text="Strategies: ---", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9), wraplength=240, justify="left")
@@ -1367,6 +1392,109 @@ class UQDawSimpleApp:
         except Exception:
             sig = None
         self.resynth_canvas.set_signal(sig)
+
+    # ── Patch save/load ────────────────────────────────────────────
+
+    def _get_patches_dir(self) -> Path:
+        d = Path("patches")
+        d.mkdir(exist_ok=True)
+        return d
+
+    def _save_patch(self) -> None:
+        """Save the current slider values as a named JSON patch."""
+        if not self.sliders:
+            return
+        patch = {p: float(s.get()) for p, s in self.sliders.items()}
+
+        patches_dir = self._get_patches_dir()
+        existing = sorted(patches_dir.glob("patch_*.json"))
+        idx = len(existing)
+        path = patches_dir / f"patch_{idx:03d}.json"
+        path.write_text(json.dumps(patch, indent=2))
+        self.status_label.config(text=f"Saved: {path.name}")
+
+    def _load_patch(self) -> None:
+        """Load a previously saved patch and set sliders."""
+        patches_dir = self._get_patches_dir()
+        files = sorted(patches_dir.glob("patch_*.json"))
+        if not files:
+            self.status_label.config(text="No patches saved yet")
+            return
+        path = filedialog.askopenfilename(
+            title="Load Patch",
+            initialdir=str(patches_dir),
+            filetypes=[("JSON", "*.json")],
+        )
+        if not path:
+            return
+        try:
+            patch = json.loads(Path(path).read_text())
+        except Exception as e:
+            self.status_label.config(text=f"Bad patch: {e}")
+            return
+        for pname, val in patch.items():
+            if pname in self.sliders:
+                self.sliders[pname].set(float(val))
+        self.status_label.config(text=f"Loaded: {Path(path).name}")
+
+    # ── Target mode (inverse design on population PCE) ────────────
+
+    def _find_target(self) -> None:
+        """Find parameters that produce a target Ŷ value.
+
+        Uses L-BFGS-B on the population PCE surrogate — no vEcoli calls.
+        """
+        if self.surr_data is None or not self.sliders:
+            return
+        raw = self.target_entry.get().strip()
+        if not raw:
+            self.status_label.config(text="Enter a target Ŷ value first")
+            return
+        try:
+            target_val = float(raw)
+        except ValueError:
+            self.status_label.config(text="Target must be a number")
+            return
+
+        from scipy.optimize import minimize
+
+        bounds = self.surr_data["bounds"]
+        coeffs = self.surr_data["pop_coeffs"]
+        mi = self.surr_data["pop_mi"]
+        lb, ub = bounds[:, 0], bounds[:, 1]
+        box = list(zip(lb.tolist(), ub.tolist()))
+
+        def loss(x_phys: np.ndarray) -> float:
+            xn = normalize_to_germ(x_phys, bounds)
+            y = legendre_eval(xn, coeffs, mi)
+            return float((y - target_val) ** 2)
+
+        rng = np.random.default_rng(0)
+        best_x, best_loss = None, np.inf
+        for _ in range(12):
+            x0 = lb + rng.random(len(lb)) * (ub - lb)
+            try:
+                res = minimize(loss, x0=x0, method="L-BFGS-B", bounds=box)
+            except Exception:
+                continue
+            if res.fun < best_loss:
+                best_loss = float(res.fun)
+                best_x = np.asarray(res.x)
+
+        if best_x is None:
+            self.status_label.config(text="Target search failed")
+            return
+
+        for _i, _pname in enumerate(self.sliders):
+            if _i < len(best_x):
+                self.sliders[_pname].set(float(best_x[_i]))
+
+        achieved = legendre_eval(normalize_to_germ(best_x, bounds), coeffs, mi)
+        self.status_label.config(
+            text=f"Target {target_val:.4f} → Ŷ={achieved:.4f} (err={abs(achieved-target_val):.2e})"
+        )
+
+    # ── Spectral inverse design (Koopman bundle) ─────────────────
 
     def _run_inverse_design(self) -> None:
         """Toolbar-triggered inverse design from the current knob setting.
