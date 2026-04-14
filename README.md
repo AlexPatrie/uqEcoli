@@ -235,3 +235,72 @@ All four share the same cached `(X, Y_timeseries)`; they only differ in how
 - Sudret, B. (2008). *Global sensitivity analysis using polynomial chaos
   expansions*. Reliability Engineering & System Safety 93(7), 964–979.
 - Macklin, D. N. *et al.* (2020). Whole-cell model of *E. coli*. **Science** 369.
+
+
+## Why a DAW format?
+
+The dashboard (`uv run uq dashboard`) does something no other tool in the
+vEcoli ecosystem does: it lets a biologist **ask "what if" questions about
+sim_data parameters and get instant answers in physical units** — without
+running a single simulation.
+
+Before this dashboard, the workflow was: guess parameters → run vEcoli
+(minutes to hours) → inspect Parquet output → repeat.  Now it's: drag a
+slider → see `Dry mass = 345.2 fg (+5.1%)` and watch the cell-cycle profile
+bend in real time.
+
+### What makes it useful
+
+1. **Searchable observable selector with units + baseline delta** — select any
+   of the cd1 observables (5 mass/growth properties, 87 exchange fluxes,
+   4,345 genes, 4,309 proteins, or 2,797 reaction fluxes depending on which
+   `--observables` presets were used at sampling time).  A search-as-you-type
+   filter handles thousands of entries.  The readout shows the selected
+   observable in physical units with % deviation from wild-type baseline:
+   `Growth rate = 0.88 hr⁻¹ (-3.2%)`.
+
+2. **Predicted observable profile** — per-cell-cycle-stage PCE prediction for
+   the selected observable.  X-axis = θ (growth progress, birth → division),
+   Y-axis = predicted value.  All observables shown simultaneously as
+   shape-guides; the selected one is bold with its own Y-axis units and a
+   baseline reference line.  When `(aggregate)` is selected, all observables
+   are shown as % deviation from baseline on a common axis.
+
+3. **Sensitivity spectrogram with tracking dots** — the RFC006 strategy-4
+   Sobol heatmap (parameters × θ-stages) with live-updating position dots
+   that follow the current slider values.  Shows the user where they are
+   in the sensitivity landscape.
+
+4. **PCE response curves** — per-parameter sweep curves with draggable
+   markers, baseline reference line, and the selected observable's label
+   and units on the Y-axis.
+
+5. **Target mode** — type a desired observable value, click *Find*, and the
+   dashboard solves `min_x (Ŷ(x) − target)²` via L-BFGS-B on the PCE
+   surrogate.  The sliders snap to the found parameters instantly.  This is
+   the reverse of exploration: "I want growth rate = 0.95 hr⁻¹ — what
+   parameters produce that?"
+
+6. **Patch save/load** — save named parameter configurations as JSON, recall
+   them later, share with colleagues.
+
+### Per-gene / per-protein observable selection
+
+When the pipeline is run with `--observables transcriptome` (4,345 mRNA
+cistron counts) or `--observables proteome` (4,309 monomer counts), every
+gene or protein becomes a selectable observable in the dashboard.  The
+search bar filters the list instantly — type a gene name substring and
+click to select.  The response curves, predicted profile, and readout all
+switch to show that specific gene's PCE surrogate.
+
+This lets a biologist ask: *"which sim_data parameters drive variance in
+this specific gene's expression across the cell cycle?"* — and get an
+interactive, slider-driven answer.  No other UQ dashboard provides this.
+
+```bash
+# Example: transcriptome run
+uv run uq sample /path/to/simData.cPickle \
+    --observables transcriptome --n-samples 50
+uv run uq quantify /path/to/simData.cPickle
+uv run uq dashboard
+```

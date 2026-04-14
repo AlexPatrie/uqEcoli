@@ -1187,13 +1187,33 @@ class UQDawSimpleApp:
         self.param_menu.pack(fill="x", padx=8, pady=8)
         self.selected_param.trace_add("write", lambda *_: self._on_param_change())
 
-        # -- Left: Observable selector --
+        # -- Left: Observable selector (searchable for large sets like transcriptome) --
         obs_frame = tk.LabelFrame(self.left_frame, text="OBSERVABLE", bg=C["panel"], fg=C["accent4"], font=("Menlo", 10, "bold"), labelanchor="n")
         obs_frame.pack(fill="x", padx=4, pady=4)
 
-        self.obs_menu = ttk.Combobox(obs_frame, textvariable=self.selected_observable, state="readonly", font=("Menlo", 9))
-        self.obs_menu.pack(fill="x", padx=8, pady=8)
-        self.selected_observable.trace_add("write", lambda *_: self._on_param_change())
+        self._obs_search_var = tk.StringVar()
+        self._obs_search_var.trace_add("write", lambda *_: self._filter_observables())
+        self._obs_search_entry = tk.Entry(
+            obs_frame, textvariable=self._obs_search_var,
+            bg=C["panel_light"], fg=C["accent4"], font=("Menlo", 9),
+            insertbackground=C["accent4"],
+        )
+        self._obs_search_entry.pack(fill="x", padx=8, pady=(8, 2))
+        self._obs_search_entry.insert(0, "")
+
+        self._obs_listbox = tk.Listbox(
+            obs_frame, bg=C["panel_light"], fg=C["text"], font=("Menlo", 8),
+            selectbackground=C["accent4"], selectforeground=C["bg"],
+            height=6, activestyle="none", exportselection=False,
+        )
+        self._obs_listbox.pack(fill="x", padx=8, pady=(0, 8))
+        self._obs_listbox.bind("<<ListboxSelect>>", self._on_obs_listbox_select)
+
+        self._obs_all_choices: list[str] = ["(aggregate)"]
+        self._obs_count_label = tk.Label(
+            obs_frame, text="", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 7),
+        )
+        self._obs_count_label.pack(fill="x", padx=8)
 
         # -- Left: PCE sliders --
         slider_frame = tk.LabelFrame(self.left_frame, text="PCE SURROGATE KNOBS", bg=C["panel"], fg=C["accent3"], font=("Menlo", 10, "bold"), labelanchor="n")
@@ -1273,12 +1293,13 @@ class UQDawSimpleApp:
 
         # Populate observable selector
         obs_names = self.data.get("observable_names", [])
-        obs_choices = ["(aggregate)"] + [
-            n.split("__")[-1] if "__" in n else n for n in obs_names
-        ]
-        self.obs_menu["values"] = obs_choices
-        self.selected_observable.set("(aggregate)")
+        short_names = [n.split("__")[-1] if "__" in n else n for n in obs_names]
+        self._obs_all_choices = ["(aggregate)"] + short_names
         self._observable_full_names = obs_names
+        self.selected_observable.set("(aggregate)")
+        self._obs_search_var.set("")
+        self._filter_observables()
+        self._obs_count_label.config(text=f"{len(obs_names)} observables")
 
         # Compute baselines (PCE at parameter midpoints)
         self._baselines = {}
@@ -1334,6 +1355,31 @@ class UQDawSimpleApp:
             return result
         except Exception:
             return None
+
+    def _filter_observables(self) -> None:
+        """Filter the observable listbox by the search entry text."""
+        query = self._obs_search_var.get().strip().lower()
+        self._obs_listbox.delete(0, tk.END)
+        for _choice in self._obs_all_choices:
+            if not query or query in _choice.lower():
+                self._obs_listbox.insert(tk.END, _choice)
+        # Re-select the current observable if it's still visible
+        _cur = self.selected_observable.get()
+        for _i in range(self._obs_listbox.size()):
+            if self._obs_listbox.get(_i) == _cur:
+                self._obs_listbox.selection_set(_i)
+                self._obs_listbox.see(_i)
+                break
+
+    def _on_obs_listbox_select(self, event) -> None:
+        """Handle click on an observable in the listbox."""
+        _sel = self._obs_listbox.curselection()
+        if not _sel:
+            return
+        _choice = self._obs_listbox.get(_sel[0])
+        if _choice != self.selected_observable.get():
+            self.selected_observable.set(_choice)
+            self._on_param_change()
 
     def _build_sliders(self, params):
         for w in self.slider_container.winfo_children():
