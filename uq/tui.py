@@ -696,6 +696,7 @@ class UQPCApp(App[None]):
         stdout_thread.start()
 
         # ── Main @work loop: drain queues, update UI every second ──
+        _last_prelim_count = [0]
         try:
             while proc.poll() is None:
                 if self._sampling_cancel.is_set():
@@ -725,6 +726,15 @@ class UQPCApp(App[None]):
                     total_sims,
                     f"{label}  {pq_count[0]}/{total_sims}  [{elapsed}s]",
                 )
+
+                # Preliminary Sobol every 5 completed variants
+                _cur = pq_count[0]
+                if _cur >= 5 and _cur - _last_prelim_count[0] >= 5:
+                    _last_prelim_count[0] = _cur
+                    self._show_preliminary_sobol(
+                        history_base, _cur, X_train, germ_train, param_space,
+                    )
+
                 threading.Event().wait(1.0)
 
             # Process finished — drain remaining logs
@@ -800,6 +810,43 @@ class UQPCApp(App[None]):
                 f"[ansi_bright_black]  Timeseries: {len(Y_ts)} samples, shape {Y_ts[0].shape}[/]",
             )
         self.call_from_thread(self.write_log, "")
+
+    def _show_preliminary_sobol(
+        self,
+        history_base: Path,
+        n_completed: int,
+        X_train: np.ndarray,
+        germ_train: np.ndarray,
+        param_space: Any,
+    ) -> None:
+        """Fit a preliminary PCE on completed samples and show live Sobol."""
+        if n_completed < 5:
+            return
+        try:
+            Y_agg, _, _ = _collect_variant_timeseries(
+                history_base, min(n_completed, X_train.shape[0]), DEFAULT_OBS,
+            )
+            k = min(n_completed, Y_agg.shape[0], X_train.shape[0])
+            if k < 3:
+                return
+
+            from uq.workflow import _compute_sobol, _fit_surrogate
+
+            germ_k = germ_train[:k]
+            Y_k = Y_agg[:k]
+            pcrv, _ = _fit_surrogate(germ_k, Y_k, polynomial_order=2, regression="lsq")
+            sobol = _compute_sobol(pcrv, param_space.parameter_names, Y_k)
+
+            lines = [f"[ansi_cyan]── Preliminary Sobol ({k} samples) ──[/]"]
+            for i, nm in enumerate(param_space.parameter_names):
+                st = sobol.total_order[i]
+                bar = "█" * int(st * 20)
+                lines.append(f"  {nm:<35s} {st:.3f} {bar}")
+
+            for line in lines:
+                self.call_from_thread(self.write_log, line)
+        except Exception:
+            pass  # Don't let preliminary analysis break sampling
 
     # ── Quantify ─────────────────────────────────────────────────────
 
