@@ -290,6 +290,66 @@ def _(COLORS, DAW, data, go, make_subplots, np, current_x_norm, current_y_hat, s
 
 
 @app.cell
+def _(COLORS, DAW, PCOLORS, data, go, mo):
+    # Strategy 2: grouped bar chart (generations × params)
+    _s2 = data.get("strategy2_by_generation", {})
+    _s2_gens = _s2.get("generations", [])
+    _params = list(data["parameters"].keys())
+
+    if _s2_gens:
+        fig_s2 = go.Figure()
+        for _pi, _p in enumerate(_params):
+            _short = _p.replace("fraction_active_", "").replace("cell_dry_mass_fraction", "dry_mass_frac")
+            _vals = [_g["sobol_total_order"].get(_p, 0) for _g in _s2_gens]
+            _labels = [f"Gen {_g['generation']}" for _g in _s2_gens]
+            fig_s2.add_trace(go.Bar(
+                name=_short, x=_labels, y=_vals,
+                marker_color=PCOLORS[_pi % len(PCOLORS)],
+                hovertemplate=f"<b>{_short}</b><br>S_Ti=%{{y:.3f}}<extra></extra>",
+            ))
+        fig_s2.update_layout(
+            **DAW, height=300, barmode="group",
+            title=dict(text="STRATEGY 2 — BY GENERATION (S_Ti)", font=dict(size=13, color=COLORS["accent1"])),
+            xaxis_title="Generation", yaxis_title="S_Ti (total Sobol)",
+            legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
+        )
+        fig_s2_output = mo.ui.plotly(fig_s2)
+    else:
+        fig_s2_output = mo.md("*Strategy 2 not available (run with `--generations >= 2`)*")
+    return (fig_s2_output,)
+
+
+@app.cell
+def _(COLORS, DAW, PCOLORS, data, go, mo):
+    # Strategy 3: grouped bar chart (seeds × params)
+    _s3 = data.get("strategy3_by_seed", {})
+    _s3_seeds = _s3.get("seeds", [])
+    _params = list(data["parameters"].keys())
+
+    if _s3_seeds:
+        fig_s3 = go.Figure()
+        for _pi, _p in enumerate(_params):
+            _short = _p.replace("fraction_active_", "").replace("cell_dry_mass_fraction", "dry_mass_frac")
+            _vals = [_s["sobol_total_order"].get(_p, 0) for _s in _s3_seeds]
+            _labels = [f"Seed {_s['lineage_seed']}" for _s in _s3_seeds]
+            fig_s3.add_trace(go.Bar(
+                name=_short, x=_labels, y=_vals,
+                marker_color=PCOLORS[_pi % len(PCOLORS)],
+                hovertemplate=f"<b>{_short}</b><br>S_Ti=%{{y:.3f}}<extra></extra>",
+            ))
+        fig_s3.update_layout(
+            **DAW, height=300, barmode="group",
+            title=dict(text="STRATEGY 3 — BY LINEAGE SEED (S_Ti)", font=dict(size=13, color=COLORS["accent1"])),
+            xaxis_title="Lineage Seed", yaxis_title="S_Ti (total Sobol)",
+            legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
+        )
+        fig_s3_output = mo.ui.plotly(fig_s3)
+    else:
+        fig_s3_output = mo.md("*Strategy 3 not available (run with `--n-init-sims >= 2`)*")
+    return (fig_s3_output,)
+
+
+@app.cell
 def _(data, mo):
     _params_info = data["parameters"]
     _sobol = data["phase1_population"]["sobol_total_order"]
@@ -299,40 +359,18 @@ def _(data, mo):
         _s_ti = _sobol.get(_name, 0)
         _rows.append(f"| `{_name}` | {_s_ti:.1%} | {_info.get('biological_role', '')} |")
 
-    _sections = [
+    param_table = mo.md(
         "### Strategy 1 — Population-Averaged Sensitivity\n\n"
         "| Parameter | S_Ti | Biological Role |\n"
         "|-----------|------|------------------|\n"
         + "\n".join(_rows)
         + "\n\n*S_Ti = total Sobol index: fraction of output variance attributable to this parameter.*"
-    ]
-
-    # Strategy 2: by generation
-    _s2 = data.get("strategy2_by_generation", {})
-    if "generations" in _s2:
-        _s2_rows = ["### Strategy 2 — By Generation\n"]
-        for _gen in _s2["generations"]:
-            _g = _gen["generation"]
-            _top = sorted(_gen["sobol_total_order"].items(), key=lambda kv: -kv[1])[:3]
-            _s2_rows.append(f"**Gen {_g}:** " + ", ".join(f"`{n}` {v:.1%}" for n, v in _top))
-        _sections.append("\n\n".join(_s2_rows))
-
-    # Strategy 3: by seed
-    _s3 = data.get("strategy3_by_seed", {})
-    if "seeds" in _s3:
-        _s3_rows = ["### Strategy 3 — By Lineage Seed\n"]
-        for _seed in _s3["seeds"]:
-            _s = _seed["lineage_seed"]
-            _top = sorted(_seed["sobol_total_order"].items(), key=lambda kv: -kv[1])[:3]
-            _s3_rows.append(f"**Seed {_s}:** " + ", ".join(f"`{n}` {v:.1%}" for n, v in _top))
-        _sections.append("\n\n".join(_s3_rows))
-
-    param_table = mo.md("\n\n---\n\n".join(_sections))
+    )
     return (param_table,)
 
 
 @app.cell
-def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_table, results_dir_input):
+def _(data, fig_response, fig_s2_output, fig_s3_output, fig_spectrogram, file_input, mo, param_sliders, param_table, results_dir_input):
     _methods = data.get("methods", {}) if data else {}
     _refs = data.get("references", []) if data else []
     _params = list(data["parameters"].keys()) if data else []
@@ -362,6 +400,7 @@ def _(data, fig_response, fig_spectrogram, file_input, mo, param_sliders, param_
     _plot_panel = mo.vstack([
         mo.ui.plotly(fig_response),
         mo.ui.plotly(fig_spectrogram),
+        mo.hstack([fig_s2_output, fig_s3_output], widths=[1, 1]),
     ])
 
     _s2_status = "available" if "generations" in data.get("strategy2_by_generation", {}) else "not available"
