@@ -526,3 +526,18 @@ Tier 1 items build sequentially: sampling → quantification → visualization.
 ## What's been done
 
 - Plan created (2026-04-16)
+- All Tier 0 + Tier 1 items implemented (2026-04-16)
+- 40 new tests, all passing
+- 302 existing tests pass (2 pre-existing failures unrelated to PR2)
+
+### Tier 0 — Safety Net ✅
+- **0.1 Observable Dimension Guard** — `_align_variant_dimensions()` in `uq/observables.py`, truncates to common dimension with warning. 5 tests.
+- **0.2 Config Passthrough** — `_build_config()` accepts `base_config_path` and `conditions` params, `--base-config` and `--conditions` CLI flags on `uq sample`. 6 tests.
+- **0.3 Manifest Extension** — `_write_manifest()` records `parca_variants` and `conditions.json` if present. 5 tests.
+
+### Tier 1 — Cross-Condition GSA ✅
+- **1.1 Multi-Condition Sampling** — `--conditions` flag on `uq sample` populates `parca_variants`, writes `conditions.json` to cache.
+- **1.2 Per-Condition Quantification** — New `uq/multi_condition.py` (~280 lines): `MultiConditionResult`, `compute_rank_stability()`, `find_universal_drivers()`, `find_condition_specific()`, `compute_differential_sobol()`, `quantify_multi_condition()`. 19 tests.
+- **1.3 CLI Report** — `_print_multi_condition_report()` with cross-condition S_Ti comparison table (rank stability dots), universal/condition-specific narrative. Auto-detected by `uq quantify`. 5 tests.
+- **1.4 Dashboard Panels** — Marimo: cross-condition grouped bar chart + rank stability. Tk DAW: condition selector combobox, switches Sobol data on condition change.
+- **1.5 TUI Support** — Conditions input field in sidebar, threaded through `_do_sample()` and `_do_quantify()`, auto-detects multi-condition cache.
