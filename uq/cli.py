@@ -374,6 +374,7 @@ def quantify(
     )
 
     _print_report(result)
+    _print_narrative(result)
     console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
 
 
@@ -527,6 +528,66 @@ def _print_sobol_table(title: str, sobol: Any, border: str) -> None:
     )
 
 
+def _print_narrative(result: Any) -> None:
+    """Print a plain-English 'Key Findings' summary after the Sobol tables."""
+    names = result.parameter_names
+    s1_total = result.strategy1.sobol.total_order
+    if s1_total.ndim > 1:
+        s1_total = np.mean(s1_total, axis=0)
+
+    # Top parameter (bulk)
+    top_idx = int(np.argmax(s1_total))
+    top_name = names[top_idx]
+    top_pct = s1_total[top_idx] * 100
+
+    # Negligible parameter (lowest S_Ti across all strategies)
+    min_idx = int(np.argmin(s1_total))
+    min_name = names[min_idx]
+    min_pct = s1_total[min_idx] * 100
+
+    # Most sensitive growth stage (strategy 4)
+    stage_line = ""
+    if result.strategy4_per_stage:
+        stage_sums = []
+        for sr in result.strategy4_per_stage:
+            st = sr.sobol.total_order
+            if st.ndim > 1:
+                st = np.mean(st, axis=0)
+            stage_sums.append(float(np.sum(st)))
+        peak_stage = int(np.argmax(stage_sums))
+        n = len(result.strategy4_per_stage)
+        lo_pct = int(100 * peak_stage / n)
+        hi_pct = int(100 * (peak_stage + 1) / n)
+        stage_line = f"  • Growth stage θ {lo_pct}–{hi_pct}% shows the strongest parameter sensitivity."
+
+    # Recommendation
+    if top_pct > 50:
+        rec = f"[bold]{top_name}[/bold] dominates output variance — prioritize its measurement accuracy."
+    elif top_pct > 20:
+        rec = f"[bold]{top_name}[/bold] is the leading driver — consider tighter bounds or dedicated experiments."
+    else:
+        rec = "No single parameter dominates — output variance is distributed across multiple inputs."
+
+    lines = [
+        f"  • [bold]{top_name}[/bold] explains [bold]{top_pct:.1f}%[/bold] of population-level output variance (S_Ti).",
+        f"  • [bold]{min_name}[/bold] is least influential at [bold]{min_pct:.1f}%[/bold] — candidate for fixing at nominal.",
+    ]
+    if stage_line:
+        lines.append(stage_line)
+    lines.append(f"  • Recommendation: {rec}")
+
+    console.print()
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold white on blue] KEY FINDINGS [/bold white on blue]",
+            border_style="blue",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
+
+
 @app.command()
 def dashboard(
     results_path: str | None = None,
@@ -537,6 +598,7 @@ def dashboard(
     \b
     --run-mode tk   Tkinter DAW (default) — draggable parameter markers
     --run-mode mo   Marimo notebook — slider-reactive
+    --run-mode web  Standalone web app (Dash) — shareable URL
 
     If --results-path is not given, looks for ./uq_results/uq_results.json.
     """
@@ -550,6 +612,14 @@ def dashboard(
 
     if run_mode == "mo":
         _sp.run(["uv", "run", "marimo", "edit", "--no-token", "app/dashboard_simple.py"], check=True)  # noqa: S607
+    elif run_mode == "web":
+        from app.web_dashboard import run_web_dashboard
+
+        # Pass the directory, not the JSON file
+        rp = results_path
+        if rp and rp.endswith(".json"):
+            rp = str(Path(rp).parent)
+        run_web_dashboard(results_path=rp)
     else:
         from app.uq_daw_simple import run_tk_dashboard_simple
 
@@ -643,6 +713,306 @@ def show_config(
 
     console.print(f"\n[dim]{n_samples} variants × {n_init_sims} seeds × {generations} gens "
                   f"= {(n_samples + 1) * n_init_sims * generations} total sims[/dim]")
+
+
+@app.command()
+def compare(
+    dirs: list[str] = typer.Argument(..., help="Two or more uq export directories to compare"),
+) -> None:
+    """Compare Sobol indices across multiple UQ experiments.
+
+    \b
+    Loads uq_results.json from each directory and prints side-by-side
+    Sobol tables with differential highlighting.
+
+    Example:
+      uq compare ./results_baseline ./results_perturbed
+    """
+    import json as _json
+
+    if len(dirs) < 2:
+        console.print("[red]Need at least 2 directories to compare.[/red]")
+        raise typer.Exit(1)
+
+    results = []
+    for d in dirs:
+        p = Path(d) / "uq_results.json"
+        if not p.exists():
+            console.print(f"[red]Not found: {p}[/red]")
+            raise typer.Exit(1)
+        results.append((_json.loads(p.read_text()), Path(d).name))
+
+    # Gather all param names (union)
+    all_params = list(results[0][0]["parameters"].keys())
+
+    # Side-by-side S_Ti table
+    table = Table(
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+        title="S_Ti COMPARISON (Population)",
+        title_style="bold cyan",
+    )
+    table.add_column("PARAMETER", style="bold yellow", no_wrap=True)
+    for _, name in results:
+        table.add_column(name, justify="right")
+    if len(results) == 2:
+        table.add_column("Δ", justify="right", style="bold")
+
+    for p in all_params:
+        row = [p]
+        vals = []
+        for data, _ in results:
+            v = data["phase1_population"]["sobol_total_order"].get(p, 0)
+            vals.append(v)
+            row.append(f"{v:.3f}")
+        if len(results) == 2:
+            delta = vals[1] - vals[0]
+            sign = "+" if delta >= 0 else ""
+            color = "green" if abs(delta) < 0.05 else ("red" if delta > 0 else "blue")
+            row.append(f"[{color}]{sign}{delta:.3f}[/{color}]")
+        table.add_row(*row)
+
+    console.print(Panel(table, border_style="cyan", box=box.ROUNDED, padding=(0, 1)))
+
+    # Per-strategy summary
+    for i, (data, name) in enumerate(results):
+        s2 = data.get("strategy2_by_generation", {})
+        s3 = data.get("strategy3_by_seed", {})
+        s4 = data.get("phase2_growth_stratified", {})
+        console.print(
+            f"  [dim]{name}: S2={s2.get('n_generations', 0)} gens, "
+            f"S3={s3.get('n_seeds', 0)} seeds, "
+            f"S4={s4.get('n_stages', 0)} stages[/dim]"
+        )
+
+
+@app.command(name="export-figures")
+def export_figures(
+    results_path: str = typer.Option("./uq_results", help="Path to uq export directory"),
+    output_dir: str | None = typer.Option(None, help="Output directory (default: <results>/figures/)"),
+) -> None:
+    """Generate publication-ready PDFs and LaTeX from UQ results.
+
+    \b
+    Outputs:
+      sobol_bar_chart.pdf    Grouped bars (S_Ti per strategy, all params)
+      spectrogram.pdf        Print-quality sensitivity heatmap
+      response_curves.pdf    PCE response curves at midpoint
+      sobol_table.tex        LaTeX table of top-K params per strategy
+
+    Requires kaleido: uv pip install kaleido
+    """
+    from uq.viz_export import export_all_figures
+
+    console.print(f"[bold cyan]Exporting figures from:[/bold cyan] {results_path}")
+    generated = export_all_figures(results_path, output_dir)
+    for p in generated:
+        console.print(f"  [green]✓[/green] {p}")
+    console.print(f"\n[bold green]{len(generated)} figures exported.[/bold green]")
+
+
+@app.command(name="suggest-experiment")
+def suggest_experiment(
+    results_path: str = typer.Option("./uq_results", help="Path to uq export directory"),
+    n_grid: int = typer.Option(1000, help="Grid points for variance scanning"),
+) -> None:
+    """Identify where to measure next to reduce uncertainty most.
+
+    \b
+    Loads the fitted PCE surrogate, evaluates prediction variance
+    across the parameter space, and reports the region of maximum
+    uncertainty in physical units.
+    """
+    import json as _json
+
+    results_dir = Path(results_path)
+    pop_dir = results_dir / "population_surrogate"
+    if not (pop_dir / "coefficients.npy").exists():
+        console.print("[red]Surrogate files not found. Run `uq quantify` first.[/red]")
+        raise typer.Exit(1)
+
+    coeffs = np.load(pop_dir / "coefficients.npy")
+    mi = np.load(pop_dir / "multi_indices.npy")
+    bounds = np.load(pop_dir / "input_bounds.npy")
+
+    data = _json.loads((results_dir / "uq_results.json").read_text())
+    params = list(data["parameters"].keys())
+    n_params = len(params)
+
+    # Grid-sample parameter space, estimate prediction variance
+    # via PCE coefficient variance approximation
+    rng = np.random.default_rng(42)
+    X_grid = bounds[:, 0] + rng.random((n_grid, n_params)) * (bounds[:, 1] - bounds[:, 0])
+
+    # Evaluate PCE at each grid point — variance proxy: |Ŷ - Ŷ_midpoint|
+    mid = 0.5 * (bounds[:, 0] + bounds[:, 1])
+    mid_norm = 2.0 * (mid - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0
+
+    def _legendre_eval_vec(x_phys):
+        x_norm = 2.0 * (x_phys - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0] + 1e-12) - 1.0
+        max_ord = int(mi.max()) if mi.size else 0
+        P = np.zeros((max_ord + 1, n_params))
+        P[0, :] = 1.0
+        if max_ord >= 1:
+            P[1, :] = x_norm
+        for n in range(2, max_ord + 1):
+            P[n, :] = ((2 * n - 1) * x_norm * P[n - 1, :] - (n - 1) * P[n - 2, :]) / n
+        result = 0.0
+        for t in range(len(coeffs)):
+            term = float(coeffs[t])
+            for p in range(n_params):
+                term *= P[mi[t, p], p]
+            result += term
+        return result
+
+    y_mid = _legendre_eval_vec(mid)
+    variances = np.zeros(n_grid)
+    for i in range(n_grid):
+        y_i = _legendre_eval_vec(X_grid[i])
+        variances[i] = (y_i - y_mid) ** 2
+
+    # Find max-variance point
+    best_idx = int(np.argmax(variances))
+    best_x = X_grid[best_idx]
+    best_var = variances[best_idx]
+
+    console.print("\n[bold cyan]SUGGESTED NEXT EXPERIMENT[/bold cyan]")
+    console.print(f"  [dim]Scanned {n_grid} parameter combinations[/dim]\n")
+
+    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold magenta")
+    table.add_column("PARAMETER", style="bold yellow")
+    table.add_column("VALUE", justify="right")
+    table.add_column("RANGE", justify="right", style="dim")
+
+    for i, p in enumerate(params):
+        table.add_row(
+            p,
+            f"{best_x[i]:.4f}",
+            f"[{bounds[i, 0]:.4f}, {bounds[i, 1]:.4f}]",
+        )
+
+    console.print(Panel(
+        table,
+        title="[bold]Max-uncertainty parameter setting[/bold]",
+        subtitle=f"[dim]Prediction variance: {best_var:.3e}[/dim]",
+        border_style="cyan",
+        box=box.ROUNDED,
+    ))
+
+    # Which param contributes most to variance at this point?
+    sensitivities = []
+    for pi in range(n_params):
+        delta = (bounds[pi, 1] - bounds[pi, 0]) * 0.01
+        x_plus = best_x.copy()
+        x_plus[pi] = min(best_x[pi] + delta, bounds[pi, 1])
+        x_minus = best_x.copy()
+        x_minus[pi] = max(best_x[pi] - delta, bounds[pi, 0])
+        sens = abs(_legendre_eval_vec(x_plus) - _legendre_eval_vec(x_minus)) / (2 * delta + 1e-12)
+        sensitivities.append((params[pi], sens))
+    sensitivities.sort(key=lambda x: -x[1])
+    top_param = sensitivities[0][0]
+    console.print(
+        f"\n  [bold]Recommendation:[/bold] Measure [bold]{top_param}[/bold] more precisely "
+        f"in the range [{bounds[params.index(top_param), 0]:.4f}, "
+        f"{bounds[params.index(top_param), 1]:.4f}] to reduce uncertainty most."
+    )
+
+
+@app.command(name="init")
+def init_project() -> None:
+    """Guided setup wizard — configure a UQ project interactively.
+
+    \b
+    Detects vEcoli, validates simData, chooses observable presets,
+    and writes uq_config.json for use with `uq sample`.
+    """
+    import json as _json
+
+    console.print("[bold cyan]UQ Project Setup Wizard[/bold cyan]\n")
+
+    # Step 1: Detect vEcoli simData
+    sim_data_path = None
+    search_paths = [
+        Path("../vEcoli/reconstruction/sim_data/kb/simData.cPickle"),
+        Path("sim_data/baseline/kb/simData.cPickle"),
+        Path.home() / ".local/share/vEcoli/simData.cPickle",
+    ]
+    for sp in search_paths:
+        if sp.resolve().exists():
+            sim_data_path = str(sp.resolve())
+            console.print(f"  [green]Auto-detected simData:[/green] {sim_data_path}")
+            break
+
+    if sim_data_path is None:
+        sim_data_path = typer.prompt("Path to simData.cPickle")
+    else:
+        override = typer.prompt(f"simData path [{sim_data_path}]", default=sim_data_path)
+        sim_data_path = override
+
+    if not Path(sim_data_path).exists():
+        console.print(f"[red]Not found: {sim_data_path}[/red]")
+        raise typer.Exit(1)
+
+    # Step 2: Validate vEcoli importable
+    try:
+        import ecoli  # type: ignore[import-not-found]  # noqa: F401
+        console.print("  [green]vEcoli: importable[/green]")
+    except ImportError:
+        console.print("  [yellow]vEcoli not importable — sampling will fail.[/yellow]")
+
+    # Step 3: Observable preset
+    console.print("\n[bold]Observable presets:[/bold]")
+    presets = {
+        "mass": "Raw mass/growth scalars (5 features, fastest)",
+        "higher_order": "Derived cd1 metrics: doubling time, growth rate, compositions (6 features)",
+        "exchange_fluxes": "External metabolite fluxes (~87 features)",
+        "transcriptome": "mRNA cistron counts (~4300 genes)",
+        "proteome": "Protein monomer counts (~4300 monomers)",
+        "fluxome": "Base reaction fluxes (~2800, dry-mass normalized)",
+    }
+    for k, v in presets.items():
+        console.print(f"  [cyan]{k:<20s}[/cyan] {v}")
+    obs_input = typer.prompt("\nObservable presets (comma-separated)", default="mass")
+    obs_list = [o.strip() for o in obs_input.split(",") if o.strip()]
+
+    # Step 4: Sample count
+    console.print("\n[bold]Sample count:[/bold]")
+    console.print("  20  — quick exploration (~2h)")
+    console.print("  50  — production quality (~5h)")
+    console.print("  200 — high-fidelity (~20h)")
+    n_samples = int(typer.prompt("Number of samples", default="20"))
+
+    # Step 5: Regression method
+    reg = typer.prompt("Regression method (lsq/bcs/anl)", default="lsq")
+
+    # Step 6: Write config
+    config = {
+        "sim_data_path": sim_data_path,
+        "cache_dir": "./uq_cache",
+        "export_path": "./uq_results",
+        "n_samples": n_samples,
+        "observables": obs_list,
+        "polynomial_order": 2,
+        "regression": reg,
+        "n_bins": 10,
+        "generations": 1,
+        "n_init_sims": 1,
+        "seed": 42,
+    }
+
+    config_path = Path("uq_config.json")
+    config_path.write_text(_json.dumps(config, indent=2))
+    console.print(f"\n[bold green]Config written to:[/bold green] {config_path}")
+    console.print(
+        f"\n[bold]Ready![/bold] Run:\n"
+        f"  [cyan]uv run uq sample {sim_data_path} "
+        f"--cache-dir ./uq_cache --n-samples {n_samples} "
+        f"--observables {' --observables '.join(obs_list)}[/cyan]\n"
+        f"  [cyan]uv run uq quantify {sim_data_path} "
+        f"--cache-dir ./uq_cache --export-path ./uq_results "
+        f"--regression {reg}[/cyan]"
+    )
 
 
 _HELP_SUBCOMMAND_ALIASES = {"help", "--help", "-h"}

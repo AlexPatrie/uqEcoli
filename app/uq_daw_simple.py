@@ -963,10 +963,12 @@ class PredictedProfileCanvas(tk.Canvas):
         profiles: dict[str, np.ndarray] | None,
         baselines: dict[str, float],
         selected_obs: str = "(aggregate)",
+        compare_profile: np.ndarray | None = None,
     ):
         self._profiles = profiles
         self._baselines = baselines
         self._selected_obs = selected_obs
+        self._compare_profile = compare_profile
         self.redraw()
 
     def redraw(self):
@@ -1096,6 +1098,25 @@ class PredictedProfileCanvas(tk.Canvas):
                 _r = 5 if _width > 2 else 3
                 self.create_oval(_px - _r, _py - _r, _px + _r, _py + _r, fill=_color, outline="")
 
+        # Comparison A overlay (dimmed dashed line)
+        _cmp = getattr(self, "_compare_profile", None)
+        if _cmp is not None and len(_cmp) == _n_stages:
+            _cmp_pts: list[int] = []
+            for _si in range(_n_stages):
+                _px = _pad_l + int(_pw * (_si + 0.5) / _n_stages)
+                _cval = float(_cmp[_si])
+                if _is_aggregate:
+                    _bl = list(self._baselines.values())[0] if self._baselines else 0.0
+                    _cval = (_cval - _bl) / abs(_bl) * 100 if abs(_bl) > 1e-15 else 0.0
+                _py = _pad_t + int((1 - (_cval - _y_min) / _y_span) * _ph)
+                _cmp_pts.extend([_px, _py])
+            if len(_cmp_pts) >= 4:
+                self.create_line(_cmp_pts, fill=C["accent5"], width=2, dash=(8, 4), smooth=True)
+                self.create_text(
+                    _cmp_pts[-2], _cmp_pts[-1] - 10,
+                    text="Config A", fill=C["accent5"], font=("Menlo", 7),
+                )
+
         # Legend (top right)
         _lx = _w - _pad_r - 10
         _n_names = len(_all_names)
@@ -1128,8 +1149,20 @@ class UQDawSimpleApp:
         self.param_colors = {}
         self._baselines: dict[str, float] = {}  # obs_short_name → PCE(midpoint)
         self._observable_full_names: list[str] = []
+        self._view_mode = tk.StringVar(value="standard")
+        self._compare_snapshot: dict[str, Any] | None = None  # frozen config A
+        self._compare_profile_a: np.ndarray | None = None
+        self._history: list[dict[str, float]] = []
+        self._history_idx: int = -1
+        self._history_debounce_id: str | None = None
 
         self._build_ui()
+
+        # Undo/redo keybindings
+        self.root.bind_all("<Control-z>", lambda e: self._undo())
+        self.root.bind_all("<Control-y>", lambda e: self._redo())
+        self.root.bind_all("<Command-z>", lambda e: self._undo())  # macOS
+        self.root.bind_all("<Command-Shift-z>", lambda e: self._redo())  # macOS
 
         if data_path:
             self._load_file(data_path)
@@ -1142,6 +1175,18 @@ class UQDawSimpleApp:
 
         tk.Label(top, text="UQ DAW Simple // RFC006", bg=C["panel"], fg=C["accent1"], font=("Menlo", 13, "bold")).pack(side="left", padx=10)
 
+        # View mode radio buttons
+        _mode_frame = tk.Frame(top, bg=C["panel"])
+        _mode_frame.pack(side="left", padx=20)
+        for _mode_val, _mode_label in [("simple", "Simple"), ("standard", "Standard"), ("expert", "Expert")]:
+            tk.Radiobutton(
+                _mode_frame, text=_mode_label, variable=self._view_mode,
+                value=_mode_val, bg=C["panel"], fg=C["text"], selectcolor=C["panel_light"],
+                activebackground=C["panel"], activeforeground=C["accent1"],
+                font=("Menlo", 9), indicatoron=True,
+                command=self._apply_view_mode,
+            ).pack(side="left", padx=4)
+
         tk.Button(
             top, text="Load JSON", command=self._open_file,
             bg=C["panel_light"], fg=C["text"], font=("Menlo", 10), relief="flat", cursor="hand2",
@@ -1151,6 +1196,18 @@ class UQDawSimpleApp:
             top, text="Inverse Design", command=self._run_inverse_design,
             bg=C["panel_light"], fg=C["accent3"], font=("Menlo", 10), relief="flat", cursor="hand2",
         ).pack(side="right", padx=4)
+
+        self._compare_btn = tk.Button(
+            top, text="Compare", command=self._on_compare_toggle,
+            bg=C["panel_light"], fg=C["accent5"], font=("Menlo", 10), relief="flat", cursor="hand2",
+        )
+        self._compare_btn.pack(side="right", padx=4)
+
+        self._clear_compare_btn = tk.Button(
+            top, text="Clear A/B", command=self._on_compare_clear,
+            bg=C["panel_light"], fg=C["text_dim"], font=("Menlo", 10), relief="flat", cursor="hand2",
+        )
+        self._clear_compare_btn.pack(side="right", padx=2)
 
         tk.Button(
             top, text="Save Patch", command=self._save_patch,
@@ -1248,6 +1305,19 @@ class UQDawSimpleApp:
         self.strategy_label = tk.Label(self.left_frame, text="Strategies: ---", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9), wraplength=240, justify="left")
         self.strategy_label.pack(fill="x", padx=8, pady=(2, 4))
 
+        # -- Left: Context panel (per-observable detail) --
+        ctx_frame = tk.LabelFrame(
+            self.left_frame, text="CONTEXT", bg=C["panel"],
+            fg=C["accent_blue"], font=("Menlo", 10, "bold"), labelanchor="n",
+        )
+        ctx_frame.pack(fill="x", padx=4, pady=4)
+        self._context_text = tk.Text(
+            ctx_frame, bg=C["panel_light"], fg=C["text"], font=("Menlo", 8),
+            height=8, wrap="word", state="disabled", borderwidth=0,
+            highlightthickness=0, padx=6, pady=4,
+        )
+        self._context_text.pack(fill="x", padx=4, pady=4)
+
         # -- Build visualization panels --
         self._build_viz_panels()
 
@@ -1321,6 +1391,7 @@ class UQDawSimpleApp:
         self._build_sliders(params)
         self._update_strategy_info()
         self._update_all_viz()
+        self._update_context_panel()
         self.status_label.config(text=f"Loaded: {path.name}")
 
     def _load_surrogates(self, export_dir):
@@ -1380,6 +1451,81 @@ class UQDawSimpleApp:
         if _choice != self.selected_observable.get():
             self.selected_observable.set(_choice)
             self._on_param_change()
+        self._update_context_panel()
+
+    def _update_context_panel(self) -> None:
+        """Populate the context sidebar with per-observable detail."""
+        self._context_text.config(state="normal")
+        self._context_text.delete("1.0", "end")
+
+        obs_choice = self.selected_observable.get()
+        if not self.data or not self.surr_data:
+            self._context_text.insert("end", "Load data first.")
+            self._context_text.config(state="disabled")
+            return
+
+        lines: list[str] = []
+        params = list(self.data["parameters"].keys())
+        per_out = self.surr_data.get("pop_coeffs_per_output")
+        mi = self.surr_data.get("pop_mi")
+        bounds = self.surr_data.get("bounds")
+        obs_names = getattr(self, "_observable_full_names", [])
+        short_names = [n.split("__")[-1] if "__" in n else n for n in obs_names]
+
+        # Per-observable Sobol ranking (top-3 params)
+        if per_out is not None and mi is not None and obs_choice in short_names and bounds is not None:
+            obs_idx = short_names.index(obs_choice)
+            coeffs = per_out[obs_idx]
+            # Compute per-param sensitivity as |dŶ/dx_i| at midpoint
+            mid = 0.5 * (bounds[:, 0] + bounds[:, 1])
+            mid_norm = normalize_to_germ(mid, bounds)
+            sensitivities = []
+            for pi in range(len(params)):
+                delta = (bounds[pi, 1] - bounds[pi, 0]) * 0.005
+                x_plus = mid.copy()
+                x_plus[pi] = min(mid[pi] + delta, bounds[pi, 1])
+                x_minus = mid.copy()
+                x_minus[pi] = max(mid[pi] - delta, bounds[pi, 0])
+                y_plus = legendre_eval(normalize_to_germ(x_plus, bounds), coeffs, mi)
+                y_minus = legendre_eval(normalize_to_germ(x_minus, bounds), coeffs, mi)
+                sensitivities.append(abs(y_plus - y_minus) / (2 * delta + 1e-12))
+            ranked = sorted(zip(params, sensitivities), key=lambda ps: -ps[1])
+            lines.append("── Top-3 drivers ──")
+            for name, sens in ranked[:3]:
+                short = name.replace("fraction_active_", "").replace("cell_dry_mass_fraction", "dry_mass")
+                lines.append(f"  {short}: {sens:.3e}")
+            lines.append("")
+
+        # Observable metadata
+        _lbl, _unit, _fmt = _obs_label(obs_choice if obs_choice != "(aggregate)" else "")
+        baseline = self._baselines.get(obs_choice)
+        if baseline is not None:
+            lines.append(f"Baseline: {baseline:{_fmt}} {_unit}")
+            # Current deviation
+            if self.sliders and bounds is not None:
+                x = np.array([float(self.sliders[p].get()) for p in params])
+                if per_out is not None and obs_choice in short_names:
+                    obs_idx = short_names.index(obs_choice)
+                    x_norm = normalize_to_germ(x, bounds)
+                    current = legendre_eval(x_norm, per_out[obs_idx], mi)
+                    delta_pct = (current - baseline) / abs(baseline) * 100 if baseline != 0 else 0
+                    sign = "+" if delta_pct >= 0 else ""
+                    lines.append(f"Current:  {current:{_fmt}} {_unit} ({sign}{delta_pct:.1f}%)")
+            lines.append("")
+
+        # Surrogate quality
+        s1 = self.data.get("phase1_population", {})
+        if s1:
+            lines.append("── Surrogate quality ──")
+            s_ti = s1.get("sobol_total_order", {}).get(obs_choice, None)
+            if s_ti is not None:
+                lines.append(f"  S_Ti (pop): {s_ti:.3f}")
+
+        if not lines:
+            lines.append("Select an observable for context.")
+
+        self._context_text.insert("end", "\n".join(lines))
+        self._context_text.config(state="disabled")
 
     def _build_sliders(self, params):
         for w in self.slider_container.winfo_children():
@@ -1422,6 +1568,45 @@ class UQDawSimpleApp:
         if pname in self.slider_labels:
             self.slider_labels[pname].config(text=f"{value:.3f}")
         self._update_response_curves()
+        # Debounced history push (200ms after last movement)
+        if self._history_debounce_id is not None:
+            self.root.after_cancel(self._history_debounce_id)
+        self._history_debounce_id = self.root.after(200, self._push_history)
+
+    def _push_history(self) -> None:
+        """Record current slider state in the undo history."""
+        if not self.sliders:
+            return
+        state = {p: float(s.get()) for p, s in self.sliders.items()}
+        # Truncate forward history if we undid
+        if self._history_idx < len(self._history) - 1:
+            self._history = self._history[: self._history_idx + 1]
+        self._history.append(state)
+        if len(self._history) > 50:
+            self._history = self._history[-50:]
+        self._history_idx = len(self._history) - 1
+
+    def _undo(self) -> None:
+        if self._history_idx <= 0:
+            return
+        self._history_idx -= 1
+        self._restore_history(self._history[self._history_idx])
+
+    def _redo(self) -> None:
+        if self._history_idx >= len(self._history) - 1:
+            return
+        self._history_idx += 1
+        self._restore_history(self._history[self._history_idx])
+
+    def _restore_history(self, state: dict[str, float]) -> None:
+        """Set sliders to a historical state without pushing new history."""
+        if self._history_debounce_id is not None:
+            self.root.after_cancel(self._history_debounce_id)
+            self._history_debounce_id = None
+        for pname, val in state.items():
+            if pname in self.sliders:
+                self.sliders[pname].set(val)
+        # Update visuals (slider callback already fired for each .set())
 
     def _on_curve_drag(self, pname, x_normalized):
         if self.surr_data is None:
@@ -1454,6 +1639,37 @@ class UQDawSimpleApp:
         self.strategy_label.config(
             text=f"S1: bulk | S2: {s2_text} | S3: {s3_text} | S4: {n_stages} stages"
         )
+
+    def _apply_view_mode(self) -> None:
+        """Show/hide panels based on view mode (Simple/Standard/Expert)."""
+        mode = self._view_mode.get()
+
+        # Simple: sliders + readout + profile only
+        # Standard: + response curves + spectrogram (default)
+        # Expert: + context sidebar + patches + target + spectral
+
+        show_response = mode in ("standard", "expert")
+        show_spectrogram = mode in ("standard", "expert")
+        show_context = mode == "expert"
+
+        if hasattr(self, "response_canvas"):
+            if show_response:
+                self.response_canvas.pack(fill="both", expand=True, padx=2, pady=2)
+            else:
+                self.response_canvas.pack_forget()
+
+        if hasattr(self, "heatmap_canvas"):
+            if show_spectrogram:
+                self.heatmap_canvas.pack(fill="x", padx=2, pady=(1, 1))
+            else:
+                self.heatmap_canvas.pack_forget()
+
+        if hasattr(self, "_context_text"):
+            ctx_parent = self._context_text.master
+            if show_context:
+                ctx_parent.pack(fill="x", padx=4, pady=4)
+            else:
+                ctx_parent.pack_forget()
 
     def _update_all_viz(self):
         if self.data is None:
@@ -1648,7 +1864,37 @@ class UQDawSimpleApp:
             profiles[_short] = _vals
 
         _obs_sel = self.selected_observable.get()
-        self.profile_canvas.set_profiles(profiles, self._baselines, selected_obs=_obs_sel)
+        self.profile_canvas.set_profiles(
+            profiles, self._baselines, selected_obs=_obs_sel,
+            compare_profile=self._compare_profile_a,
+        )
+
+    # ── What-If Comparison ─────────────────────────────────────────
+
+    def _on_compare_toggle(self) -> None:
+        """Freeze current slider state as 'Configuration A'."""
+        if not self.sliders:
+            return
+        self._compare_snapshot = {p: float(s.get()) for p, s in self.sliders.items()}
+        # Capture current profile if available
+        if hasattr(self, "profile_canvas") and self.profile_canvas._profiles:
+            obs = self.selected_observable.get()
+            if obs in self.profile_canvas._profiles:
+                self._compare_profile_a = self.profile_canvas._profiles[obs].copy()
+            elif obs == "(aggregate)" and self.profile_canvas._profiles:
+                # Store first observable as representative
+                first_key = next(iter(self.profile_canvas._profiles))
+                self._compare_profile_a = self.profile_canvas._profiles[first_key].copy()
+        self._compare_btn.config(fg=C["accent3"], text="A frozen")
+        self.status_label.config(text="Config A frozen — adjust sliders for B")
+
+    def _on_compare_clear(self) -> None:
+        """Clear the comparison snapshot."""
+        self._compare_snapshot = None
+        self._compare_profile_a = None
+        self._compare_btn.config(fg=C["accent5"], text="Compare")
+        self.status_label.config(text="Comparison cleared")
+        self._update_response_curves()
 
     # ── Patch save/load ────────────────────────────────────────────
 
