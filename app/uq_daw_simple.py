@@ -1305,6 +1305,21 @@ class UQDawSimpleApp:
         self.strategy_label = tk.Label(self.left_frame, text="Strategies: ---", bg=C["panel"], fg=C["text_dim"], font=("Menlo", 9), wraplength=240, justify="left")
         self.strategy_label.pack(fill="x", padx=8, pady=(2, 4))
 
+        # -- Left: Condition selector (multi-parca, hidden by default) --
+        self._condition_frame = tk.LabelFrame(
+            self.left_frame, text="GROWTH CONDITION", bg=C["panel"],
+            fg=C["accent_gold"], font=("Menlo", 10, "bold"), labelanchor="n",
+        )
+        self._selected_condition = tk.StringVar()
+        self._condition_menu = ttk.Combobox(
+            self._condition_frame, textvariable=self._selected_condition,
+            state="readonly", font=("Menlo", 10),
+        )
+        self._condition_menu.pack(fill="x", padx=8, pady=8)
+        self._selected_condition.trace_add("write", lambda *_: self._on_condition_change())
+        self._conditions_data: dict[str, Any] | None = None
+        # Frame is packed only when multi-condition data is loaded
+
         # -- Left: Context panel (per-observable detail) --
         ctx_frame = tk.LabelFrame(
             self.left_frame, text="CONTEXT", bg=C["panel"],
@@ -1387,6 +1402,18 @@ class UQDawSimpleApp:
                     self._baselines[_short] = float(
                         legendre_eval(mid_norm, per_out[_i], self.surr_data["pop_mi"])
                     )
+
+        # Detect multi-condition data
+        mc_data = self.data.get("per_condition")
+        if mc_data and len(mc_data) > 1:
+            self._conditions_data = mc_data
+            cond_ids = list(mc_data.keys())
+            self._condition_menu["values"] = cond_ids
+            self._selected_condition.set(cond_ids[0])
+            self._condition_frame.pack(fill="x", padx=4, pady=4, before=self.strategy_label)
+        else:
+            self._conditions_data = None
+            self._condition_frame.pack_forget()
 
         self._build_sliders(params)
         self._update_strategy_info()
@@ -1639,6 +1666,18 @@ class UQDawSimpleApp:
         self.strategy_label.config(
             text=f"S1: bulk | S2: {s2_text} | S3: {s3_text} | S4: {n_stages} stages"
         )
+
+    def _on_condition_change(self) -> None:
+        """Handle condition selector change — reload per-condition data."""
+        cond_id = self._selected_condition.get()
+        if not cond_id or not self._conditions_data:
+            return
+        cond_data = self._conditions_data.get(cond_id)
+        if cond_data:
+            # Update the Sobol data for the selected condition
+            self.data["phase1_population"] = cond_data
+            self._update_all_viz()
+            self.status_label.config(text=f"Condition: {cond_id}")
 
     def _apply_view_mode(self) -> None:
         """Show/hide panels based on view mode (Simple/Standard/Expert)."""

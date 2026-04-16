@@ -111,15 +111,31 @@ def _build_config(
     n_init_sims: int = 1,
     generations: int = 1,
     max_duration: float = 10800.0,
+    base_config_path: str | None = None,
+    conditions: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Build a vEcoli workflow config JSON."""
-    return {
+    """Build a vEcoli workflow config JSON.
+
+    Args:
+        base_config_path: Optional path to a base vEcoli config to merge with.
+            Preserves ``parca_variants``, ``analysis_options``, and other
+            multi-parca keys from the base config.
+        conditions: Optional list of ``rnaseq_basal_dataset_id`` strings.
+            When provided, populates ``parca_variants`` for multi-parca
+            cross-condition UQ.
+    """
+    if base_config_path:
+        base = json.loads(Path(base_config_path).read_text())
+    else:
+        base = {}
+
+    # UQ fields override base; everything else preserved
+    base.update({
         "sim_data_path": sim_data_path,
         "experiment_id": experiment_id,
         "emitter": "parquet",
         "emitter_arg": {
             "out_dir": output_dir,
-            # "batch_size": max(1, int(max_duration)),
         },
         "max_duration": max_duration,
         "n_init_sims": n_init_sims,
@@ -127,7 +143,16 @@ def _build_config(
         "single_daughters": True,
         "suffix_time": False,
         "variants": variants_section,
-    }
+    })
+
+    # Multi-condition: populate parca_variants
+    if conditions:
+        base["parca_variants"] = [
+            {"rnaseq_basal_dataset_id": cond_id}
+            for cond_id in conditions
+        ]
+
+    return base
 
 
 def _build_variants_from_samples(
@@ -346,6 +371,13 @@ class UQPCApp(App[None]):
                 yield Label("Regression", classes="cfg-label")
                 yield Select(REGRESSION_OPTIONS, value="lsq", id="cfg-reg")
 
+                yield Label("Conditions", classes="cfg-label")
+                yield Input(
+                    value="",
+                    id="cfg-conditions",
+                    placeholder="comma-separated dataset IDs (multi-parca)",
+                )
+
                 yield Label("VARIANT PARAMETERS", classes="nav-section")
                 for _p in _DEFAULT_PARAMS:
                     with Horizontal(classes="param-row"):
@@ -562,6 +594,10 @@ class UQPCApp(App[None]):
         # pre-computed simData pickle.
         variants = _build_variants_from_samples(X_train, param_space._sim_data_parameters)
 
+        # Parse conditions from sidebar
+        cond_str = self._cfg("cfg-conditions").strip()
+        conditions = [c.strip() for c in cond_str.split(",") if c.strip()] if cond_str else None
+
         config = _build_config(
             sim_data_path=sim_path,
             output_dir=str(output_dir),
@@ -569,9 +605,18 @@ class UQPCApp(App[None]):
             experiment_id=experiment_id,
             n_init_sims=n_init_sims,
             generations=generations,
+            conditions=conditions,
         )
         config_path = batch_dir / "workflow_config.json"
         config_path.write_text(json.dumps(config, indent=2))
+
+        if conditions:
+            cond_meta = {"conditions": conditions, "n_samples": n_samples}
+            (cache_dir / "conditions.json").write_text(json.dumps(cond_meta))
+            self.call_from_thread(
+                self.write_log,
+                f"[ansi_cyan]Multi-condition: {len(conditions)} parca_variants[/]",
+            )
 
         self.call_from_thread(
             self.write_log,
@@ -852,6 +897,7 @@ class UQPCApp(App[None]):
 
     @work(thread=True)
     def _do_quantify(self) -> None:
+        from uq.multi_condition import is_multi_condition_cache, quantify_multi_condition
         from uq.workflow import quantify
 
         cache_dir = self._cfg("cfg-cache") or "./uq_cache"
@@ -870,6 +916,44 @@ class UQPCApp(App[None]):
             self.write_log,
             f"[bold cyan]QUANTIFY[/] order={order} bins={bins} reg={reg}",
         )
+
+        # Auto-detect multi-condition cache
+        if is_multi_condition_cache(cache_dir):
+            self.call_from_thread(
+                self.write_log,
+                "[ansi_magenta]Multi-condition cache detected — cross-condition GSA[/]",
+            )
+            try:
+                mc_result = quantify_multi_condition(
+                    cache_dir=cache_dir,
+                    sim_data_path=sim_path,
+                    polynomial_order=order,
+                    n_bins=bins,
+                    regression=reg,
+                )
+                self.call_from_thread(self._set_progress, 4, 4, "Done")
+                for cond_id, cr in mc_result.per_condition.items():
+                    self.call_from_thread(self.write_log, f"\n[ansi_cyan]── {cond_id} ──[/]")
+                    for i, nm in enumerate(mc_result.parameter_names):
+                        st = cr.strategy1.sobol.total_order[i]
+                        bar = "█" * int(st * 30)
+                        self.call_from_thread(self.write_log, f"  {nm:<35s} {st:.4f} {bar}")
+
+                if mc_result.universal_drivers:
+                    self.call_from_thread(
+                        self.write_log,
+                        f"\n[ansi_green]Universal drivers: {', '.join(mc_result.universal_drivers)}[/]",
+                    )
+                for cond_id, params in mc_result.condition_specific.items():
+                    self.call_from_thread(
+                        self.write_log,
+                        f"[ansi_yellow]Condition-specific ({cond_id}): {', '.join(params)}[/]",
+                    )
+                self.call_from_thread(self._hide_progress)
+            except Exception as e:
+                self.call_from_thread(self.write_log, f"[ansi_red]Error: {e}[/]\n")
+                self.call_from_thread(self._hide_progress)
+            return
 
         try:
             result = quantify(

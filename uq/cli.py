@@ -79,6 +79,17 @@ def sample(
         help="Skip generations below this value when aggregating Y "
         "(cd1 generation_lower_bound). 0 = keep all.",
     ),
+    base_config: str | None = typer.Option(
+        None,
+        help="Base vEcoli config JSON to merge with. Preserves parca_variants, "
+        "analysis_options, and other multi-parca keys.",
+    ),
+    conditions: list[str] = typer.Option(
+        [],
+        help="RNA-seq dataset IDs for multi-condition UQ (one per --conditions). "
+        "Populates parca_variants for cross-condition sensitivity analysis. "
+        "Requires vEcoli multi-parca-aws branch.",
+    ),
 ) -> None:
     """UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli workflow.py.
 
@@ -177,10 +188,19 @@ def sample(
         n_init_sims=n_init_sims,
         generations=generations,
         max_duration=max_duration,
+        base_config_path=base_config,
+        conditions=conditions if conditions else None,
     )
     config_path = batch_dir / "workflow_config.json"
     config_path.write_text(_json.dumps(config, indent=2))
     console.print(f"  [dim]Config JSON: {config_path}[/dim]")
+    if conditions:
+        console.print(f"  [dim]Multi-condition: {len(conditions)} parca_variants[/dim]")
+
+    # Save conditions metadata for quantify to detect multi-condition cache
+    if conditions:
+        cond_meta = {"conditions": conditions, "n_samples": n_samples, "n_test": n_test}
+        (cache_path / "conditions.json").write_text(_json.dumps(cond_meta, indent=2))
 
     vecoli_root = _get_vecoli_root()
     nf_temp = Path(vecoli_root) / "nextflow_temp" / experiment_id
@@ -357,11 +377,31 @@ def quantify(
       bcs  Bayesian Compressed Sensing (sparse)
       anl  Analytical Bayesian
     """
+    from uq.multi_condition import is_multi_condition_cache, quantify_multi_condition
     from uq.workflow import quantify as wf_quantify
 
     console.print(
         f"[bold cyan]Quantify:[/bold cyan] order={polynomial_order}, bins={n_bins}, regression={regression}, tol={tol}"
     )
+
+    # Auto-detect multi-condition cache
+    if is_multi_condition_cache(cache_dir):
+        console.print("[bold magenta]Multi-condition cache detected — running cross-condition GSA (extension beyond RFC006)[/bold magenta]")
+        mc_result = quantify_multi_condition(
+            cache_dir=cache_dir,
+            sim_data_path=sim_data_path,
+            polynomial_order=polynomial_order,
+            n_bins=n_bins,
+            regression=regression,
+            tolerance=tol,
+            export_path=export_path,
+        )
+        for cond_id, cond_result in mc_result.per_condition.items():
+            console.print(f"\n[bold cyan]── Condition: {cond_id} ──[/bold cyan]")
+            _print_report(cond_result)
+        _print_multi_condition_report(mc_result)
+        console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+        return
 
     result = wf_quantify(
         cache_dir=cache_dir,
@@ -582,6 +622,75 @@ def _print_narrative(result: Any) -> None:
             "\n".join(lines),
             title="[bold white on blue] KEY FINDINGS [/bold white on blue]",
             border_style="blue",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
+
+
+def _print_multi_condition_report(mc_result: Any) -> None:
+    """Print cross-condition comparison table and narrative."""
+    from uq.multi_condition import MultiConditionResult
+
+    names = mc_result.parameter_names
+    conditions = mc_result.conditions
+
+    # ── Cross-condition S_Ti comparison table ──
+    table = Table(
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+        title="CROSS-CONDITION SENSITIVITY COMPARISON",
+        title_style="bold magenta",
+    )
+    table.add_column("PARAMETER", style="bold yellow", no_wrap=True)
+    for cond_id in conditions:
+        table.add_column(cond_id, justify="right")
+    table.add_column("STABILITY", justify="right")
+
+    stability = mc_result.rank_stability
+    for i, name in enumerate(names):
+        row = [name]
+        for cond_id in conditions:
+            s_ti = mc_result.per_condition[cond_id].strategy1.sobol.total_order
+            if s_ti.ndim > 1:
+                s_ti = np.mean(s_ti, axis=0)
+            row.append(_pct(s_ti[i]))
+        # Stability indicator
+        n_dots = max(1, int(stability[i] * 5))
+        dots = "●" * n_dots + "○" * (5 - n_dots)
+        row.append(f"{dots} ({stability[i]:.2f})")
+        table.add_row(*row)
+
+    console.print()
+    console.print(
+        Panel(
+            table,
+            border_style="magenta",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
+
+    # ── Cross-condition narrative ──
+    lines = []
+    if mc_result.universal_drivers:
+        drivers = ", ".join(f"[bold]{d}[/bold]" for d in mc_result.universal_drivers)
+        lines.append(f"  • Universal drivers (S_Ti > 10% in all conditions): {drivers}")
+        lines.append("    These should be measured precisely regardless of growth condition.")
+
+    for cond_id, params in mc_result.condition_specific.items():
+        param_str = ", ".join(f"[bold]{p}[/bold]" for p in params)
+        lines.append(f"  • Condition-specific to [cyan]{cond_id}[/cyan]: {param_str}")
+
+    if not lines:
+        lines.append("  • No clear universal or condition-specific patterns detected.")
+
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold white on magenta] CROSS-CONDITION FINDINGS [/bold white on magenta]",
+            border_style="magenta",
             box=box.ROUNDED,
             padding=(1, 2),
         )
