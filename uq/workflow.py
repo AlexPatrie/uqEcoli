@@ -34,9 +34,14 @@ References:
 
 from __future__ import annotations
 
+import hashlib
 import json as _json
 import logging
+import platform
+import subprocess as _subprocess
+import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1197,7 +1202,7 @@ class QuantifyResult:
     observable_names: list[str]
     cache: PrecomputedCache
 
-    def export(self, export_dir: str | Path) -> Path:
+    def export(self, export_dir: str | Path, cli_argv: list[str] | None = None) -> Path:
         """Write all strategy artifacts to *export_dir*.
 
         Produces a directory layout compatible with both the Marimo
@@ -1317,7 +1322,175 @@ class QuantifyResult:
         }
         (out / "uq_results.json").write_text(json.dumps(summary, indent=2))
 
+        # Reproducibility manifest
+        _write_manifest(out, self.cache, cli_argv=cli_argv)
+
         return out
+
+
+def _write_manifest(
+    export_dir: Path,
+    cache: PrecomputedCache,
+    cli_argv: list[str] | None = None,
+) -> None:
+    """Write ``manifest.json`` for full reproducibility.
+
+    Records software versions, git SHAs, data hashes, and the CLI
+    command that produced these results — everything needed to reproduce
+    or audit a UQ run.
+    """
+    import importlib.metadata
+
+    def _git_sha(repo_dir: str | Path) -> str:
+        try:
+            return _subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(repo_dir),
+                stderr=_subprocess.DEVNULL,
+            ).decode().strip()
+        except Exception:
+            return "unknown"
+
+    def _sha256_file(path: Path) -> str:
+        if not path.exists():
+            return "missing"
+        h = hashlib.sha256()
+        h.update(path.read_bytes())
+        return h.hexdigest()
+
+    def _pkg_version(name: str) -> str:
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return "not installed"
+
+    uqecoli_root = Path(__file__).resolve().parent.parent
+    vecoli_sha = "unknown"
+    try:
+        import ecoli  # type: ignore[import-not-found]
+        vecoli_root = Path(ecoli.__file__).resolve().parent.parent
+        vecoli_sha = _git_sha(vecoli_root)
+    except ImportError:
+        pass
+
+    manifest = {
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "hostname": platform.node(),
+        "python_version": sys.version,
+        "package_versions": {
+            "pytuq": _pkg_version("pytuq"),
+            "numpy": _pkg_version("numpy"),
+            "polars": _pkg_version("polars"),
+            "scipy": _pkg_version("scipy"),
+        },
+        "git_sha": {
+            "uqEcoli": _git_sha(uqecoli_root),
+            "vEcoli": vecoli_sha,
+        },
+        "cli_command": cli_argv or sys.argv,
+        "data_hashes": {
+            "X.npy": _sha256_file(cache.cache_dir / "X.npy"),
+            "Y.npy": _sha256_file(cache.cache_dir / "Y.npy"),
+        },
+        "cache_path": str(cache.cache_dir),
+        "n_samples": int(cache.X.shape[0]),
+        "n_outputs": int(cache.Y.shape[1]),
+        "n_parameters": int(cache.X.shape[1]),
+        "parameter_names": cache.parameter_names,
+    }
+
+    (export_dir / "manifest.json").write_text(
+        _json.dumps(manifest, indent=2, default=str)
+    )
+
+
+def _adaptive_sampling_loop(
+    input_pc: PCRV,
+    sim_func: TimeseriesGeneratorVecoli,
+    n_budget: int,
+    polynomial_order: int = 3,
+    regression: str = "lsq",
+    tol: float = 0.05,
+    batch_fraction: float = 0.33,
+    seed: int | None = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[float]]:
+    """Adaptive sampling loop: start small, refine where error is highest.
+
+    1. Draw ``n_budget * batch_fraction`` initial samples.
+    2. Fit PCE, compute leave-one-out relative error.
+    3. If error > tol and budget remains, draw more samples from the germ
+       measure and re-fit.
+    4. Repeat until convergence or budget exhausted.
+
+    Args:
+        input_pc: PCRV from ``_setup_input_pc()``.
+        sim_func: vEcoli simulation wrapper.
+        n_budget: Total sample budget.
+        polynomial_order: PCE order.
+        regression: Fitting method.
+        tol: Target mean relative error for convergence.
+        batch_fraction: Fraction of budget for initial batch.
+        seed: Random seed.
+
+    Returns:
+        Tuple of (germ_all, X_all, Y_all, convergence_history).
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    n_initial = max(polynomial_order + 2, int(n_budget * batch_fraction))
+    n_remaining = n_budget - n_initial
+    batch_size = max(1, n_remaining // 4)
+
+    # Initial batch
+    germ = input_pc.sampleGerm(n_initial)
+    X = input_pc.evalPC(germ)
+    Y = sim_func.evaluate_batch(X)
+    if Y.ndim == 1:
+        Y = Y.reshape(-1, 1)
+
+    convergence: list[float] = []
+
+    while True:
+        # Fit PCE on current data
+        _, linregs = _fit_surrogate(germ, Y, polynomial_order, regression)
+
+        # LOO relative error estimate
+        n_dim = germ.shape[1]
+        mindex = get_mi(polynomial_order, n_dim)
+        pcrv_tmp = PCRV(Y.shape[1], n_dim, "LU", mi=mindex)
+        Amat = pcrv_tmp.evalBases(germ, 0)
+        loo_errors = []
+        for j in range(Y.shape[1]):
+            pred = Amat @ linregs[j].cf
+            residuals = Y[:, j] - pred
+            norm_y = np.linalg.norm(Y[:, j])
+            loo_errors.append(np.linalg.norm(residuals) / max(norm_y, 1e-12))
+        mean_err = float(np.mean(loo_errors))
+        convergence.append(mean_err)
+
+        logger.info(
+            "Adaptive sampling: %d samples, mean relerr=%.4f (tol=%.4f)",
+            germ.shape[0], mean_err, tol,
+        )
+
+        if mean_err <= tol or n_remaining <= 0:
+            break
+
+        # Draw more samples
+        n_new = min(batch_size, n_remaining)
+        germ_new = input_pc.sampleGerm(n_new)
+        X_new = input_pc.evalPC(germ_new)
+        Y_new = sim_func.evaluate_batch(X_new)
+        if Y_new.ndim == 1:
+            Y_new = Y_new.reshape(-1, 1)
+
+        germ = np.vstack([germ, germ_new])
+        X = np.vstack([X, X_new])
+        Y = np.vstack([Y, Y_new])
+        n_remaining -= n_new
+
+    return germ, X, Y, convergence
 
 
 def sample(
@@ -1676,7 +1849,7 @@ def quantify(
     )
 
     if export_path is not None:
-        result.export(export_path)
+        result.export(export_path, cli_argv=sys.argv)
         logger.info("Artifacts exported to %s", export_path)
 
     return result
