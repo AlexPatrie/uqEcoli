@@ -350,6 +350,46 @@ def _(COLORS, DAW, PCOLORS, data, go, mo):
 
 
 @app.cell
+def _(COLORS, DAW, PCOLORS, data, go, mo, np):
+    # Cross-condition comparison (multi-parca)
+    _mc = data.get("per_condition") if "conditions" in data else None
+
+    if _mc and len(_mc) > 1:
+        _params = list(data.get("parameter_names", data.get("parameters", {}).keys()))
+        fig_cc = go.Figure()
+        for _pi, _p in enumerate(_params):
+            _short = _p.replace("fraction_active_", "").replace("cell_dry_mass_fraction", "dry_mass_frac")
+            _vals = [_mc[_c]["sobol_total_order"].get(_p, 0) for _c in _mc]
+            _labels = list(_mc.keys())
+            fig_cc.add_trace(go.Bar(
+                name=_short, x=_labels, y=_vals,
+                marker_color=PCOLORS[_pi % len(PCOLORS)],
+                hovertemplate=f"<b>{_short}</b><br>S_Ti=%{{y:.3f}}<extra></extra>",
+            ))
+        fig_cc.update_layout(
+            **DAW, height=300, barmode="group",
+            title=dict(text="CROSS-CONDITION COMPARISON — S_Ti by Growth Condition", font=dict(size=13, color=COLORS["accent1"])),
+            xaxis_title="Growth Condition", yaxis_title="S_Ti (total Sobol)",
+            legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)),
+        )
+
+        # Rank stability dots
+        _cc_meta = data.get("cross_condition", {})
+        _stab = _cc_meta.get("rank_stability", {})
+        if _stab:
+            _stab_text = " | ".join(
+                f"`{_p}`: {'●' * max(1, int(float(_s) * 5))}{'○' * (5 - max(1, int(float(_s) * 5)))}"
+                for _p, _s in _stab.items()
+            )
+            fig_cc_output = mo.vstack([mo.ui.plotly(fig_cc), mo.md(f"**Rank stability:** {_stab_text}")])
+        else:
+            fig_cc_output = mo.ui.plotly(fig_cc)
+    else:
+        fig_cc_output = mo.md("")  # Empty — not a multi-condition result
+    return (fig_cc_output,)
+
+
+@app.cell
 def _(data, mo):
     _params_info = data["parameters"]
     _sobol = data["phase1_population"]["sobol_total_order"]
@@ -370,7 +410,7 @@ def _(data, mo):
 
 
 @app.cell
-def _(data, fig_response, fig_s2_output, fig_s3_output, fig_spectrogram, file_input, mo, param_sliders, param_table, results_dir_input):
+def _(data, fig_cc_output, fig_response, fig_s2_output, fig_s3_output, fig_spectrogram, file_input, mo, param_sliders, param_table, results_dir_input):
     _methods = data.get("methods", {}) if data else {}
     _refs = data.get("references", []) if data else []
     _params = list(data["parameters"].keys()) if data else []
@@ -401,6 +441,7 @@ def _(data, fig_response, fig_s2_output, fig_s3_output, fig_spectrogram, file_in
         mo.ui.plotly(fig_response),
         mo.ui.plotly(fig_spectrogram),
         mo.hstack([fig_s2_output, fig_s3_output], widths=[1, 1]),
+        fig_cc_output,
     ])
 
     _s2_status = "available" if "generations" in data.get("strategy2_by_generation", {}) else "not available"

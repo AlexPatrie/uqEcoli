@@ -1399,6 +1399,24 @@ def _write_manifest(
         "parameter_names": cache.parameter_names,
     }
 
+    # Record multi-parca info if present in workflow config
+    config_path = cache.cache_dir / "_batch" / "workflow_config.json"
+    if config_path.exists():
+        try:
+            wf_config = _json.loads(config_path.read_text())
+            if "parca_variants" in wf_config:
+                manifest["parca_variants"] = wf_config["parca_variants"]
+        except Exception:
+            pass
+
+    # Record conditions metadata if this is a multi-condition cache
+    cond_path = cache.cache_dir / "conditions.json"
+    if cond_path.exists():
+        try:
+            manifest["conditions"] = _json.loads(cond_path.read_text())
+        except Exception:
+            pass
+
     (export_dir / "manifest.json").write_text(
         _json.dumps(manifest, indent=2, default=str)
     )

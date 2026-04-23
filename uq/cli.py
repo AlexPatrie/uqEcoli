@@ -79,52 +79,76 @@ def sample(
         help="Skip generations below this value when aggregating Y "
         "(cd1 generation_lower_bound). 0 = keep all.",
     ),
+    base_config: str | None = typer.Option(
+        None,
+        help="Base vEcoli config JSON to merge with. Preserves parca_variants, "
+        "analysis_options, and other multi-parca keys.",
+    ),
+    conditions: list[str] = typer.Option(
+        [],
+        help="RNA-seq dataset IDs for multi-condition UQ (one per --conditions). "
+        "Populates parca_variants for cross-condition sensitivity analysis. "
+        "Requires vEcoli multi-parca-aws branch.",
+    ),
+    api_url: str | None = typer.Option(
+        None,
+        help="SMS-API base URL for remote execution (e.g. https://sms.cam.uchc.edu). "
+        "When set, simulations run on the SMS-API cluster instead of local vEcoli.",
+    ),
+    simulator_id: int | None = typer.Option(
+        None,
+        help="SMS-API simulator database_id (required with --api-url). "
+        "Use `uq remote discover --api-url URL` to list available simulators.",
+    ),
+    config_filename: str = typer.Option(
+        "api_simulation_default.json",
+        help="vEcoli config filename on the server (used with --api-url). "
+        "Use GET /simulations/discovery to list available files.",
+    ),
+    ecoli_sources_repo: str | None = typer.Option(
+        None,
+        help="GitHub URL for ecoli-sources data repo (used with --api-url). "
+        "Server downloads and syncs to S3 automatically.",
+    ),
+    ecoli_sources_ref: str | None = typer.Option(
+        None,
+        help="Git ref for ecoli-sources repo (default: main).",
+    ),
 ) -> None:
-    """UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli workflow.py.
+    """UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli.
 
-    Generates samples using PyTUQ's native PCRV sampling, evaluates
-    vEcoli as a subprocess via runscripts/workflow.py, and caches
-    (X, Y, timeseries) to disk as a PrecomputedCache.
+    Two execution modes:
+      LOCAL (default): subprocess vEcoli via runscripts/workflow.py
+      REMOTE (--api-url): submit to SMS-API, poll, download cd1 analysis TSVs
 
     \b
     Use --generations >= 2 to enable Strategy 2 (by-generation GSA).
     Use --n-test > 0 for held-out validation (UQPC --ntst).
     Use --observables to select cd1-style observable categories:
-      mass             Raw mass/growth scalars (default)
+      mass             Raw mass/growth scalars (default, local only)
       higher_order     Derived metrics: doubling time, biomass composition
       exchange_fluxes  External metabolite fluxes (~87)
       transcriptome    mRNA cistron counts (~4300 genes)
       proteome         Protein monomer counts (~4300 monomers)
       fluxome          Base reaction fluxes (~2800, dry-mass normalized)
     Use --generation-lower-bound N to skip early generations.
+    Use --api-url http://localhost:8080 --simulator-id 11 for remote execution.
     """
     import json as _json
-    import os
-    import re
     import shutil
-    import subprocess
-    import sys
-    import time as _time
-
-    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
     from libuq.pipeline.models import SimDataParameter
     from libuq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS, ParameterDataset
     from libuq.sampling import PrecomputedCache
-    from uq.tui import (
-        _build_config,
-        _build_variants_from_samples,
-        _collect_variant_timeseries,
-        _count_completed_variants,
-        _get_vecoli_root,
-    )
     from uq.workflow import _setup_input_pc
 
     # ── Step 1: Setup inputs ──
     sim_data_path = str(Path(sim_data_path).resolve())
     cache_path = Path(cache_dir).resolve()
+    is_remote = api_url is not None
 
-    console.print(f"[bold cyan]Sampling:[/bold cyan] {n_samples} variants, {n_init_sims} seeds, {generations} gens")
+    mode_label = f"[bold magenta]REMOTE → {api_url}[/bold magenta]" if is_remote else "[dim]LOCAL[/dim]"
+    console.print(f"[bold cyan]Sampling:[/bold cyan] {n_samples} variants, {n_init_sims} seeds, {generations} gens  {mode_label}")
     console.print(f"  [dim]simData: {sim_data_path}[/dim]")
     console.print(f"  [dim]cache:   {cache_path}[/dim]")
 
@@ -159,7 +183,251 @@ def sample(
     # Concatenate train + test; vEcoli evaluates all variants in one workflow.
     X_all = np.vstack([X_train, X_test]) if X_test is not None else X_train
 
-    # ── Step 3: Build config + run workflow.py ──
+    # ── Step 3: Execute ──
+    if is_remote:
+        _sample_remote(
+            api_url=api_url,  # type: ignore[arg-type]
+            simulator_id=simulator_id,
+            config_filename=config_filename,
+            ecoli_sources_repo=ecoli_sources_repo,
+            ecoli_sources_ref=ecoli_sources_ref,
+            X_all=X_all,
+            param_space=param_space,
+            n_samples=n_samples,
+            n_test=n_test,
+            n_init_sims=n_init_sims,
+            generations=generations,
+            observables=observables,
+            generation_lower_bound=generation_lower_bound,
+            cache_path=cache_path,
+            X_train=X_train,
+            X_test=X_test,
+            germ_train=germ_train,
+            germ_test=germ_test,
+            bounds=bounds,
+            seed=seed,
+            conditions=conditions,
+        )
+        return
+
+    _sample_local(
+        sim_data_path=sim_data_path,
+        cache_path=cache_path,
+        X_all=X_all,
+        param_space=param_space,
+        n_samples=n_samples,
+        n_test=n_test,
+        n_init_sims=n_init_sims,
+        generations=generations,
+        max_duration=max_duration,
+        observables=observables,
+        generation_lower_bound=generation_lower_bound,
+        base_config=base_config,
+        conditions=conditions,
+        X_train=X_train,
+        X_test=X_test,
+        germ_train=germ_train,
+        germ_test=germ_test,
+        bounds=bounds,
+        seed=seed,
+    )
+
+
+def _sample_remote(
+    *,
+    api_url: str,
+    simulator_id: int | None,
+    config_filename: str,
+    ecoli_sources_repo: str | None,
+    ecoli_sources_ref: str | None,
+    X_all: np.ndarray,
+    param_space: Any,
+    n_samples: int,
+    n_test: int,
+    n_init_sims: int,
+    generations: int,
+    observables: list[str],
+    generation_lower_bound: int,
+    cache_path: Path,
+    X_train: np.ndarray,
+    X_test: np.ndarray | None,
+    germ_train: np.ndarray,
+    germ_test: np.ndarray | None,
+    bounds: np.ndarray,
+    seed: int,
+    conditions: list[str],
+) -> None:
+    """Step 3 (remote): submit to SMS-API, poll, download cd1 TSVs, cache."""
+    import json as _json
+
+    from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+    from libuq.sampling import PrecomputedCache
+    from uq.remote import (
+        DEFAULT_CD1_ANALYSIS_OPTIONS,
+        SmsApiClient,
+        parse_cd1_tsvs,
+        parse_cd1_tsvs_multi_variant,
+    )
+
+    if simulator_id is None:
+        console.print("[red]--simulator-id is required with --api-url[/red]")
+        raise typer.Exit(1)
+
+    # Map UQ observable presets to cd1 module names for analysis_options
+    cd1_presets = [p for p in observables if p in ("higher_order", "transcriptome", "proteome", "fluxome", "exchange_fluxes")]
+    if not cd1_presets:
+        # Default: use all cd1 modules
+        cd1_presets = ["higher_order", "transcriptome", "proteome", "fluxome", "exchange_fluxes"]
+
+    gen_lb = generation_lower_bound if generation_lower_bound > 0 else 5
+    from uq.remote import CD1_MODULE_MAP
+
+    analysis_options: dict[str, Any] = {
+        "multiseed": {
+            CD1_MODULE_MAP[preset]["module"]: {"generation_lower_bound": gen_lb}
+            for preset in cd1_presets
+            if preset in CD1_MODULE_MAP
+        }
+    }
+
+    n_variants = X_all.shape[0]
+    console.print(f"[dim]Step 3: submitting {n_variants} simulations to SMS-API at {api_url}...[/dim]")
+
+    with SmsApiClient(base_url=api_url) as client:
+        # Submit one simulation per variant sample
+        sim_ids: list[int] = []
+        for i in range(n_variants):
+            exp_id = f"uq-sample-{i}"
+            desc = f"UQ variant {i}/{n_variants}"
+            sim = client.submit_simulation(
+                simulator_id=simulator_id,
+                experiment_id=exp_id,
+                config_filename=config_filename,
+                num_generations=generations,
+                num_seeds=n_init_sims,
+                description=desc,
+                run_parca=True,
+                ecoli_sources_repo_url=ecoli_sources_repo,
+                ecoli_sources_ref=ecoli_sources_ref,
+                analysis_options=analysis_options,
+            )
+            sim_ids.append(sim["database_id"])
+            console.print(f"  [dim]Submitted variant {i} → sim {sim['database_id']}[/dim]")
+
+        # Poll all simulations
+        console.print(f"[dim]Polling {len(sim_ids)} simulations...[/dim]")
+        with Progress(
+            SpinnerColumn("dots", style="bold magenta"),
+            TextColumn("[bold cyan]{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Waiting for {len(sim_ids)} simulations", total=len(sim_ids))
+
+            def _on_status(sim_id: int, status: dict[str, Any]) -> None:
+                current = status.get("status", "")
+                if current.lower() in {"completed", "failed", "cancelled"}:
+                    progress.advance(task)
+
+            client.poll_batch(sim_ids, on_status=_on_status)
+
+        # Download and parse cd1 TSVs
+        console.print("[dim]Step 4: downloading cd1 analysis outputs...[/dim]")
+        Y_rows: list[np.ndarray] = []
+        obs_names: list[str] | None = None
+        dl_dir = cache_path / "_remote"
+        dl_dir.mkdir(parents=True, exist_ok=True)
+
+        for i, sim_id in enumerate(sim_ids):
+            dest = dl_dir / f"variant_{i}"
+            output_dir = client.download_data(sim_id, dest=dest)
+            y_row, names = parse_cd1_tsvs(output_dir, presets=cd1_presets)
+            if obs_names is None:
+                obs_names = names
+            Y_rows.append(y_row)
+            console.print(f"  [dim]variant {i}: {len(y_row)} observables from sim {sim_id}[/dim]")
+
+    if not Y_rows:
+        console.print("[red]No data collected from remote simulations.[/red]")
+        raise typer.Exit(1)
+
+    Y_all_arr = np.vstack(Y_rows)
+    Y_agg = Y_all_arr[:n_samples]
+    Y_test_arr = Y_all_arr[n_samples:] if n_test > 0 else None
+
+    cache_path.mkdir(parents=True, exist_ok=True)
+    cache = PrecomputedCache(
+        cache_dir=cache_path,
+        X=X_train,
+        Y=Y_agg,
+        parameter_names=param_space.parameter_names,
+        metadata={
+            "bounds": bounds.tolist(),
+            "seed": seed,
+            "observable_columns": obs_names or [],
+            "source": "sms-api",
+            "api_url": api_url,
+            "simulator_id": simulator_id,
+        },
+        X_test=X_test,
+        Y_test=Y_test_arr,
+    )
+    cache.save()
+    np.save(cache_path / "germ_train.npy", germ_train)
+    if germ_test is not None:
+        np.save(cache_path / "germ_test.npy", germ_test)
+
+    console.print(
+        f"[bold green]Cached {Y_agg.shape[0]} training samples[/bold green] "
+        f"({Y_agg.shape[1]} cd1 observables) to [cyan]{cache_path}[/cyan]"
+    )
+    if Y_test_arr is not None:
+        console.print(f"  [dim]Held-out validation: {Y_test_arr.shape[0]} samples[/dim]")
+
+
+def _sample_local(
+    *,
+    sim_data_path: str,
+    cache_path: Path,
+    X_all: np.ndarray,
+    param_space: Any,
+    n_samples: int,
+    n_test: int,
+    n_init_sims: int,
+    generations: int,
+    max_duration: float,
+    observables: list[str],
+    generation_lower_bound: int,
+    base_config: str | None,
+    conditions: list[str],
+    X_train: np.ndarray,
+    X_test: np.ndarray | None,
+    germ_train: np.ndarray,
+    germ_test: np.ndarray | None,
+    bounds: np.ndarray,
+    seed: int,
+) -> None:
+    """Step 3 (local): subprocess vEcoli via runscripts/workflow.py."""
+    import json as _json
+    import os
+    import re
+    import shutil
+    import subprocess
+    import sys
+    import time as _time
+
+    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+    from libuq.sampling import PrecomputedCache
+    from uq.tui import (
+        _build_config,
+        _build_variants_from_samples,
+        _collect_variant_timeseries,
+        _count_completed_variants,
+        _get_vecoli_root,
+    )
+
     batch_dir = cache_path / "_batch"
     if batch_dir.exists():
         shutil.rmtree(batch_dir)
@@ -177,10 +445,19 @@ def sample(
         n_init_sims=n_init_sims,
         generations=generations,
         max_duration=max_duration,
+        base_config_path=base_config,
+        conditions=conditions if conditions else None,
     )
     config_path = batch_dir / "workflow_config.json"
     config_path.write_text(_json.dumps(config, indent=2))
     console.print(f"  [dim]Config JSON: {config_path}[/dim]")
+    if conditions:
+        console.print(f"  [dim]Multi-condition: {len(conditions)} parca_variants[/dim]")
+
+    # Save conditions metadata for quantify to detect multi-condition cache
+    if conditions:
+        cond_meta = {"conditions": conditions, "n_samples": n_samples, "n_test": n_test}
+        (cache_path / "conditions.json").write_text(_json.dumps(cond_meta, indent=2))
 
     vecoli_root = _get_vecoli_root()
     nf_temp = Path(vecoli_root) / "nextflow_temp" / experiment_id
@@ -279,6 +556,7 @@ def sample(
     from uq.observables import collect_observables
 
     console.print(f"[dim]Observables: {observables}, gen_lower_bound={generation_lower_bound}[/dim]")
+    n_variants = X_all.shape[0]
     Y_all, obs, Y_ts_all, Y_meta_all = collect_observables(
         history_base,
         n_variants,
@@ -357,11 +635,31 @@ def quantify(
       bcs  Bayesian Compressed Sensing (sparse)
       anl  Analytical Bayesian
     """
+    from uq.multi_condition import is_multi_condition_cache, quantify_multi_condition
     from uq.workflow import quantify as wf_quantify
 
     console.print(
         f"[bold cyan]Quantify:[/bold cyan] order={polynomial_order}, bins={n_bins}, regression={regression}, tol={tol}"
     )
+
+    # Auto-detect multi-condition cache
+    if is_multi_condition_cache(cache_dir):
+        console.print("[bold magenta]Multi-condition cache detected — running cross-condition GSA (extension beyond RFC006)[/bold magenta]")
+        mc_result = quantify_multi_condition(
+            cache_dir=cache_dir,
+            sim_data_path=sim_data_path,
+            polynomial_order=polynomial_order,
+            n_bins=n_bins,
+            regression=regression,
+            tolerance=tol,
+            export_path=export_path,
+        )
+        for cond_id, cond_result in mc_result.per_condition.items():
+            console.print(f"\n[bold cyan]── Condition: {cond_id} ──[/bold cyan]")
+            _print_report(cond_result)
+        _print_multi_condition_report(mc_result)
+        console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+        return
 
     result = wf_quantify(
         cache_dir=cache_dir,
@@ -582,6 +880,75 @@ def _print_narrative(result: Any) -> None:
             "\n".join(lines),
             title="[bold white on blue] KEY FINDINGS [/bold white on blue]",
             border_style="blue",
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
+
+
+def _print_multi_condition_report(mc_result: Any) -> None:
+    """Print cross-condition comparison table and narrative."""
+    from uq.multi_condition import MultiConditionResult
+
+    names = mc_result.parameter_names
+    conditions = mc_result.conditions
+
+    # ── Cross-condition S_Ti comparison table ──
+    table = Table(
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+        title="CROSS-CONDITION SENSITIVITY COMPARISON",
+        title_style="bold magenta",
+    )
+    table.add_column("PARAMETER", style="bold yellow", no_wrap=True)
+    for cond_id in conditions:
+        table.add_column(cond_id, justify="right")
+    table.add_column("STABILITY", justify="right")
+
+    stability = mc_result.rank_stability
+    for i, name in enumerate(names):
+        row = [name]
+        for cond_id in conditions:
+            s_ti = mc_result.per_condition[cond_id].strategy1.sobol.total_order
+            if s_ti.ndim > 1:
+                s_ti = np.mean(s_ti, axis=0)
+            row.append(_pct(s_ti[i]))
+        # Stability indicator
+        n_dots = max(1, int(stability[i] * 5))
+        dots = "●" * n_dots + "○" * (5 - n_dots)
+        row.append(f"{dots} ({stability[i]:.2f})")
+        table.add_row(*row)
+
+    console.print()
+    console.print(
+        Panel(
+            table,
+            border_style="magenta",
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
+
+    # ── Cross-condition narrative ──
+    lines = []
+    if mc_result.universal_drivers:
+        drivers = ", ".join(f"[bold]{d}[/bold]" for d in mc_result.universal_drivers)
+        lines.append(f"  • Universal drivers (S_Ti > 10% in all conditions): {drivers}")
+        lines.append("    These should be measured precisely regardless of growth condition.")
+
+    for cond_id, params in mc_result.condition_specific.items():
+        param_str = ", ".join(f"[bold]{p}[/bold]" for p in params)
+        lines.append(f"  • Condition-specific to [cyan]{cond_id}[/cyan]: {param_str}")
+
+    if not lines:
+        lines.append("  • No clear universal or condition-specific patterns detected.")
+
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold white on magenta] CROSS-CONDITION FINDINGS [/bold white on magenta]",
+            border_style="magenta",
             box=box.ROUNDED,
             padding=(1, 2),
         )
@@ -1013,6 +1380,101 @@ def init_project() -> None:
         f"--cache-dir ./uq_cache --export-path ./uq_results "
         f"--regression {reg}[/cyan]"
     )
+
+
+@app.command()
+def fetch(
+    simulation_id: int = typer.Argument(..., help="SMS-API simulation database_id to fetch"),
+    cache_dir: str = typer.Option("./uq_cache", help="Cache output directory"),
+    api_url: str = typer.Option("http://localhost:8080", help="SMS-API base URL"),
+    observables: list[str] = typer.Option(
+        ["higher_order", "transcriptome", "proteome", "fluxome", "exchange_fluxes"],
+        help="cd1 observable presets to extract from the downloaded TSVs.",
+    ),
+) -> None:
+    """Fetch cd1 analysis outputs from a completed SMS-API simulation.
+
+    \b
+    Downloads the tar.gz from /simulations/{id}/data, parses cd1_* TSV
+    files (identifier, mean, std), and prints the observable summary.
+    Useful for inspecting what the SMS-API produces before running a
+    full remote UQ campaign.
+
+    \b
+    Example:
+      uq fetch 48 --api-url http://localhost:8080
+      uq fetch 48 --observables higher_order --observables transcriptome
+    """
+    from uq.remote import SmsApiClient, find_cd1_tsvs, parse_cd1_tsv, parse_cd1_tsvs
+
+    cache_path = Path(cache_dir).resolve()
+    dl_dir = cache_path / "_remote" / f"sim_{simulation_id}"
+    dl_dir.mkdir(parents=True, exist_ok=True)
+
+    console.print(f"[bold cyan]Fetching simulation {simulation_id}[/bold cyan] from {api_url}")
+
+    with SmsApiClient(base_url=api_url) as client:
+        # Get simulation info
+        sim_info = client.get_simulation(simulation_id)
+        exp_id = sim_info.get("experiment_id", "?")
+        cfg = sim_info.get("config", {})
+        gens = cfg.get("generations", "?")
+        seeds = cfg.get("n_init_sims", "?")
+        console.print(f"  [dim]experiment: {exp_id}[/dim]")
+        console.print(f"  [dim]config: {gens} gens, {seeds} seeds[/dim]")
+
+        # Download
+        console.print("[dim]Downloading analysis outputs...[/dim]")
+        output_dir = client.download_data(simulation_id, dest=dl_dir)
+        console.print(f"  [dim]Extracted to: {output_dir}[/dim]")
+
+    # Parse cd1 TSVs
+    tsv_paths = find_cd1_tsvs(output_dir)
+    if not tsv_paths:
+        console.print("[red]No cd1 TSV files found in the downloaded archive.[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]cd1 Analysis Outputs[/bold cyan]")
+
+    table = Table(
+        box=box.SIMPLE_HEAVY,
+        show_header=True,
+        header_style="bold magenta",
+    )
+    table.add_column("PRESET", style="bold yellow")
+    table.add_column("MODULE", style="dim")
+    table.add_column("ROWS", justify="right")
+    table.add_column("FILE", style="dim")
+
+    total_obs = 0
+    for preset in observables:
+        if preset not in tsv_paths:
+            table.add_row(preset, "—", "0", "[red]not found[/red]")
+            continue
+        path = tsv_paths[preset]
+        ids, means, _stds = parse_cd1_tsv(path)
+        from uq.remote import CD1_MODULE_MAP
+        module = CD1_MODULE_MAP.get(preset, {}).get("module", "?")
+        table.add_row(preset, module, str(len(ids)), str(path.name))
+        total_obs += len(ids)
+
+        # Show first few identifiers
+        if ids:
+            preview = ", ".join(ids[:5])
+            if len(ids) > 5:
+                preview += f", ... (+{len(ids) - 5} more)"
+            console.print(f"    [dim]{preview}[/dim]")
+
+    console.print(Panel(table, border_style="cyan", box=box.ROUNDED, padding=(0, 1)))
+    console.print(f"\n  [bold green]Total observables: {total_obs}[/bold green]")
+    console.print(f"  [dim]Archive at: {dl_dir}[/dim]")
+
+    if total_obs == 0:
+        console.print(
+            "\n  [yellow]All TSVs are empty (headers only). This usually means "
+            "generation_lower_bound filtered out all data. Check that the simulation "
+            "ran enough generations.[/yellow]"
+        )
 
 
 _HELP_SUBCOMMAND_ALIASES = {"help", "--help", "-h"}
