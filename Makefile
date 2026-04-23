@@ -67,6 +67,11 @@ check: ## Run code quality tools.
 	@echo "🚀 Checking for obsolete dependencies: Running deptry"
 	@uv run deptry .
 
+.PHONY: docs
+docs: ## Build Sphinx HTML docs
+	@uv run sphinx-build -b html docs docs/_build/html
+	@echo "Docs built at docs/_build/html/index.html"
+
 .PHONY: biocompose
 biocompose:
 	@uv run marimo edit ./examples/biocompose.py
