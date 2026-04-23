@@ -91,15 +91,52 @@ uv run uq quantify /path/to/simData.cPickle \
    terminal report ranking Sobol indices per strategy.
 6. Exports a dashboard-ready artifact directory under `./uq_results/`.
 
+### Remote execution via SMS-API
+
+If you don't have a local vEcoli checkout, sampling can run against
+the **SMS-API** — a REST API that runs vEcoli on AWS Batch and returns
+cd1 analysis TSVs (transcriptomics, proteomics, fluxomics, metabolomics,
+higher-order properties).
+
+```bash
+# Inspect a completed simulation's cd1 outputs
+uv run uq fetch 48 --api-url http://localhost:8080
+
+# Remote sampling: PCRV sampling is local, simulation runs on AWS Batch
+uv run uq sample /path/to/simData.cPickle \
+    --api-url http://localhost:8080 \
+    --simulator-id 11 \
+    --n-samples 20 \
+    --observables transcriptome \
+    --observables proteome
+```
+
+Stage 2 (`quantify`) is identical regardless of execution mode.
+
+### Cross-condition GSA
+
+Compare sensitivity rankings across multiple growth conditions:
+
+```bash
+uv run uq sample /path/to/simData.cPickle \
+    --conditions vecoli_m9_glucose_minus_aas \
+    --conditions vecoli_m9_glucose_plus_aas \
+    --n-samples 20
+
+uv run uq quantify /path/to/simData.cPickle
+# Auto-detects multi-condition cache → prints cross-condition comparison
+```
+
 ### Other clients
 
-All four clients wrap the same two-stage workflow — pick your surface:
+All clients wrap the same two-stage workflow — pick your surface:
 
 ```bash
 uv run uq show-config /path/to/simData.cPickle   # preview the vEcoli config JSON
 uv run uq tui         # Textual terminal dashboard with live progress
 uv run uq gui         # marimo browser notebook
 uv run uq dashboard   # tkinter DAW-style result explorer
+uv run uq fetch 48    # inspect SMS-API simulation outputs
 ```
 
 A verified end-to-end run (10 variants, 6 params, `mass` preset) is

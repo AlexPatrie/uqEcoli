@@ -13,8 +13,9 @@ Top-level
 
    Commands:
      help       Show help for a specific subcommand, or the main CLI.
-     sample     UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli workflow.py.
+     sample     UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli (local or remote).
      quantify   UQPC Steps 4-5: fit PCE surrogates, compute Sobol (all 4 strategies).
+     fetch      Download cd1 analysis outputs from a completed SMS-API simulation.
      dashboard  Launch the uq interactive dashboard.
      tui        Launch the UQPC interactive terminal UI (Textual).
      gui        Launch the UQPC interactive GUI (marimo).
@@ -100,6 +101,100 @@ Options:
     Mirrors the cd1 ``generation_lower_bound`` parameter — filters
     early transient dynamics so the sensitivity analysis focuses on
     steady-state growth.  Default ``0`` (keep all).
+
+``--base-config PATH``
+    Base vEcoli config JSON to merge with.  Preserves ``parca_variants``,
+    ``analysis_options``, and other multi-parca keys from multi-condition
+    configs.  UQ-specific fields (variants, emitter, output_dir) override
+    the base; everything else is preserved.
+
+``--conditions TEXT`` (repeatable)
+    RNA-seq dataset IDs for **cross-condition UQ** (one per flag).
+    Populates ``parca_variants`` for cross-condition global sensitivity
+    analysis.  Requires vEcoli ``multi-parca-aws`` branch.  Example::
+
+        uv run uq sample simData.cPickle \
+            --conditions vecoli_m9_glucose_minus_aas \
+            --conditions vecoli_m9_glucose_plus_aas
+
+    ``uq quantify`` auto-detects multi-condition caches via
+    ``conditions.json`` and runs per-condition quantification plus
+    cross-condition rank stability analysis.
+
+Remote execution flags
+^^^^^^^^^^^^^^^^^^^^^^
+
+These flags switch ``uq sample`` from local subprocess execution to
+**SMS-API remote execution**.  The API runs vEcoli on AWS Batch and
+returns cd1 analysis TSVs instead of raw Parquet.
+
+``--api-url TEXT``
+    SMS-API base URL (e.g. ``http://localhost:8080``).  When set,
+    simulations run on the SMS-API cluster instead of local vEcoli.
+    The stanford-test deployment is accessed via ``kubectl port-forward``
+    or ``ptools-proxy.sh``.
+
+``--simulator-id INTEGER``
+    SMS-API simulator ``database_id`` (required with ``--api-url``).
+    Identifies which vEcoli build on the server to use.
+
+``--config-filename TEXT``
+    vEcoli config filename on the server (``configs/`` directory).
+    Default ``api_simulation_default.json``.
+
+``--ecoli-sources-repo TEXT``
+    GitHub URL for the ``ecoli-sources`` data repo.  The server downloads
+    and syncs to S3 automatically — no local clone or AWS CLI needed.
+
+``--ecoli-sources-ref TEXT``
+    Git ref (branch/tag/commit) for the ecoli-sources repo.
+    Default ``main``.
+
+``uq fetch``
+------------
+
+Download and inspect cd1 analysis outputs from a **completed** SMS-API
+simulation, without running a full UQ campaign.  Useful for verifying
+the data format and observable coverage before committing to a remote
+sampling run.
+
+.. code-block:: text
+
+   uv run uq fetch SIMULATION_ID [OPTIONS]
+
+Arguments:
+
+* ``SIMULATION_ID`` — SMS-API simulation ``database_id``.
+
+Options:
+
+``--cache-dir PATH``
+    Directory to download into.  Default ``./uq_cache``.
+
+``--api-url TEXT``
+    SMS-API base URL.  Default ``http://localhost:8080``.
+
+``--observables TEXT`` (repeatable)
+    cd1 observable presets to extract from the downloaded TSVs.
+    Default: all five cd1 modules.
+
+The command downloads the tar.gz from ``/simulations/{id}/data``,
+parses the cd1 TSV files (3-column tab-separated: identifier, mean,
+std), and prints an observable summary table:
+
+.. code-block:: text
+
+   uv run uq fetch 48 --api-url http://localhost:8080
+
+   ┌──────────────────────────────────────────────────────┐
+   │ PRESET            MODULE                   ROWS      │
+   │ higher_order      cd1_higher_order_prop…      5      │
+   │ transcriptome     cd1_transcriptomics      4345      │
+   │ proteome          cd1_proteomics           4309      │
+   │ fluxome           cd1_fluxomics            2820      │
+   │ exchange_fluxes   cd1_metabolomics          165      │
+   └──────────────────────────────────────────────────────┘
+   Total observables: 11644
 
 ``uq quantify``
 ---------------

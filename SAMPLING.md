@@ -174,7 +174,52 @@ and `timeseries_test/`).
 
 ---
 
-## 4. What's in this repo vs. what's in vEcoli / PyTUQ
+## 3e. Alternative: SMS-API remote execution
+
+When `--api-url` is provided, step 3 routes through the **SMS-API** instead
+of a local subprocess. The SMS-API (documented at
+<https://sms-api.readthedocs.io>) runs vEcoli on AWS Batch and produces
+cd1 analysis outputs as pre-aggregated TSV files.
+
+The remote flow:
+
+1. Steps 1-2 (parameter space + PCRV sampling) remain **local**.
+2. Step 3a (variant encoding): same `_build_variants_from_samples` — but
+   currently submitted as individual simulations to the API rather than as
+   a single multi-variant workflow config.
+3. Step 3c (execution): `SmsApiClient.submit_simulation()` → `POST
+   /api/v1/simulations` with simulator_id, generations, seeds, observables.
+4. Step 3d (collection): `POST /api/v1/simulations/{id}/data` returns a
+   tar.gz archive containing cd1 analysis TSVs (not raw Parquet):
+
+```
+{experiment_id}/analyses/variant=0/plots/analysis=cd1_transcriptomics/transcriptomics.tsv
+{experiment_id}/analyses/variant=0/plots/analysis=cd1_proteomics/proteomics.tsv
+{experiment_id}/analyses/variant=0/plots/analysis=cd1_fluxomics/cd1_fluxomics_detailed.tsv
+{experiment_id}/analyses/variant=0/plots/analysis=cd1_metabolomics/metabolomics.tsv
+{experiment_id}/analyses/variant=0/plots/analysis=cd1_higher_order_properties/higher_order_properties.tsv
+```
+
+Each TSV has 3 tab-separated columns: `identifier`, `mean`, `std`. The
+`mean` column becomes the Y vector for UQ. The mapping between cd1
+modules and UQ observable presets is defined in `uq/remote.py::CD1_MODULE_MAP`:
+
+| UQ preset | cd1 module | Observables |
+| --- | --- | --- |
+| `higher_order` | `cd1_higher_order_properties` | ~5 (mass, volume, DNA/RNA fractions) |
+| `transcriptome` | `cd1_transcriptomics` | ~4,345 EcoCyc Gene IDs |
+| `proteome` | `cd1_proteomics` | ~4,309 EcoCyc Monomer IDs |
+| `fluxome` | `cd1_fluxomics` | ~2,820 EcoCyc Reaction IDs |
+| `exchange_fluxes` | `cd1_metabolomics` | ~165 EcoCyc Compound IDs |
+
+The `mass` preset is local-only (requires raw Parquet timeseries).
+
+The `SmsApiClient` in `uq/remote.py` handles ALB 502/504 retries
+automatically (a common transient failure on the stanford-test deployment).
+
+---
+
+## 4. What's in this repo vs. what's in vEcoli / PyTUQ / SMS-API
 
 | Concern | Owner | Where |
 | --- | --- | --- |
@@ -185,9 +230,13 @@ and `timeseries_test/`).
 | Parca / `simData` build | **vEcoli** | handled by `runscripts/workflow.py` |
 | Simulation dispatch + Nextflow orchestration | **vEcoli** | `runscripts/workflow.py` |
 | Parquet emission + hive partitioning | **vEcoli** | vEcoli parquet emitter |
+| cd1 analysis modules (TSV output) | **vEcoli** | cd1_transcriptomics, etc. |
+| Remote simulation execution | **SMS-API** | `POST /api/v1/simulations` |
+| Remote data download | **SMS-API** | `POST /api/v1/simulations/{id}/data` |
 | Mutation dict building | uqEcoli | `uq/tui.py::_build_variants_from_samples` |
 | Config assembly | uqEcoli | `uq/tui.py::_build_config` |
-| Subprocess driver + progress UI | uqEcoli | `uq/cli.py::sample`, `uq/tui.py` |
+| Subprocess driver + progress UI | uqEcoli | `uq/cli.py::_sample_local` |
+| SMS-API client + cd1 TSV parsing | uqEcoli | `uq/remote.py`, `uq/cli.py::_sample_remote` |
 | Hive Parquet → `(X, Y, meta)` reshape | uqEcoli | `uq/tui.py::_collect_variant_timeseries` |
 | Cache format (`PrecomputedCache`) | uqEcoli | `libuq/sampling.py` |
 
