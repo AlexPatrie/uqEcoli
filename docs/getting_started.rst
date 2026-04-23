@@ -97,16 +97,71 @@ What happens:
    schema, per-strategy Sobol ``.npy`` files, and the two PCE surrogates
    (population + growth-stratified).
 
+Remote execution via SMS-API
+---------------------------
+
+If you don't have a local vEcoli checkout, you can run the sampling step
+against the **SMS-API** — a REST API that runs vEcoli on AWS Batch and
+returns cd1 analysis outputs as pre-aggregated TSVs.
+
+Prerequisites for remote mode:
+
+1. Access to an SMS-API deployment (e.g. stanford-test at
+   ``http://localhost:8080`` via ``kubectl port-forward``).
+2. A ``simulator_id`` on that deployment (use ``uq fetch`` to explore).
+3. A local ``simData.cPickle`` (still needed for parameter space setup).
+
+.. code-block:: bash
+
+   # Inspect what a completed simulation looks like
+   uv run uq fetch 48 --api-url http://localhost:8080
+
+   # Remote sampling: Steps 1-2 run locally, Step 3 submits to SMS-API
+   uv run uq sample /path/to/simData.cPickle \
+       --api-url http://localhost:8080 \
+       --simulator-id 11 \
+       --n-samples 20 \
+       --observables higher_order \
+       --observables transcriptome
+
+In remote mode, observables come from cd1 analysis TSVs (3-column format:
+identifier, mean, std) instead of raw Parquet.  The ``mass`` preset is
+local-only; remote mode supports ``higher_order``, ``transcriptome``,
+``proteome``, ``fluxome``, and ``exchange_fluxes``.
+
+Stage 2 (``uq quantify``) is identical regardless of how Stage 1 ran —
+the cache format is the same.
+
+Cross-condition GSA
+-------------------
+
+With the vEcoli ``multi-parca-aws`` branch, you can run UQ across
+multiple growth conditions and compare which parameters are universally
+important vs. condition-specific:
+
+.. code-block:: bash
+
+   uv run uq sample /path/to/simData.cPickle \
+       --conditions vecoli_m9_glucose_minus_aas \
+       --conditions vecoli_m9_glucose_plus_aas \
+       --n-samples 20
+
+   uv run uq quantify /path/to/simData.cPickle
+
+``quantify`` auto-detects the multi-condition cache and prints a
+cross-condition comparison table with rank stability indicators.
+
 Interactive clients
 -------------------
 
-All four clients wrap the same ``uq.workflow`` functions:
+All clients wrap the same two-stage workflow — pick your surface:
 
 .. code-block:: bash
 
    uv run uq tui         # Textual TUI
    uv run uq gui         # marimo browser GUI
    uv run uq dashboard   # tkinter DAW-style dashboard
+   uv run uq fetch 48    # inspect SMS-API simulation outputs
 
 See :doc:`cli_reference` for a per-flag breakdown of every command and
 :doc:`tutorial_workflow` for the underlying math.

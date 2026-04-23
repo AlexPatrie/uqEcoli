@@ -286,6 +286,65 @@ def _extract_preset(
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Dimension guard
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def _align_variant_dimensions(
+    Y_list: list[np.ndarray],
+    Y_ts: list[np.ndarray],
+    observable_names: list[str],
+    strict: bool = True,
+) -> tuple[np.ndarray, list[str]]:
+    """Validate that all variants have the same observable count.
+
+    In strict mode (default, RFC006-compliant), raises an error on
+    dimension mismatch — all variants within a single condition must
+    have identical observable shape.
+
+    In non-strict mode (multi-condition), truncates to the minimum
+    common dimension and warns.  This is needed when different ParCa
+    datasets produce slightly different gene sets.
+
+    Args:
+        Y_list: Per-variant time-averaged arrays, each shape ``(n_obs,)``.
+        Y_ts: Per-variant raw timeseries (mutated in-place if truncated).
+        observable_names: Feature names corresponding to the first variant.
+        strict: If True, raise on mismatch. If False, truncate and warn.
+
+    Returns:
+        ``(Y_agg, observable_names)`` — possibly truncated to common dimension.
+    """
+    widths = [arr.shape[0] for arr in Y_list]
+    min_w = min(widths)
+    max_w = max(widths)
+
+    if min_w != max_w:
+        if strict:
+            raise ValueError(
+                f"Observable dimension mismatch across variants: min={min_w}, max={max_w}. "
+                f"All variants must produce the same observable count within a single condition. "
+                f"If this is a multi-condition run with different ParCa datasets, "
+                f"use strict=False to truncate to the common dimension."
+            )
+        logger.warning(
+            "Observable dimension mismatch across variants: min=%d, max=%d. "
+            "Truncating to common dimension %d. "
+            "This can happen when different ParCa datasets produce different gene sets.",
+            min_w,
+            max_w,
+            min_w,
+        )
+        for i in range(len(Y_list)):
+            Y_list[i] = Y_list[i][:min_w]
+        for i in range(len(Y_ts)):
+            Y_ts[i] = Y_ts[i][:, :min_w]
+        observable_names = observable_names[:min_w]
+
+    return np.vstack(Y_list), observable_names
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Public API
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -296,6 +355,7 @@ def collect_observables(
     presets: list[str] | None = None,
     generation_lower_bound: int = 0,
     time_lower_bound: float = 0.0,
+    strict: bool = True,
 ) -> tuple[np.ndarray, list[str], list[np.ndarray], list[dict[str, np.ndarray]] | None]:
     """Extract per-variant observables from hive-partitioned Parquet.
 
@@ -422,7 +482,10 @@ def collect_observables(
             f"Presets: {preset_names}"
         )
 
-    Y_agg = np.vstack(Y_list)
+    # ── Dimension guard: detect column mismatches across variants ──
+    Y_agg, observable_names = _align_variant_dimensions(
+        Y_list, Y_ts, observable_names or [], strict=strict,
+    )
     has_meta = Y_meta_list and any(m for m in Y_meta_list)
 
     logger.info(
