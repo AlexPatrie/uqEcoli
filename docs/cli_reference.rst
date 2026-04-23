@@ -20,6 +20,20 @@ Top-level
      tui        Launch the UQPC interactive terminal UI (Textual).
      gui        Launch the UQPC interactive GUI (marimo).
 
+``uq help``
+-----------
+
+Shows help for the main CLI or any subcommand.  Trailing ``help`` also
+works at any nesting level, mirroring the Atlantis CLI pattern.
+
+.. code-block:: text
+
+   uv run uq help                # all commands
+   uv run uq help sample         # help for sample
+   uv run uq sample help         # same (trailing alias)
+   uv run uq quantify help       # help for quantify
+   uv run uq fetch help          # help for fetch
+
 ``uq sample``
 -------------
 
