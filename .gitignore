@@ -220,7 +220,7 @@ readmes/
 uq_results/
 
 .claude/
-CLAUDE.md
+./todo.md
 uq_cache/
 kb/
 output/
