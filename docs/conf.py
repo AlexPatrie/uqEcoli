@@ -53,7 +53,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    "sphinx_rtd_theme",
 ]
 
 # Autosummary settings
@@ -99,20 +98,26 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 html_static_path = ["_static"]
 
 html_theme_options = {
-    "logo_only": False,
-    "display_version": True,
-    "prev_next_buttons_location": "bottom",
-    "style_external_links": False,
-    "collapse_navigation": False,
-    "sticky_navigation": True,
-    "navigation_depth": 4,
-    "includehidden": True,
-    "titles_only": False,
+    "dark_css_variables": {
+        "color-brand-primary": "#e91e90",
+        "color-brand-content": "#00e5ff",
+    },
+    "light_css_variables": {
+        "color-brand-primary": "#b3006b",
+        "color-brand-content": "#0088aa",
+    },
+    "navigation_with_keys": True,
+    # Force dark mode as default (users can still toggle via sun/moon button)
+    "default_mode": "dark",
 }
+
+# Pygments syntax highlighting: light for light mode, monokai for dark
+pygments_style = "sphinx"
+pygments_dark_style = "monokai"
 
 # Custom CSS
 html_css_files = [
