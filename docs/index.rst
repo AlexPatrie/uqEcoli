@@ -84,7 +84,6 @@ Documentation contents
    aggregation_strategies
    sensitivity_analysis
    cell_cycle
-   koopman
 
 .. toctree::
    :maxdepth: 1

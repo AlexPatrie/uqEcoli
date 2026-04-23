@@ -355,7 +355,7 @@ def _(mo):
     3. Identify optimal parameter combinations for desired outputs
     4. Use Sobol indices to rank parameter importance
 
-    Continue to **Tutorial 4** for cell cycle analysis and Koopman spectral methods.
+    Continue to **Tutorial 7** for the full RFC006 workflow.
     """)
     return
 

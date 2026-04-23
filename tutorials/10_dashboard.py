@@ -46,7 +46,7 @@ def _(mo):
     │                                                            │                 │
     │                                             ┌──────────────┼──────────┐      │
     │  Phase 1 (bulk):                            │  Phase 2 (cell cycle):  │      │
-    │  Morris → PCE → Sobol                       │  GSA obs → Koopman θ → │      │
+    │  Morris → PCE → Sobol                       │  GSA obs → growth θ → │      │
     │  "Which params drive bulk variance?"        │  per-stage Sobol        │      │
     │                                             └─────────────────────────┘      │
     │                                                                              │
@@ -99,13 +99,10 @@ def _():
     from libuq.wrappers import DataDrivenWrapper
     from libuq.sampling import PrecomputedCache
     from libuq.pce.models import PCEParameterSelectionConfig
-    from libuq.koopman import DynamicModeDecomposition
-    from libuq.viz import plot_koopman_spectrum
 
     return (
         AggregationResult,
         DataDrivenWrapper,
-        DynamicModeDecomposition,
         MorrisIndices,
         PCEParameterSelectionConfig,
         PCESurrogate,
@@ -119,7 +116,6 @@ def _():
         aggregate_timeseries,
         get_variance_decomposition,
         initialize_datasets,
-        plot_koopman_spectrum,
         run_phase1,
         run_phase2,
     )
@@ -624,7 +620,7 @@ def _(mo):
     sensitivity analyses (1-3)."*
 
     Observables with high **residual variance** (not explained by generation or seed)
-    are selected for Koopman analysis.
+    are selected for growth-stratified analysis.
     """)
     return
 
@@ -661,7 +657,7 @@ def _(decomp, mo, np, observable_columns):
 |------------|-------------------|--------|
 {_rows}
 
-**{len(relevant_observables)}/{len(observable_columns)} observables selected** for Koopman cell cycle analysis.
+**{len(relevant_observables)}/{len(observable_columns)} observables selected** for growth-stratified cell cycle analysis.
     """)
     return (relevant_observables,)
 
@@ -950,7 +946,7 @@ def _(
         )
         per_stage_sobol = [_sobol_single] * _n_bins
         mo.md(f"""
-**Phase 2 fallback** — Koopman cell cycle extraction failed: `{type(_e).__name__}: {_e}`
+**Phase 2 fallback** — Cell cycle extraction failed: `{type(_e).__name__}: {_e}`
 
 Using replicated population Sobol as proxy for {_n_bins} stages.
         """)
@@ -999,71 +995,7 @@ def _(go, mo, n_bins_slider, np, param_space, per_stage_sobol):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 11: KOOPMAN SPECTRUM
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-@app.cell
-def _(mo):
-    mo.md("""
-    ## Koopman Spectral Analysis
-
-    DMD decomposes the simulation trajectory into spatial modes with associated
-    frequencies and growth rates — a "spectral fingerprint" of cellular dynamics.
-    Cell cycle modes appear near the expected cycle frequency.
-    """)
-    return
-
-
-@app.cell
-def _(
-    DynamicModeDecomposition,
-    cycle_time_slider,
-    mo,
-    np,
-    observable_columns,
-    plot_koopman_spectrum,
-    sim_data,
-):
-    # Use mass-related columns for Koopman
-    _mass_cols = [c for c in observable_columns if c in sim_data.columns and "mass" in c]
-    if not _mass_cols:
-        _mass_cols = [c for c in observable_columns[:3] if c in sim_data.columns]
-
-    if not _mass_cols:
-        mo.md("*No matching observable columns in data for Koopman analysis.*")
-    else:
-        _first_exp = sim_data["experiment_id"].unique()[0]
-        _first_seed = sim_data.filter(sim_data["experiment_id"] == _first_exp)["lineage_seed"].unique()[0]
-
-        _traj_df = sim_data.filter(
-            (sim_data["experiment_id"] == _first_exp) & (sim_data["lineage_seed"] == _first_seed)
-        ).sort("time")
-
-        _traj_data = _traj_df.select(_mass_cols).to_numpy()
-
-        if _traj_data.shape[0] < 10:
-            mo.md(f"*Trajectory too short ({_traj_data.shape[0]} rows) for DMD.*")
-        else:
-            _rank = min(5, _traj_data.shape[1], _traj_data.shape[0] - 2)
-            _dmd = DynamicModeDecomposition(rank=max(_rank, 1), dt=1.0)
-            _dmd.fit(_traj_data)
-            _spectrum = _dmd.get_spectrum(
-                observable_names=[c.split("__")[-1] for c in _mass_cols],
-            )
-
-            _koopman_fig = plot_koopman_spectrum(
-                spectrum=_spectrum,
-                expected_cycle_time=cycle_time_slider.value,
-                frequency_tolerance=0.3,
-            )
-            _koopman_fig.update_layout(height=600, template="plotly_dark")
-            _koopman_fig
-    return
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 12: RESULTS & EXPORT
+# SECTION 11: RESULTS & EXPORT
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -1166,7 +1098,7 @@ def _(mo):
     | 3 | Implement wrapper functions | `uq.wrappers` | Done |
     | 4 | PCE-based sensitivity (strategies 1-3) | `uq.sensitivity`, `uq.pce` | Done |
     | 5 | Apply to representative simulations | This dashboard | Done |
-    | 6 | Cell cycle stratification strategy | `uq.cell_cycle`, `uq.koopman` | Done |
+    | 6 | Cell cycle stratification strategy | `uq.growth` (θ = normalized log dry_mass) | Done |
     | 7 | Cell cycle variable + per-stage GSA | `uq.pipeline.workflow` | Done |
 
     **RFC006 Section 4 parametrised steps:**
