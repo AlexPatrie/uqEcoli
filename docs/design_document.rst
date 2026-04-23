@@ -94,12 +94,8 @@ GSA → Cell Cycle Feedback Loop
 -------------------------------
 
 Variance decomposition from strategies 1–3 (Uniform, By Generation, By Lineage
-Seed) selects observables for Koopman DMD cell cycle mode extraction. Observables
-with high residual variance — variance not explained by input parameters — are
-candidates for cell-cycle-related dynamics. The ``GSAInformedCellCycleVariable``
-class implements this feedback loop: it takes aggregated sensitivity results,
-identifies observables whose variance is dominated by cell cycle effects, and
-feeds those observables into Koopman DMD to extract cell cycle modes.
+Seed) identifies observables with high residual variance — variance not explained
+by input parameters — which are candidates for cell-cycle-related dynamics.
 
 Architecture
 ------------
@@ -110,56 +106,26 @@ A. **Selection/Extraction**: ``outputs.py`` - Extract variables from simulation 
 B. **Temporal Aggregation**: ``aggregation.py`` - Aggregate into output variables Y
 C. **Sensitivity Analysis**: ``sensitivity.py`` - Apply PCE-based methods
 
-Additional module for complementary analysis:
-
-D. **Koopman Spectral Analysis**: ``koopman.py`` - Dynamic mode decomposition for cell cycle harmonics
-
 Libraries
 ---------
 
-* **UQPy**: Primary library for PCE and Sobol analysis
-* **PyTUQ**: Alternative compatible library
-
-Koopman Spectral Analysis
--------------------------
-
-The ``koopman.py`` module provides a complementary "harmonic" view of simulation
-dynamics using Dynamic Mode Decomposition (DMD). This enables:
-
-* Extraction of dominant frequencies and growth rates
-* Identification of cell cycle harmonics
-* Spectral sensitivity analysis
-
-See :doc:`koopman` for details.
-
-Apollo Package
---------------
-
-The Apollo package provides sonification of UQ results:
-
-* **Layer 1**: Koopman modes → musical notes (existing ``apollo/`` module)
-* **Layer 2**: UQ pipeline outputs → musical score (``uq_score.py``) — maps
-  Sobol indices, variance decomposition, and per-stage sensitivity to Western
-  musical notation
+* **PyTUQ**: Primary library for PCE and Sobol analysis (Sandia National Labs)
 
 Key Documents
 -------------
 
-* ``uq/RFC006.md`` - Authoritative specification
-* ``uq/RFC006_VERIFICATION.md`` - Compliance analysis
-* ``uq/PIPELINE.md`` - Complete 7-step UQ workflow
-* ``apollo/README.md`` - Apollo sonification package
-* ``readmes/CONTEXT.md`` - Claude context document
+* ``readmes/RFC006.md`` - Authoritative specification
+* ``SAMPLING.md`` - How ``uq sample`` delegates to PyTUQ + vEcoli
 
 Full Pipeline Example
 ---------------------
 
-The ``examples/uq_pipeline.py`` script demonstrates the complete RFC006 pipeline:
+The ``uq`` CLI demonstrates the complete RFC006 pipeline:
 
-* **Phase 1** (Steps 5a–7a): Morris prescreening → PCE surrogate → Sobol indices
+* **Phase 1** (strategies 1–3): PCE surrogate → Sobol indices
   ("Which parameters drive bulk output variance?")
-* **Phase 2** (Steps 5b–7b): GSA-informed observable selection → Koopman θ →
-  Strategy 4 wrapper → per-stage PCE → per-stage Sobol indices
+* **Phase 2** (strategy 4): Growth-stratified θ →
+  per-stage PCE → per-stage Sobol indices
   ("Which parameters drive variance WITHIN each cell cycle stage?")
 
 Both phases produce a ``UqProfile``, assembled into a ``PipelineResult``.
