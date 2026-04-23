@@ -178,16 +178,16 @@
   <!-- Arrow 5b→6b -->
   <line x1="1340" y1="330" x2="1368" y2="330" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
-  <!-- STEP 6b: Koopman DMD -->
+  <!-- STEP 6b: Growth-Stratified Cell Cycle Variable -->
   <rect x="1378" y="255" width="380" height="110" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
   <rect x="1378" y="255" width="380" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
   <rect x="1378" y="267" width="380" height="10" fill="#8b5cf6" opacity="0.1"/>
-  <text x="1394" y="271" fill="#5b21b6" font-size="11" font-weight="700">STEP 6b: Koopman DMD</text>
-  <text x="1394" y="296" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">KoopmanCellCycleVariable(obs=relevant_obs)</text>
-  <text x="1394" y="318" fill="#64748b" font-size="10">DMD/EDMD &#x2192; &#x3c9;_cc &#x2192; &#x3c6;_cc(x) &#x2192; &#x3b8; = arg(&#x3c6;)/2&#x3c0;</text>
+  <text x="1394" y="271" fill="#5b21b6" font-size="11" font-weight="700">STEP 6b: Growth-Stratified &#x3b8;</text>
+  <text x="1394" y="296" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">bin_by_growth_stage(mass, n_bins)</text>
+  <text x="1394" y="318" fill="#64748b" font-size="10">&#x3b8; = [log(m) &#x2212; log(m_birth)] / [log(m_div) &#x2212; log(m_birth)]</text>
   <text x="1394" y="340" fill="#64748b" font-size="10">&#x2192; &#x3b8; &#x2208; [0, 1]</text>
   <rect x="1670" y="340" width="75" height="18" rx="9" fill="#ede9fe"/>
-  <text x="1707" y="352" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">KOOPMAN</text>
+  <text x="1707" y="352" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">GROWTH</text>
 
   <!-- Arrow 6b→6c -->
   <line x1="1350" y1="365" x2="1350" y2="390" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
@@ -203,26 +203,26 @@
   <!-- Arrow 6c→6d -->
   <line x1="1340" y1="460" x2="1368" y2="460" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
-  <!-- STEP 6d: Stage4 Wrapper (MISSING) -->
-  <rect x="1378" y="395" width="380" height="90" rx="7" fill="#ffffff" stroke="#f87171" stroke-width="1.5" stroke-dasharray="6 3" filter="url(#shadow)"/>
-  <rect x="1378" y="395" width="380" height="22" rx="7" fill="#ef4444" opacity="0.08"/>
-  <rect x="1378" y="407" width="380" height="10" fill="#ef4444" opacity="0.08"/>
-  <text x="1394" y="411" fill="#991b1b" font-size="11" font-weight="700">STEP 6d: Stage4 Wrapper</text>
-  <rect x="1670" y="399" width="60" height="16" rx="8" fill="#fecaca"/>
-  <text x="1700" y="410" text-anchor="middle" fill="#dc2626" font-size="8" font-weight="700">MISSING</text>
-  <text x="1394" y="436" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">f_stage4(params): raw&#x2192;&#x3b8;&#x2192;bin&#x2192;stage_means</text>
-  <text x="1394" y="460" fill="#64748b" font-size="10">&#x2192; stage-specific objective function</text>
+  <!-- STEP 6d: Stage4 Wrapper -->
+  <rect x="1378" y="395" width="380" height="90" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="1378" y="395" width="380" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="1378" y="407" width="380" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="1394" y="411" fill="#5b21b6" font-size="11" font-weight="700">STEP 6d: Strategy4 Wrapper</text>
+  <rect x="1670" y="399" width="75" height="18" rx="9" fill="#ede9fe"/>
+  <text x="1707" y="410" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">WRAPPER</text>
+  <text x="1394" y="436" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">run_strategy4_growth_stratified(X, Y, n_bins)</text>
+  <text x="1394" y="460" fill="#64748b" font-size="10">&#x2192; per-stage PCE input (Y binned by &#x3b8;)</text>
 
   <!-- Arrow 6d→7b -->
   <line x1="1350" y1="485" x2="1350" y2="510" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
 
-  <!-- STEP 7b: PCE + Sobol on Strategy 4 (MISSING) -->
-  <rect x="940" y="515" width="818" height="110" rx="7" fill="#ffffff" stroke="#f87171" stroke-width="1.5" stroke-dasharray="6 3" filter="url(#shadow)"/>
-  <rect x="940" y="515" width="818" height="22" rx="7" fill="#ef4444" opacity="0.08"/>
-  <rect x="940" y="527" width="818" height="10" fill="#ef4444" opacity="0.08"/>
-  <text x="956" y="531" fill="#991b1b" font-size="11" font-weight="700">STEP 7b: PCE + Sobol on Strategy 4</text>
-  <rect x="1670" y="519" width="60" height="16" rx="8" fill="#fecaca"/>
-  <text x="1700" y="530" text-anchor="middle" fill="#dc2626" font-size="8" font-weight="700">MISSING</text>
+  <!-- STEP 7b: PCE + Sobol on Strategy 4 -->
+  <rect x="940" y="515" width="818" height="110" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2" filter="url(#shadow)"/>
+  <rect x="940" y="515" width="818" height="22" rx="7" fill="#8b5cf6" opacity="0.1"/>
+  <rect x="940" y="527" width="818" height="10" fill="#8b5cf6" opacity="0.1"/>
+  <text x="956" y="531" fill="#5b21b6" font-size="11" font-weight="700">STEP 7b: PCE + Sobol on Strategy 4</text>
+  <rect x="1670" y="519" width="75" height="18" rx="9" fill="#ede9fe"/>
+  <text x="1707" y="530" text-anchor="middle" fill="#6d28d9" font-size="8" font-weight="600">ANALYSIS</text>
   <text x="956" y="558" fill="#475569" font-size="9.5" font-family="'SF Mono', 'Fira Code', monospace">generate_surrogate(param_space, f_stage4, sample_size)</text>
   <text x="956" y="580" fill="#64748b" font-size="10" font-style="italic">"Which parameters drive variation WITHIN each cell cycle stage?"</text>
   <text x="956" y="602" fill="#64748b" font-size="10">&#x2192; PCESurrogate (phenotypic) &#x2192; SobolIndices (phenotypic)</text>
@@ -231,7 +231,7 @@
   <rect x="940" y="640" width="818" height="100" rx="7" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1"/>
   <text x="956" y="661" fill="#5b21b6" font-size="11" font-weight="700">Phase 2 Outputs:</text>
   <text x="956" y="681" fill="#475569" font-size="10">&#x251c; CellCycleResult (&#x3b8;, stages)&#x2003;&#x251c; per-stage statistics&#x2003;&#x251c; relevant observables</text>
-  <text x="956" y="701" fill="#475569" font-size="10">&#x251c; PCESurrogate (phenotypic) <tspan fill="#dc2626" font-size="8" font-weight="600">MISSING</tspan>&#x2003;&#x2514; SobolIndices (phenotypic) <tspan fill="#dc2626" font-size="8" font-weight="600">MISSING</tspan></text>
+  <text x="956" y="701" fill="#475569" font-size="10">&#x251c; PCESurrogate (per-stage)&#x2003;&#x2514; SobolIndices (per-stage)</text>
   <text x="956" y="725" fill="#64748b" font-size="9.5" font-style="italic">&#x2190; depends on Phase 1 residual_fraction via feedback loop</text>
 
   <!-- ===== FEEDBACK LOOP ===== -->
@@ -245,7 +245,7 @@
   <line x1="350" y1="950" x2="730" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
   <text x="400" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 5b observable selection</text>
   <line x1="740" y1="950" x2="1100" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
-  <text x="790" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 6b Koopman</text>
+  <text x="790" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 6b growth &#x3b8;</text>
   <line x1="1110" y1="950" x2="1500" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
   <text x="1160" y="963" fill="#78716c" font-size="9.5">&#x2192; Step 6c/6d aggregation + wrapper</text>
   <line x1="1510" y1="950" x2="1760" y2="950" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
@@ -268,8 +268,8 @@
   <!-- Phase 2 outputs column -->
   <text x="940" y="1042" fill="#5b21b6" font-size="11" font-weight="700">From Phase 2 (Strategy 4 &#x2014; Cell Cycle):</text>
   <text x="950" y="1062" fill="#475569" font-size="10">&#x251c; CellCycleResult (&#x3b8;, stages)&#x2003;&#x251c; per-stage statistics&#x2003;&#x251c; relevant observables (GSA-selected)</text>
-  <text x="950" y="1082" fill="#475569" font-size="10">&#x251c; PCESurrogate (phenotypic) <tspan fill="#dc2626" font-size="8" font-weight="600">MISSING</tspan>&#x2003;&#x2514; SobolIndices (phenotypic) <tspan fill="#dc2626" font-size="8" font-weight="600">MISSING</tspan></text>
+  <text x="950" y="1082" fill="#475569" font-size="10">&#x251c; PCESurrogate (per-stage)&#x2003;&#x2514; SobolIndices (per-stage)</text>
 
   <!-- Key modules reference -->
-  <text x="60" y="1118" fill="#94a3b8" font-size="9.5" font-style="italic">Key modules: inputs.py | aggregation.py | pce.py (PyTUQ) | sensitivity.py (PCSobol, SamSobol, Morris) | cell_cycle.py | koopman.py (DMD/EDMD) | pipeline.py</text>
+  <text x="60" y="1118" fill="#94a3b8" font-size="9.5" font-style="italic">Key modules: workflow.py (PyTUQ UQPC) | growth.py (&#x3b8;-binning) | observables.py | remote.py (SMS-API) | multi_condition.py | cli.py</text>
 </svg>
