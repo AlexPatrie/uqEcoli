@@ -64,25 +64,14 @@ Added
 * ``CompositeCellCycleVariable`` - Custom variable support
 * ``register_cell_cycle_variable()`` - Register custom variables
 
-**Koopman Spectral Analysis** (``uq/koopman.py``)
-
-* ``DynamicModeDecomposition`` - Standard DMD for spectral analysis
-* ``ExtendedDMD`` - EDMD with dictionary functions
-* ``KoopmanMode`` - Single Koopman mode container
-* ``KoopmanSpectrum`` - Complete spectral decomposition
-* ``KoopmanSensitivityAnalyzer`` - Spectral sensitivity analysis
-* ``CellCycleKoopmanAnalyzer`` - Cell cycle harmonic identification
-* ``KoopmanDictionary`` - Dictionary types for EDMD (identity, polynomial, Fourier, RBF)
-* ``extract_koopman_features()`` - Extract features from simulation data
-
 Dependencies
 ^^^^^^^^^^^^
 
-* Added ``UQpy>=4.1.0`` as optional dependency (``pip install -e ".[uq]"``)
+* Added ``PyTUQ`` as primary PCE/Sobol dependency
 
 Documentation
 ^^^^^^^^^^^^^
 
 * Added comprehensive Sphinx documentation
-* Added tutorials for basic sensitivity, variance decomposition, cell cycle analysis, and Koopman analysis
+* Added tutorials for basic sensitivity, variance decomposition, and cell cycle analysis
 * Added API reference for all modules
