@@ -20,7 +20,7 @@ The RFC006 pipeline has 7 steps that fork into two parallel phases:
                                                     ┌──────────────────┤
                                                     │                  │
    Phase 1 (bulk):                                  │  Phase 2 (cell cycle):
-   Morris → PCE → Sobol                             │  GSA obs → Koopman θ →
+   Morris → PCE → Sobol                             │  GSA obs → growth θ →
    "Which params drive bulk variance?"               │  Strategy4 → per-stage Sobol
                                                     │  "Which params drive
                                                     │   within-stage variance?"

@@ -286,6 +286,3 @@ Further reading
 * :doc:`aggregation_strategies` — worked examples for strategies 2-4.
 * :doc:`cell_cycle` — background on the growth-progress variable
   :math:`\theta(t)`.
-* :doc:`koopman` — an alternative cell-cycle decomposition that
-  ``quantify`` does **not** use in its default path (no spectral
-  decomposition, per RFC006 §3).
