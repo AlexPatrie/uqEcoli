@@ -1480,18 +1480,55 @@ def fetch(
 _HELP_SUBCOMMAND_ALIASES = {"help", "--help", "-h"}
 
 
+@app.command(name="help")
+def display_help(
+    command: str | None = typer.Argument(default=None, help="Command to show help for"),
+) -> None:
+    """Show help for a specific subcommand, or the main CLI.
+
+    \b
+    Examples:
+      uq help              Show all available commands
+      uq help sample       Show help for the sample command
+      uq help quantify     Show help for the quantify command
+      uq sample help       Same as uq help sample
+    """
+    import click
+
+    cmd = typer.main.get_command(app)
+    if command is None:
+        # Show main CLI help
+        with click.Context(cmd) as ctx:
+            console.print(cmd.get_help(ctx))
+        return
+
+    # Show help for a specific subcommand
+    with click.Context(cmd) as ctx:
+        sub = cmd.get_command(ctx, command)  # type: ignore[attr-defined]
+        if sub is None:
+            console.print(f"[red]Unknown command: {command}[/red]")
+            console.print("[dim]Run `uq help` to see available commands.[/dim]")
+            raise typer.Exit(1)
+        with click.Context(sub, parent=ctx) as sub_ctx:
+            console.print(sub.get_help(sub_ctx))
+
+
 def main() -> None:
     """Entry point.
 
     Rewrites ``uq <cmd> ... help`` → ``uq <cmd> ... --help`` so users can
-    discover flags with a trailing ``help`` word on any subcommand
-    (``uq sample help``, ``uq quantify help``, ``uq tui help``, …)
+    discover flags with a trailing ``help`` word at any nesting level
+    (``uq help``, ``uq sample help``, ``uq quantify help``, …)
     in addition to the standard ``uq <cmd> --help`` form.
     """
     import sys
 
     argv = sys.argv
-    if len(argv) >= 3 and argv[-1] in _HELP_SUBCOMMAND_ALIASES:
+    # "uq help" → "uq --help" (bare help with no subcommand)
+    if len(argv) == 2 and argv[-1] in _HELP_SUBCOMMAND_ALIASES:
+        argv[-1] = "--help"
+    # "uq sample help" → "uq sample --help" (trailing help on any command)
+    elif len(argv) >= 3 and argv[-1] in _HELP_SUBCOMMAND_ALIASES:
         argv[-1] = "--help"
     app()
 
