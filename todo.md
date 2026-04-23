@@ -90,3 +90,41 @@
     > - Legend shows color-coded observable names; X-axis labeled with θ% ranges
     > - 5 tests in `tests/test_daw_predicted_profile.py`, all passing
 
+- [ ] 9. **Deploy public docs via GitHub Pages (free, private source repo)**
+    Create a separate public repo for rendered HTML only:
+    ```
+    # 1. Create empty public repo "uqEcoli-docs" on GitHub (no README)
+
+    # 2. Build + deploy:
+    cd docs && uv run sphinx-build -b html . _build/html && cd ..
+    cd docs/_build/html
+    git init
+    git remote add origin https://github.com/<you>/uqEcoli-docs.git
+    touch .nojekyll
+    git add -A
+    git commit -m "docs build"
+    git push -f origin main
+
+    # 3. Go to uqEcoli-docs repo → Settings → Pages → Source →
+    #    "Deploy from branch" → main → Save
+    ```
+    Docs will be at `https://<you>.github.io/uqEcoli-docs/`.
+    Source code stays private in `uqEcoli`. To update: re-run step 2.
+    Makefile target already added: `make docs` builds the HTML.
+
+- [x] 10. For sampling, we are currently running simulations with ../vEcoli. Let's now add the ability to pass a flag to sample, that has the actual compute come from
+    the SMS-API (../sms-api). Default base URL: http://localhost:8080 (stanford-test namespace via port-forward).
+    > Implemented in `uq/remote.py` and `uq/cli.py`:
+    > - `SmsApiClient` — httpx wrapper for SMS-API REST endpoints with ALB 502/504 retry logic
+    > - `uq sample --api-url http://localhost:8080 --simulator-id 11` — remote execution mode
+    >   Steps 1-2 (PCRV.sampleGerm) remain local; Step 3 submits to SMS-API; Step 4 downloads
+    >   cd1 analysis TSVs instead of collecting raw Parquet
+    > - `uq fetch <sim_id>` — download + parse cd1 outputs from a completed simulation
+    > - cd1 module → UQ observable mapping:
+    >   cd1_transcriptomics → transcriptome (4345 genes)
+    >   cd1_proteomics → proteome (4309 monomers)
+    >   cd1_fluxomics → fluxome (2820 reactions)
+    >   cd1_metabolomics → exchange_fluxes (165 compounds)
+    >   cd1_higher_order_properties → higher_order (5 properties)
+    > - Verified: `uq fetch 48` against stanford-test → 11,644 observables
+    > - 14 tests in `tests/test_remote_client.py`, all passing
