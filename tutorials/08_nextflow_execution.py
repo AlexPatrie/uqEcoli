@@ -520,7 +520,7 @@ def _(mo):
     | `LOAD_DATA` | Steps 1-2 | DuckDB + OutputExtractor → timeseries parquet |
     | `AGGREGATE` | Steps 3-4 | 3 aggregation strategies + variance decomposition |
     | `PHASE1_GSA` | Steps 5a-7a | Morris → PCE → Sobol (population-level) |
-    | `PHASE2_CELL_CYCLE` | Steps 5b-7b | GSA obs → Koopman → Strategy4 → per-stage Sobol |
+    | `PHASE2_CELL_CYCLE` | Steps 5b-7b | GSA obs → growth-stratified → Strategy4 → per-stage Sobol |
     | `ASSEMBLE_RESULTS` | — | Merge everything into `pipeline_result.json` |
 
     **Phase 1 and Phase 2 run in parallel** — they both depend only on

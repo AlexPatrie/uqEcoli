@@ -26,12 +26,8 @@ wrappers
 sensitivity
     Global sensitivity analysis using PCE surrogate methods, with Morris
     screening for efficient parameter importance ranking in high dimensions
-cell_cycle
-    Cell cycle stratification for Phase 2 analysis, including Koopman eigenfunction-
-    based cell cycle variable (recommended approach per RFC006 Section 1.3)
-koopman
-    Koopman spectral analysis via DMD for dynamic sensitivity and cell cycle mode
-    identification. Provides the foundation for the Koopman cell cycle variable.
+    (cell_cycle, koopman, viz modules removed from public release —
+    see private/spectral-music-apollo branch)
 
 Usage
 -----
@@ -112,38 +108,12 @@ from libuq.aggregation import (
 
 # Cell cycle stratification (Phase 2)
 # The Koopman-based cell cycle variable uses spectral analysis to identify
-# the cell cycle mode and extract its eigenfunction phase as the cycle coordinate.
-# GSAInformedCellCycleVariable implements the RFC006 requirement that the cell
-# cycle variable choice be "informed by the sensitivity analyses (1-3)".
-from libuq.cell_cycle import (
-    CellAngleCellCycleVariable,
-    CellCycleAggregator,
-    CellCycleResult,
-    CellCycleVariableComputer,
-    CompositeCellCycleVariable,
-    DNAReplicationCellCycleVariable,
-    GSAInformedCellCycleVariable,
-    KoopmanCellCycleVariable,
-    MassBasedCellCycleVariable,
-    calculate_cell_cycle,
-    register_cell_cycle_variable,
-)
+# Cell cycle and Koopman modules removed from public release.
+# Available on the private/spectral-music-apollo branch.
 from libuq.inputs import (
     XSpaceVecoli,
     get_available_columns,
     load_dataset,
-)
-
-# Koopman spectral analysis
-from libuq.koopman import (
-    CellCycleKoopmanAnalyzer,
-    DynamicModeDecomposition,
-    ExtendedDMD,
-    KoopmanDictionary,
-    KoopmanMode,
-    KoopmanSensitivityAnalyzer,
-    KoopmanSpectrum,
-    extract_koopman_features,
 )
 
 # Output variable extraction
@@ -224,29 +194,6 @@ __all__ = [
     "identify_cell_cycle_relevant_observables",
     "run_gsa_informed_cell_cycle_analysis",
     "run_sensitivity_analysis",
-    # Cell cycle (GSAInformedCellCycleVariable is the RFC006-compliant approach)
-    "calculate_cell_cycle",
-    "CellAngleCellCycleVariable",
-    "CellCycleAggregator",
-    "CellCyclePhase",
-    "CellCycleResult",
-    "CellCycleVariable",
-    "CellCycleVariableComputer",
-    "CompositeCellCycleVariable",
-    "DNAReplicationCellCycleVariable",
-    "GSAInformedCellCycleVariable",
-    "KoopmanCellCycleVariable",
-    "MassBasedCellCycleVariable",
-    "register_cell_cycle_variable",
-    # Koopman spectral analysis
-    "CellCycleKoopmanAnalyzer",
-    "DynamicModeDecomposition",
-    "ExtendedDMD",
-    "KoopmanDictionary",
-    "KoopmanMode",
-    "KoopmanSensitivityAnalyzer",
-    "KoopmanSpectrum",
-    "extract_koopman_features",
     # Pipeline utilities
     "PCEFitResult",
     "PCESurrogateConfig",

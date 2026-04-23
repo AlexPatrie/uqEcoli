@@ -543,8 +543,8 @@ def _(mo):
 
     ## Next Steps
 
-    Continue to **Tutorial 4** to learn about cell cycle stratification
-    and Koopman spectral analysis for understanding system dynamics.
+    Continue to **Tutorial 7** for the full RFC006 workflow with all four
+    aggregation strategies.
     """)
     return
 

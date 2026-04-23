@@ -12,7 +12,7 @@ RFC006 Activities:
     5. Apply to representative simulations      → this tutorial
 
   Phase 2 (CD2 / Milestone 10):
-    6. Cell cycle stratification strategy       → uq.cell_cycle
+    6. Cell cycle stratification strategy       → uq.growth
     7. Cell cycle variable + per-stage GSA      → uq.pipeline.workflow
 
   RFC006 §4 parametrized steps:
@@ -54,7 +54,7 @@ def _(mo):
     │                                                    ┌──────────────────┼──────────┐    │
     │                                                    │                  │          │    │
     │  Phase 1 (bulk):                                   │  Phase 2 (cell cycle):      │    │
-    │  Morris → PCE → Sobol                              │  GSA obs → Koopman θ →      │    │
+    │  Morris → PCE → Sobol                              │  GSA obs → growth θ →       │    │
     │  "Which params drive bulk variance?"               │  Strategy4 → per-stage Sobol │    │
     │                                                    │  "Which params drive         │    │
     │                                                    │   within-stage variance?"    │    │
@@ -338,7 +338,7 @@ def _(mo):
 
     **Satisfied by:** `uq.pipeline.workflow.run_phase2()` which chains:
     - **5b.** `identify_cell_cycle_relevant_observables()` — GSA-informed obs selection
-    - **6b.** `KoopmanCellCycleVariable` — DMD → θ(x) = arg(φ)/2π ∈ [0,1]
+    - **6b.** Growth-stratified cell cycle variable: θ = normalized log(dry_mass)
     - **6d.** `Strategy4Wrapper` — params → sim → θ-binning → per-stage means
     - **7b.** `compute_strategy4_sobol()` — per-stage PCE + Sobol indices
     """)
@@ -511,48 +511,6 @@ def _(PipelineResult, per_stage_sobol, pipeline_result):
 
 
 # =============================================================================
-# KOOPMAN SPECTRAL ANALYSIS (Bonus)
-# =============================================================================
-@app.cell
-def _(mo):
-    mo.md("""
-    ## Bonus: Koopman Spectral Analysis
-
-    The `uq.koopman` module provides DMD-based spectral decomposition for
-    identifying cell cycle harmonics and dynamical modes.
-    """)
-    return
-
-
-@app.cell
-def _(observable_columns, pl, sim_data):
-    from libuq import CellCycleKoopmanAnalyzer, DynamicModeDecomposition
-
-    _trajectory = (
-        sim_data.filter((pl.col("experiment_id") == 0) & (pl.col("lineage_seed") == 0))
-        .sort("time")
-        .select(observable_columns)
-        .to_numpy()
-    )
-
-    _dmd = DynamicModeDecomposition(rank=5)
-    _dmd.fit(_trajectory)
-    _spectrum = _dmd.get_spectrum(observable_names=["mass", "growth_rate"])
-
-    print("=== Koopman Spectral Analysis ===")
-    print(f"Trajectory shape: {_trajectory.shape}")
-    print(f"Extracted {len(_spectrum.modes)} modes:")
-    for _i, _mode in enumerate(_spectrum.get_dominant_modes(3)):
-        print(
-            f"  Mode {_i + 1}: freq={_mode.frequency:.6f} Hz, "
-            f"|amp|={abs(_mode.amplitude):.4f}, "
-            f"{'oscillatory' if _mode.is_oscillatory else 'non-oscillatory'}"
-        )
-
-    return CellCycleKoopmanAnalyzer, DynamicModeDecomposition
-
-
-# =============================================================================
 # REACTIVE PARAMETER EXPLORATION
 # =============================================================================
 @app.cell
@@ -631,7 +589,7 @@ def _(mo):
     | 3 | Implement wrapper functions | §4 Act. 3 | COMPLETE | `SimulationWrapper`, `PrecomputedWrapper` |
     | 4 | PCE-based sensitivity (strategies 1-3) | §4 Act. 4 | COMPLETE | `SensitivityAnalyzer.analyze_with_pce()` |
     | 5 | Apply to representative simulations | §4 Act. 5 | DEMONSTRATED | This tutorial + `examples/uq_pipeline.py` |
-    | 6 | Cell cycle stratification | §4 Act. 6 | COMPLETE | `KoopmanCellCycleVariable`, `GSAInformedCellCycleVariable` |
+    | 6 | Cell cycle stratification | §4 Act. 6 | COMPLETE | Growth-stratified θ = normalized log(dry_mass) |
     | 7 | Cell cycle variable + per-stage GSA | §4 Act. 7 | COMPLETE | `Strategy4Wrapper`, `compute_strategy4_sobol()` |
 
     **RFC006 §4 parametrized steps:**
@@ -648,8 +606,8 @@ def _(mo):
     |----------|-------------|
     | `execute_pipeline()` | Full orchestrator: steps 3-7 → `PipelineResult` |
     | `run_phase1()` | Phase 1: bulk PCE + Sobol |
-    | `run_phase2()` | Phase 2: GSA obs → Koopman → Strategy4 → per-stage Sobol |
-    | `Strategy4Wrapper` | Step 6d: params → Koopman θ → per-stage means |
+    | `run_phase2()` | Phase 2: GSA obs → growth-stratified → Strategy4 → per-stage Sobol |
+    | `Strategy4Wrapper` | Step 6d: params → growth θ → per-stage means |
     | `compute_strategy4_sobol()` | Step 7b: per-stage PCE + Sobol |
     | `aggregate_timeseries()` | Step 3: strategies 1-3 on Polars DataFrame |
     | `PipelineResult.export()` | Serialize surrogates + Sobol + metadata |
