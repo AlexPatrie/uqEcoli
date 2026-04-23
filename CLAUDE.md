@@ -33,9 +33,9 @@ UQ framework for tracking prediction confidence in vEcoli whole-cell simulations
 | `synthetic.py` | `generate_synthetic_simulation_data()`, `generate_signal()` — for test/demo only |
 | `pce/surrogate.py` | PCE math: fit coefficients, multi-indices, basis matrices, LHS sampling, generate_surrogate() |
 | `pce/models.py` | PCE-specific models (PCESolverConfig, PCESurrogateConfig, PCEParameterSelectionConfig, etc.) |
-| `cell_cycle.py` | Phase 2: cell cycle variable implementations (mass, DNA replication, cell angle, Koopman, GSA-informed). `KoopmanCellCycleVariable.spectrum` property exposes `KoopmanSpectrum` after `compute()` |
-| `koopman.py` | Koopman spectral analysis via PyDMD backend; `DynamicModeDecomposition` and `ExtendedDMD` delegate to `pydmd.DMD` while exposing `KoopmanSpectrum`/`KoopmanMode` API |
-| `viz.py` | Plotly visualization: `plot_koopman_spectrum()` — 4-panel figure (eigenvalues, frequency spectrum, mode shapes / Chladni patterns, power spectrum) |
+| ~~`cell_cycle.py`~~ | *Removed from public — see `private/spectral-music-apollo` branch* |
+| ~~`koopman.py`~~ | *Removed from public — see `private/spectral-music-apollo` branch* |
+| ~~`viz.py`~~ | *Removed from public — see `private/spectral-music-apollo` branch* |
 | `pipe.py` | `Pipeline` dataclass (full orchestration), `execute_pipeline()`, `initialize_data()` → `DatasetMultiExperiment` |
 | `handlers.py` | CLI handler functions: `generate_samples()`, `export_configs()`, `collect_results()`, `pipeline()` |
 | `cli.py` | Typer CLI app: `quantify`, `generate-samples`, `export-configs`, `collect-results`, `configure-pipeline`, `demo`, `readme` |
@@ -218,7 +218,7 @@ The full pipeline produces a `PipelineResult` with two `UqProfile` instances plu
 | `03_sensitivity_analysis.py` | PCE and Sobol indices |
 | `03b_reactive_sensitivity.py` | Reactive parameter exploration (vEcoli-specific) |
 | `03c_reactive_sensitivity_generalized.py` | Generalized reactive exploration |
-| `04_cell_cycle_and_koopman.py` | Koopman spectral analysis |
+| ~~`04_cell_cycle_and_koopman.py`~~ | *Removed from public* |
 | `07_full_workflow.py` | Complete Morris → PCE → reactive exploration |
 | `08_nextflow_execution.py` | Nextflow HPC execution |
 | `09_batch_pipeline.py` | Batch pipeline patterns |
@@ -258,8 +258,6 @@ export_dir/
 ├── cell_cycle_sobol_stage_N/     # Per-stage Sobol indices (.npy)
 ├── variance_decomposition.json
 ├── morris_indices/
-├── koopman_spectrum.pdf          # 4-panel eigenmode visualization
-├── koopman_spectrum.html         # Interactive Plotly version
 └── metadata.json
 ```
 
