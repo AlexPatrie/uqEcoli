@@ -137,12 +137,12 @@ uv run uq tui         # Textual terminal dashboard with live progress
 uv run uq gui         # marimo browser notebook
 uv run uq dashboard   # tkinter DAW-style result explorer
 uv run uq fetch 48    # inspect SMS-API simulation outputs
+uv run uq help        # list all commands
+uv run uq help sample # show help for any command
 ```
 
-A verified end-to-end run (10 variants, 6 params, `mass` preset) is
-documented in [`TUTORIAL.md`](TUTORIAL.md#verified-end-to-end-run) with
-cached artifacts in `uq_cache_e2e/` and exported results in
-`uq_results_e2e/`.
+Trailing `help` works everywhere — `uq sample help`, `uq quantify help`,
+`uq fetch help` all show the same output as `--help`.
 
 Full per-flag documentation lives in [`docs/cli_reference.rst`](docs/cli_reference.rst).
 
