@@ -1,0 +1,7 @@
+{
+  "basis_type": "legendre",
+  "polynomial_order": 2,
+  "input_dim": 6,
+  "output_dim": 5,
+  "r_squared": 0.0
+}

@@ -1,6 +1,11 @@
 .idea/
 todo.md
 sim_data/
+uq_cache_*/
+uq_results_e2e_verify/
+debug_sim*/
+patches/
+*.cPickle
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
