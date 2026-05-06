@@ -1179,6 +1179,24 @@ def export_figures(
     console.print(f"\n[bold green]{len(generated)} figures exported.[/bold green]")
 
 
+@app.command(name="report")
+def report(
+    results_path: str = typer.Option("./uq_results", help="Path to uq export directory"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output HTML path (default: <results>/report.html)"),
+) -> None:
+    """Generate a self-contained HTML report from UQ results.
+
+    \b
+    Reads uq_results.json and manifest.json from the export directory
+    and produces a single HTML file with inline SVG charts, parameter
+    rankings, spectrogram, and provenance metadata.
+    """
+    from uq.report import generate_html_report
+
+    path = generate_html_report(results_path, output)
+    console.print(f"[bold green]Report written to:[/bold green] {path}")
+
+
 @app.command(name="suggest-experiment")
 def suggest_experiment(
     results_path: str = typer.Option("./uq_results", help="Path to uq export directory"),
