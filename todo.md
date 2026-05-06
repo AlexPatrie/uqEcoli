@@ -129,8 +129,20 @@
     > - Verified: `uq fetch 48` against stanford-test → 11,644 observables
     > - 14 tests in `tests/test_remote_client.py`, all passing
 
-- [ ] 11. Stakeholders specifically want a human-readable/sleek/modern/clear/conscice yet informative html report of what exists as the main output artifact (a la /Users/alexanderpatrie/sms/uqEcoli/uq_results_e2e_verify/uq_results.json). Please make this.
+- [x] 11. Stakeholders specifically want a human-readable/sleek/modern/clear/conscice yet informative html report of what exists as the main output artifact (a la /Users/alexanderpatrie/sms/uqEcoli/uq_results_e2e_verify/uq_results.json). Please make this.
+    > Implemented `uq/report.py` + `uq report` CLI command. Self-contained HTML (zero deps):
+    > - All 4 RFC006 strategies visualized with SVG bar charts, heatmaps, ranking tables
+    > - Cross-strategy comparison with automatic insight callouts
+    > - Interactive PCE Explorer: client-side Legendre evaluation, multi-select observable
+    >   toggle pills, real-time cell-cycle profile chart from embedded surrogate coefficients
+    > - Experimental Design section: parameter specs table with SimData dot-paths,
+    >   perturbation bounds, and biological role descriptions
+    > - Simulation Design summary, Provenance (git SHAs, packages, CLI command)
+    > - `sobol_first_order` now exported for all strategies (was S1 only)
+    > - `parameter_specs` embedded in manifest.json for biological context
 
 - [ ] 12. Let's find unused content in this repo and together work to do some housekeeping in the following way: for each item found, 1. you tell me the filepath 2. you summarize its content and try to decipher and explain why it exists in the first place 3. i say either "keep" (do nothing: we want to keep this content) or "toss" (delete this content: we want to remove it.).NOTE: DO NOT INCLUDE output artifacts from any cli (`uq` cli) commands/calls. 
 
-- [ ] 13. Create Release for version `v0.0.1`.Ensure that ALL documentation/human-readable references are up to date
+- [ ] 13. PR number 7 AND ALL FUTURE WORK/PRS MUST BE ON THE vivarium-collective origin (github.com/vivarium-collective/uqEcoli). It would be nice if any work done to this remote (vivarium-collective) can automatically be streamed/added to the AlexPatrie remote (github.com/AlexPatrie/uqEcoli). I hope this doesnt screw anything up.
+
+- [ ] 14. Create Release for version `v0.0.1` in github.com/vivarium-collective/uqEcoli AND github.com/AlexPatrie/uqEcoli.Ensure that ALL documentation/human-readable references are up to date

@@ -75,3 +75,7 @@ docs: ## Build Sphinx HTML docs
 .PHONY: biocompose
 biocompose:
 	@uv run marimo edit ./examples/biocompose.py
+
+.PHONY: commit
+commit:
+	@./commits.sh
