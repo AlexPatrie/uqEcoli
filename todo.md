@@ -128,3 +128,9 @@
     >   cd1_higher_order_properties → higher_order (5 properties)
     > - Verified: `uq fetch 48` against stanford-test → 11,644 observables
     > - 14 tests in `tests/test_remote_client.py`, all passing
+
+- [ ] 11. Stakeholders specifically want a human-readable/sleek/modern/clear/conscice yet informative html report of what exists as the main output artifact (a la /Users/alexanderpatrie/sms/uqEcoli/uq_results_e2e_verify/uq_results.json). Please make this.
+
+- [ ] 12. Let's find unused content in this repo and together work to do some housekeeping in the following way: for each item found, 1. you tell me the filepath 2. you summarize its content and try to decipher and explain why it exists in the first place 3. i say either "keep" (do nothing: we want to keep this content) or "toss" (delete this content: we want to remove it.).NOTE: DO NOT INCLUDE output artifacts from any cli (`uq` cli) commands/calls. 
+
+- [ ] 13. Create Release for version `v0.0.1`.Ensure that ALL documentation/human-readable references are up to date
