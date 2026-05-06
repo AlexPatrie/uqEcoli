@@ -1400,7 +1400,28 @@ def _write_manifest(
         "n_outputs": int(cache.Y.shape[1]),
         "n_parameters": int(cache.X.shape[1]),
         "parameter_names": cache.parameter_names,
+        "observable_names": cache.metadata.get("observable_columns", []),
     }
+
+    # Embed full parameter specs (attr_path, bounds, description) if available
+    try:
+        from libuq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS
+        param_lookup = {p.name: p for p in DEFAULT_SIM_DATA_PARAMETERS}
+        specs = []
+        for name in cache.parameter_names:
+            p = param_lookup.get(name)
+            if p:
+                specs.append({
+                    "name": p.name,
+                    "attr_path": p.attr_path,
+                    "bounds": list(p.bounds),
+                    "description": p.description or "",
+                })
+            else:
+                specs.append({"name": name, "attr_path": "", "bounds": [], "description": ""})
+        manifest["parameter_specs"] = specs
+    except Exception:
+        pass
 
     # Record multi-parca info if present in workflow config
     config_path = cache.cache_dir / "_batch" / "workflow_config.json"
