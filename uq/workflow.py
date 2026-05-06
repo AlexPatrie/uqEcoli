@@ -1291,6 +1291,7 @@ class QuantifyResult:
                     {
                         "generation": gen,
                         "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                        "sobol_first_order": {n: round(float(r.sobol.first_order[i]), 6) for i, n in enumerate(names)},
                     }
                     for gen, r in sorted(self.strategy2.items())
                 ],
@@ -1301,6 +1302,7 @@ class QuantifyResult:
                     {
                         "lineage_seed": seed,
                         "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                        "sobol_first_order": {n: round(float(r.sobol.first_order[i]), 6) for i, n in enumerate(names)},
                     }
                     for seed, r in sorted(self.strategy3.items())
                 ],
@@ -1315,6 +1317,7 @@ class QuantifyResult:
                             round((j + 1) / n_bins, 3) if n_bins > 0 else 1,
                         ],
                         "sobol_total_order": {n: round(float(r.sobol.total_order[i]), 6) for i, n in enumerate(names)},
+                        "sobol_first_order": {n: round(float(r.sobol.first_order[i]), 6) for i, n in enumerate(names)},
                     }
                     for j, r in enumerate(self.strategy4_per_stage)
                 ],
