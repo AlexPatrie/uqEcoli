@@ -659,6 +659,13 @@ def quantify(
             _print_report(cond_result)
         _print_multi_condition_report(mc_result)
         console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+        # Generate HTML report for each condition
+        from uq.report import generate_html_report
+        for cond_id in mc_result.per_condition:
+            cond_dir = Path(export_path) / cond_id
+            if (cond_dir / "uq_results.json").exists():
+                rpt = generate_html_report(cond_dir)
+                console.print(f"  [green]Report:[/green] {rpt}")
         return
 
     result = wf_quantify(
@@ -674,6 +681,11 @@ def quantify(
     _print_report(result)
     _print_narrative(result)
     console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+
+    # Generate HTML report
+    from uq.report import generate_html_report
+    rpt = generate_html_report(export_path)
+    console.print(f"  [green]Report:[/green] {rpt}")
 
 
 # ── Report rendering ─────────────────────────────────────────────────
