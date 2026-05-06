@@ -1109,6 +1109,20 @@ def generate_html_report(
     cross_bar = _svg_cross_strategy_bars(params, cross_strategies)
     cross_insight = _cross_strategy_insight(params, s1_total, s2_avg, s3_avg)
 
+    # Build per-strategy Sobol JSON for the side-by-side comparison JS
+    _compare_data: dict[str, dict[str, float]] = {"S1 Population": s1_total}
+    if s2_avg:
+        _compare_data["S2 By Generation"] = s2_avg
+    if s3_avg:
+        _compare_data["S3 By Lineage"] = s3_avg
+    # S4: average across stages
+    if s4_stages:
+        s4_avg: dict[str, float] = {}
+        for p in params:
+            s4_avg[p] = sum(s["sobol_total_order"].get(p, 0) for s in s4_stages) / len(s4_stages)
+        _compare_data["S4 Growth-Stratified"] = s4_avg
+    compare_json = json.dumps({"strategies": _compare_data, "params": params})
+
     # ── Strategy 2/3 section builders ──
 
     def _s2_section() -> str:
@@ -1341,6 +1355,50 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
   border: 1px solid rgba(99,102,241,0.3);
 }}
 
+/* Side-by-side comparison */
+.compare-toggles {{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}}
+.compare-toggle {{
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  color: var(--text-dim);
+}}
+.compare-toggle:hover {{ border-color: var(--accent); }}
+.compare-toggle.active {{
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(99,102,241,0.15);
+}}
+.compare-grid {{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}}
+.compare-card {{
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  overflow-x: auto;
+}}
+.compare-card h3 {{
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text);
+}}
+
 /* Accordion (strategy cards) */
 details.accordion {{
   background: var(--surface);
@@ -1520,6 +1578,16 @@ details.accordion > .accordion-body {{
 
 <div class="strategy-divider">Sensitivity by Aggregation Strategy</div>
 
+<!-- Side-by-side comparison -->
+<div class="section">
+  <h2>Compare Strategies</h2>
+  <p class="section-desc">
+    Select two or more strategies to view their S_Ti bar charts side by side.
+  </p>
+  <div class="compare-toggles" id="compare-toggles"></div>
+  <div class="compare-grid" id="compare-grid"></div>
+</div>
+
 <!-- Strategy 1: Population -->
 <details class="accordion" open>
   <summary>Population <span class="badge">Strategy 1</span></summary>
@@ -1616,6 +1684,96 @@ details.accordion > .accordion-body {{
     json.dumps(obs),
     n_stages,
 )}
+<script>
+(function() {{
+  const CMP = {compare_json};
+  const strats = CMP.strategies;
+  const pNames = CMP.params;
+  const sKeys = Object.keys(strats);
+  const COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#8b5cf6'];
+  const selected = new Set(sKeys.slice(0, 2));
+
+  function shortName(s) {{
+    return s.replace('fraction_active_','').replace('cell_dry_mass_fraction','dry_mass_frac');
+  }}
+
+  function drawBar(container, label, data, color) {{
+    const W = 320, H = 220;
+    const ml = 50, mr = 10, mt = 8, mb = 70;
+    const pw = W - ml - mr, ph = H - mt - mb;
+    const n = pNames.length;
+    const vals = pNames.map(p => data[p] || 0);
+    let mx = Math.max(...vals, 0.01);
+    mx = Math.ceil(mx * 10) / 10;
+    const bw = pw / n * 0.7;
+    const gap = pw / n * 0.15;
+
+    let s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:'+W+'px;height:auto;">';
+    for (let i = 0; i <= 4; i++) {{
+      const yv = mx * i / 4;
+      const yp = mt + ph - (i / 4) * ph;
+      s += '<line x1="'+ml+'" y1="'+yp.toFixed(1)+'" x2="'+(W-mr)+'" y2="'+yp.toFixed(1)+'" stroke="#333355" stroke-width="1"/>';
+      s += '<text x="'+(ml-6)+'" y="'+(yp+4).toFixed(1)+'" text-anchor="end" font-size="10" fill="#94a3b8">'+yv.toFixed(2)+'</text>';
+    }}
+    for (let i = 0; i < n; i++) {{
+      const h = (vals[i] / mx) * ph;
+      const x = ml + i * (pw / n) + gap;
+      const y = mt + ph - h;
+      s += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+color+'" rx="2">';
+      s += '<title>'+pNames[i]+'\\nS_Ti = '+vals[i].toFixed(4)+'</title></rect>';
+      const xc = ml + i * (pw / n) + (pw / n) / 2;
+      s += '<text x="'+xc.toFixed(1)+'" y="'+(mt+ph+14)+'" text-anchor="end" font-size="10" fill="#e2e8f0" transform="rotate(-40 '+xc.toFixed(1)+' '+(mt+ph+14)+')">'+shortName(pNames[i])+'</text>';
+    }}
+    s += '</svg>';
+
+    const card = document.createElement('div');
+    card.className = 'compare-card';
+    card.innerHTML = '<h3>'+label+'</h3>' + s;
+    container.appendChild(card);
+  }}
+
+  function render() {{
+    const grid = document.getElementById('compare-grid');
+    grid.innerHTML = '';
+    const sel = Array.from(selected);
+    if (sel.length < 2) {{
+      grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">Select at least 2 strategies to compare.</p>';
+      return;
+    }}
+    sel.forEach(function(key, i) {{
+      drawBar(grid, key, strats[key], COLORS[i % COLORS.length]);
+    }});
+  }}
+
+  function init() {{
+    const container = document.getElementById('compare-toggles');
+    if (!container) return;
+    sKeys.forEach(function(key, i) {{
+      const pill = document.createElement('span');
+      pill.className = 'compare-toggle' + (selected.has(key) ? ' active' : '');
+      pill.textContent = key;
+      pill.addEventListener('click', function() {{
+        if (selected.has(key)) {{
+          selected.delete(key);
+          pill.classList.remove('active');
+        }} else {{
+          selected.add(key);
+          pill.classList.add('active');
+        }}
+        render();
+      }});
+      container.appendChild(pill);
+    }});
+    render();
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', init);
+  }} else {{
+    init();
+  }}
+}})();
+</script>
 </body>
 </html>"""
 
