@@ -532,15 +532,6 @@ def _interactive_css() -> str:
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
-.explorer-controls select {
-  background: var(--surface2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
 .explorer-controls button {
   background: var(--accent);
   color: #fff;
@@ -552,6 +543,37 @@ def _interactive_css() -> str:
   font-weight: 500;
 }
 .explorer-controls button:hover { opacity: 0.85; }
+.obs-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.obs-toggle {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.obs-toggle:hover { border-color: var(--accent); }
+.obs-toggle.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.obs-toggle .color-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
 """
 
 
@@ -615,9 +637,16 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
             .replace('instantaneous_growth_rate', 'growth_rate');
   }}
 
+  // Track selected observables as a Set of indices
+  const selected = new Set();
+
+  function getSelected() {{
+    return selected.size > 0 ? Array.from(selected).sort() : Array.from({{length: nObs}}, (_, i) => i);
+  }}
+
   function update() {{
     const {{ xPhys, xNorm }} = getXNorm();
-    const selIdx = parseInt(document.getElementById('pce-obs-select').value);
+    const sel = getSelected();
 
     // Update slider value displays
     for (let i = 0; i < nP; i++) {{
@@ -630,34 +659,31 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
       popPreds.push(legendreEval(xNorm, popC[o]));
     }}
 
-    // Update readout cards
+    // Update readout cards — highlight selected
     for (let o = 0; o < nObs; o++) {{
       const el = document.getElementById('pce-pred-' + o);
       if (el) {{
         el.textContent = popPreds[o].toFixed(4);
-        if (o === selIdx) {{
-          el.parentElement.style.borderColor = 'var(--accent)';
-        }} else {{
-          el.parentElement.style.borderColor = 'var(--border)';
-        }}
+        el.parentElement.style.borderColor = selected.has(o) ? 'var(--accent)' : 'var(--border)';
       }}
     }}
 
     // Growth-stratified profile chart
     if (gsC && N_STAGES > 0) {{
-      drawProfile(xNorm, selIdx);
+      drawProfile(xNorm, sel);
     }}
   }}
 
   const CHART_COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6',
                          '#8b5cf6','#ec4899','#14b8a6','#f97316','#84cc16'];
 
-  function drawProfile(xNorm, selIdx) {{
+  function drawProfile(xNorm, selList) {{
     const svg = document.getElementById('pce-profile-svg');
     if (!svg) return;
     const W = 560, H = 200;
     const ml = 60, mr = 20, mt = 10, mb = 40;
     const pw = W - ml - mr, ph = H - mt - mb;
+    const selSet = new Set(selList);
 
     // Compute all per-stage predictions
     const allPreds = []; // [obs][stage]
@@ -671,19 +697,12 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
       }}
     }}
 
-    // Find Y range across selected obs (or all if aggregate)
+    // Find Y range across selected obs
     let yMin = Infinity, yMax = -Infinity;
-    if (selIdx >= 0) {{
-      for (const v of allPreds[selIdx]) {{
+    for (const o of selList) {{
+      for (const v of allPreds[o]) {{
         if (v < yMin) yMin = v;
         if (v > yMax) yMax = v;
-      }}
-    }} else {{
-      for (let o = 0; o < nObs; o++) {{
-        for (const v of allPreds[o]) {{
-          if (v < yMin) yMin = v;
-          if (v > yMax) yMax = v;
-        }}
       }}
     }}
     if (yMax <= yMin) {{ yMax = yMin + 1; }}
@@ -716,10 +735,12 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
       + '" text-anchor="middle" font-size="11" fill="#94a3b8">'
       + 'Cell Cycle Progress (\\u03b8)</text>');
 
-    // Draw lines
-    const obsToPlot = selIdx >= 0 ? [selIdx] : Array.from({{length: nObs}}, (_, i) => i);
-    for (const o of obsToPlot) {{
+    // Draw lines — selected observables bold, rest dimmed
+    for (let o = 0; o < nObs; o++) {{
       if (allPreds[o].length === 0) continue;
+      const isSel = selSet.has(o);
+      // Skip unselected entirely when specific selection exists
+      if (selected.size > 0 && !isSel) continue;
       const pts = [];
       for (let s = 0; s < allPreds[o].length; s++) {{
         const x = ml + (s + 0.5) * pw / N_STAGES;
@@ -727,26 +748,24 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
         pts.push(x.toFixed(1) + ',' + y.toFixed(1));
       }}
       const col = CHART_COLORS[o % CHART_COLORS.length];
-      const sw = (selIdx < 0 || o === selIdx) ? 2.5 : 1.2;
-      const op = (selIdx < 0 || o === selIdx) ? 1.0 : 0.35;
       parts.push('<polyline points="' + pts.join(' ')
-        + '" fill="none" stroke="' + col + '" stroke-width="' + sw
-        + '" opacity="' + op + '" stroke-linejoin="round"/>');
+        + '" fill="none" stroke="' + col + '" stroke-width="2.5"'
+        + ' stroke-linejoin="round"/>');
       // Dots
       for (let s = 0; s < allPreds[o].length; s++) {{
         const x = ml + (s + 0.5) * pw / N_STAGES;
         const y = mt + ph - ((allPreds[o][s] - yMin) / (yMax - yMin)) * ph;
         parts.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1)
-          + '" r="3" fill="' + col + '" opacity="' + op + '"/>');
+          + '" r="3" fill="' + col + '"/>');
       }}
     }}
 
-    // Legend
+    // Legend (only selected)
     let lx = ml + 4, ly = mt + 4;
-    for (const o of obsToPlot) {{
+    for (const o of selList) {{
       const col = CHART_COLORS[o % CHART_COLORS.length];
       const name = shortName(OBS[o]);
-      if (name.length > 20) continue; // skip very long names in legend
+      if (name.length > 25) continue;
       parts.push('<rect x="' + lx + '" y="' + ly + '" width="10" height="10" fill="' + col + '" rx="2"/>');
       parts.push('<text x="' + (lx+14) + '" y="' + (ly+9) + '" font-size="10" fill="#e2e8f0">' + name + '</text>');
       ly += 14;
@@ -754,6 +773,18 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
     }}
 
     svg.innerHTML = parts.join('');
+  }}
+
+  function syncToggleStyles() {{
+    const pills = document.querySelectorAll('.obs-toggle');
+    pills.forEach(function(pill) {{
+      const idx = parseInt(pill.dataset.idx);
+      if (selected.has(idx)) {{
+        pill.classList.add('active');
+      }} else {{
+        pill.classList.remove('active');
+      }}
+    }});
   }}
 
   // Build slider panel
@@ -775,18 +806,28 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
       document.getElementById('pce-slider-' + i).addEventListener('input', update);
     }}
 
-    // Build observable selector
-    const sel = document.getElementById('pce-obs-select');
-    const allOpt = document.createElement('option');
-    allOpt.value = '-1'; allOpt.textContent = '(all observables)';
-    sel.appendChild(allOpt);
+    // Build observable toggle pills
+    const toggles = document.getElementById('pce-obs-toggles');
     for (let o = 0; o < nObs; o++) {{
-      const opt = document.createElement('option');
-      opt.value = o; opt.textContent = shortName(OBS[o]);
-      sel.appendChild(opt);
+      const pill = document.createElement('span');
+      pill.className = 'obs-toggle active';
+      pill.dataset.idx = o;
+      const col = CHART_COLORS[o % CHART_COLORS.length];
+      pill.innerHTML = '<span class="color-dot" style="background:' + col + '"></span>'
+        + shortName(OBS[o]);
+      selected.add(o);
+      pill.addEventListener('click', function() {{
+        const idx = parseInt(this.dataset.idx);
+        if (selected.has(idx)) {{
+          selected.delete(idx);
+        }} else {{
+          selected.add(idx);
+        }}
+        syncToggleStyles();
+        update();
+      }});
+      toggles.appendChild(pill);
     }}
-    sel.value = nObs > 0 ? '0' : '-1';
-    sel.addEventListener('change', update);
 
     // Build prediction readout cards
     const readout = document.getElementById('pce-readout');
@@ -795,15 +836,41 @@ def _interactive_js(surr_json: str, param_names_json: str, obs_names_json: str, 
       card.className = 'pred-card';
       card.innerHTML = '<div class="pred-label">' + shortName(OBS[o])
         + '</div><div class="pred-value" id="pce-pred-' + o + '">-</div>';
+      card.style.cursor = 'pointer';
+      card.dataset.idx = o;
+      card.addEventListener('click', function() {{
+        const idx = parseInt(this.dataset.idx);
+        if (selected.has(idx)) {{
+          selected.delete(idx);
+        }} else {{
+          selected.add(idx);
+        }}
+        syncToggleStyles();
+        update();
+      }});
       readout.appendChild(card);
     }}
 
-    // Reset button
+    // Reset sliders button
     document.getElementById('pce-reset').addEventListener('click', function() {{
       for (let i = 0; i < nP; i++) {{
         const lo = bounds[i][0], hi = bounds[i][1];
         document.getElementById('pce-slider-' + i).value = (lo + hi) / 2;
       }}
+      update();
+    }});
+
+    // Select All button
+    document.getElementById('pce-select-all').addEventListener('click', function() {{
+      for (let o = 0; o < nObs; o++) selected.add(o);
+      syncToggleStyles();
+      update();
+    }});
+
+    // Clear selection button
+    document.getElementById('pce-select-none').addEventListener('click', function() {{
+      selected.clear();
+      syncToggleStyles();
       update();
     }});
 
@@ -832,9 +899,11 @@ def _interactive_section_html(has_gs: bool) -> str:
         )
     return f"""
 <div class="explorer-controls">
-  <select id="pce-obs-select"></select>
   <button id="pce-reset">Reset to Midpoint</button>
+  <button id="pce-select-all">Select All</button>
+  <button id="pce-select-none" style="background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);">Clear</button>
 </div>
+<div class="obs-toggles" id="pce-obs-toggles"></div>
 <div class="explorer-grid">
   <div class="slider-panel" id="pce-sliders"></div>
   <div class="pred-panel">
@@ -976,6 +1045,59 @@ def generate_html_report(
     s4_heatmap = _svg_heatmap(params, s4_groups, s4_labels)
     s4_table = _evolution_table(params, s4_groups, s4_labels)
 
+    # ── Experimental design section ──
+    param_specs = manifest.get("parameter_specs", []) if manifest else []
+    surr_meta_path = results_dir / "population_surrogate" / "metadata.json"
+    surr_meta = json.loads(surr_meta_path.read_text()) if surr_meta_path.exists() else {}
+    bounds = surr.get("bounds", []) if surr else []
+    obs_columns = manifest.get("observable_names", obs) if manifest else obs
+
+    def _param_spec_table() -> str:
+        """Parameter specification table with biological context."""
+        if not param_specs and not bounds:
+            return ""
+        rows = []
+        for i, name in enumerate(params):
+            spec = next((s for s in param_specs if s["name"] == name), None)
+            attr_path = spec["attr_path"] if spec and spec.get("attr_path") else ""
+            desc = spec["description"] if spec and spec.get("description") else ""
+            lo = bounds[i][0] if i < len(bounds) else ""
+            hi = bounds[i][1] if i < len(bounds) else ""
+            mid = (lo + hi) / 2 if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) else ""
+            # Format numbers — use scientific for very small values
+            def _fnum(v: float | str) -> str:
+                if isinstance(v, str):
+                    return v
+                if abs(v) < 0.01 and v != 0:
+                    return f"{v:.2e}"
+                return f"{v:.4f}"
+            rows.append((name, attr_path, _fnum(lo), _fnum(hi), _fnum(mid), desc))
+
+        L = ['<table>', '<thead><tr>',
+             '<th>Parameter</th><th>SimData Path</th>',
+             '<th>Min</th><th>Max</th><th>Midpoint</th>',
+             '<th>Biological Role</th>',
+             '</tr></thead>', '<tbody>']
+        for name, attr, lo, hi, mid, desc in rows:
+            L.append(
+                f'<tr><td><code>{html.escape(_short(name))}</code></td>'
+                f'<td><code style="font-size:10px;color:var(--text-dim)">{html.escape(attr)}</code></td>'
+                f'<td style="text-align:right;font-variant-numeric:tabular-nums">{lo}</td>'
+                f'<td style="text-align:right;font-variant-numeric:tabular-nums">{hi}</td>'
+                f'<td style="text-align:right;font-variant-numeric:tabular-nums">{mid}</td>'
+                f'<td style="font-size:12px;color:var(--text-dim);max-width:260px">{html.escape(desc)}</td></tr>'
+            )
+        L.extend(['</tbody>', '</table>'])
+        return '\n'.join(L)
+
+    param_spec_html = _param_spec_table()
+
+    # Simulation design summary
+    poly_order = surr_meta.get("polynomial_order", "")
+    basis_type = surr_meta.get("basis_type", "")
+    n_basis_terms = surr_meta.get("input_dim", "")
+    r_squared = surr_meta.get("r_squared", "")
+
     # Cross-strategy comparison
     cross_strategies: list[tuple[str, dict[str, float], str]] = [
         ("Population", s1_total, _COLORS[0]),
@@ -1074,7 +1196,7 @@ body {{
   color: var(--text);
   line-height: 1.6;
 }}
-.container {{ max-width: 920px; margin: 0 auto; padding: 40px 24px; }}
+.container {{ max-width: 1100px; margin: 0 auto; padding: 40px 24px; }}
 
 /* Header */
 .header {{
@@ -1268,6 +1390,53 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
   </div>
 </div>
 
+<!-- ═══════════════ EXPERIMENTAL DESIGN ═══════════════ -->
+
+<div class="strategy-divider">Experimental Design</div>
+
+<div class="section">
+  <h2>Simulation Design</h2>
+  <p class="section-desc">
+    Each sample corresponds to a full vEcoli whole-cell simulation with perturbed
+    <code>SimulationDataEcoli</code> attributes. Parameters are varied simultaneously
+    via Latin Hypercube Sampling within the bounds below, and the simulation is
+    executed using the <code>sim_data_setattr</code> variant mechanism.
+  </p>
+  <div class="info-grid" style="margin-bottom:16px;">
+    <div class="key">Samples (N)</div><div class="val">{n_samples or '-'}</div>
+    <div class="key">Polynomial Order</div><div class="val">{poly_order or '-'}</div>
+    <div class="key">Basis</div><div class="val">{(basis_type or '-').capitalize()}</div>
+    <div class="key">Generations</div><div class="val">{n_gens}</div>
+    <div class="key">Lineage Seeds</div><div class="val">{n_seeds}</div>
+  </div>
+</div>
+
+{"" if not param_spec_html else '''
+<div class="section">
+  <h2>Parameter Specifications</h2>
+  <p class="section-desc">
+    Each parameter targets a specific attribute in the vEcoli
+    <code>SimulationDataEcoli</code> object. Bounds define the perturbation range
+    used during sampling (&plusmn; around the calibrated baseline value).
+  </p>
+  <div style="overflow-x:auto;">
+    ''' + param_spec_html + '''
+  </div>
+</div>
+'''}
+
+<div class="section">
+  <h2>Tracked Observables</h2>
+  <p class="section-desc">
+    Output variables extracted from each simulation and used to compute
+    sensitivity indices. These correspond to time-averaged quantities
+    from vEcoli's listener outputs.
+  </p>
+  <div class="obs-list">
+    {''.join(f'<span class="obs-pill">{html.escape(_short(o))}</span>' for o in obs)}
+  </div>
+</div>
+
 <!-- ═══════════════ STRATEGIES 1-3 ═══════════════ -->
 
 <div class="strategy-divider">Sensitivity by Aggregation Strategy</div>
@@ -1333,14 +1502,6 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
   ''' + _interactive_section_html(has_gs=bool(surr.get("gs_coeffs"))) + '''
 </div>
 '''}
-
-<!-- Observables -->
-<div class="section">
-  <h2>Tracked Observables</h2>
-  <div class="obs-list">
-    {''.join(f'<span class="obs-pill">{html.escape(_short(o))}</span>' for o in obs)}
-  </div>
-</div>
 
 <!-- Provenance -->
 <div class="section">
