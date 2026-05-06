@@ -2,6 +2,6 @@
   "basis_type": "legendre",
   "polynomial_order": 2,
   "input_dim": 6,
-  "output_dim": 25,
+  "output_dim": 50,
   "r_squared": 0.0
 }
