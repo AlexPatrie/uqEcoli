@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-05-06T16:50:22.608476+00:00",
+  "hostname": "LT-0919656",
+  "python_version": "3.12.12 (main, Feb 12 2026, 00:42:34) [Clang 21.1.4 ]",
+  "package_versions": {
+    "pytuq": "1.0.0",
+    "numpy": "2.4.3",
+    "polars": "1.39.3",
+    "scipy": "1.17.1"
+  },
+  "git_sha": {
+    "uqEcoli": "2cb836fbdc82525504ad252de7fd7d1d216daef0",
+    "vEcoli": "67e3b1c3b05dee6caa7dcc7849359662aed507b1"
+  },
+  "cli_command": [
+    "/Users/alexanderpatrie/sms/uqEcoli/.venv/bin/uq",
+    "quantify",
+    "/Users/alexanderpatrie/sms/uqEcoli/sim_data/baseline/kb/simData.cPickle",
+    "--cache-dir",
+    "./uq_cache_e2e",
+    "--export-path",
+    "./uq_results_fresh"
+  ],
+  "data_hashes": {
+    "X.npy": "14e04fb6a5034ae5c421340b43dc81c8b3a30aada8ec1248145a83d03379ec34",
+    "Y.npy": "fb92b17a160d8c1678a6fbcfa5bc26eb447ccd7a11c9a618c2a2057160d1c5dd"
+  },
+  "cache_path": "uq_cache_e2e",
+  "n_samples": 10,
+  "n_outputs": 5,
+  "n_parameters": 6,
+  "parameter_names": [
+    "fraction_active_rnap_free",
+    "fraction_active_rnap_bound",
+    "basal_elongation_rate",
+    "kinetic_objective_weight",
+    "secretion_penalty_coeff",
+    "cell_dry_mass_fraction"
+  ],
+  "observable_names": [
+    "listeners__mass__dry_mass",
+    "listeners__mass__cell_mass",
+    "listeners__mass__volume",
+    "listeners__mass__growth",
+    "listeners__mass__instantaneous_growth_rate"
+  ],
+  "parameter_specs": [
+    {
+      "name": "fraction_active_rnap_free",
+      "attr_path": "process.transcription.fraction_active_rnap_free",
+      "bounds": [
+        0.25,
+        0.47
+      ],
+      "description": "Fraction of RNAP actively transcribing when ppGpp-free. Controls rRNA/mRNA/tRNA synthesis rates. Experimentally tunable via ppGpp circuit mutations (relA/spoT). Baseline ~0.36."
+    },
+    {
+      "name": "fraction_active_rnap_bound",
+      "attr_path": "process.transcription.fraction_active_rnap_bound",
+      "bounds": [
+        0.12,
+        0.22
+      ],
+      "description": "Fraction of RNAP actively transcribing when ppGpp-bound. ppGpp destabilizes open complex formation, reducing this fraction. Tunable via relA/spoT knockouts. Baseline ~0.17."
+    },
+    {
+      "name": "basal_elongation_rate",
+      "attr_path": "process.translation.basal_elongation_rate",
+      "bounds": [
+        15.0,
+        28.0
+      ],
+      "description": "Ribosome elongation rate for non-ribosomal proteins (aa/s). Experimentally tunable via sub-inhibitory chloramphenicol, fusidic acid, or growth temperature. Baseline ~22 aa/s."
+    },
+    {
+      "name": "kinetic_objective_weight",
+      "attr_path": "process.metabolism.kinetic_objective_weight",
+      "bounds": [
+        5e-08,
+        5e-07
+      ],
+      "description": "Weight on kinetic vs homeostatic objective in FBA. Controls balance between matching enzyme kinetics and maintaining metabolite homeostasis. Baseline 1e-7 (linear solver)."
+    },
+    {
+      "name": "secretion_penalty_coeff",
+      "attr_path": "process.metabolism.secretion_penalty_coeff",
+      "bounds": [
+        0.0005,
+        0.005
+      ],
+      "description": "Penalty on metabolite secretion fluxes in FBA. Higher values force the cell to retain metabolites. Controls acetate overflow metabolism, experimentally tunable via media composition. Baseline 0.001."
+    },
+    {
+      "name": "cell_dry_mass_fraction",
+      "attr_path": "mass.cell_dry_mass_fraction",
+      "bounds": [
+        0.25,
+        0.35
+      ],
+      "description": "Fraction of total cell mass that is dry mass. Determines relationship between cell volume and biosynthetic capacity. Constrained by buoyant density measurements. Baseline ~0.30."
+    }
+  ]
+}
