@@ -82,6 +82,7 @@ Documentation contents
    :maxdepth: 2
    :caption: Topics
 
+   architecture
    aggregation_strategies
    sensitivity_analysis
    cell_cycle
