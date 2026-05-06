@@ -12,13 +12,19 @@ Top-level
    uv run uq [OPTIONS] COMMAND [ARGS]...
 
    Commands:
-     help       Show help for a specific subcommand, or the main CLI.
-     sample     UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli (local or remote).
-     quantify   UQPC Steps 4-5: fit PCE surrogates, compute Sobol (all 4 strategies).
-     fetch      Download cd1 analysis outputs from a completed SMS-API simulation.
-     dashboard  Launch the uq interactive dashboard.
-     tui        Launch the UQPC interactive terminal UI (Textual).
-     gui        Launch the UQPC interactive GUI (marimo).
+     help              Show help for a specific subcommand, or the main CLI.
+     sample            UQPC Steps 1-3: sample via PCRV.sampleGerm(), run vEcoli (local or remote).
+     quantify          UQPC Steps 4-5: fit PCE surrogates, compute Sobol (all 4 strategies).
+     report            Generate a self-contained HTML report from UQ results.
+     fetch             Download cd1 analysis outputs from a completed SMS-API simulation.
+     show-config       Preview the vEcoli workflow config JSON without running.
+     compare           Side-by-side Sobol comparison across multiple UQ experiments.
+     export-figures    Publication-ready PDFs and LaTeX from results.
+     suggest-experiment  Identify max-uncertainty parameter region.
+     dashboard         Launch the uq interactive dashboard.
+     tui               Launch the UQPC interactive terminal UI (Textual).
+     gui               Launch the UQPC interactive GUI (marimo).
+     init              Guided project setup wizard.
 
 ``uq help``
 -----------
@@ -251,16 +257,102 @@ Options:
 Report
 ^^^^^^
 
-The Rich report now includes (from top to bottom):
+``quantify`` produces two reports:
 
-1. **Surrogate quality panel** — per-output training relative error and,
-   if the cache contains ``X_test``/``Y_test``, test relative error.
-2. **Strategy 1** — population-averaged Sobol indices (bulk).
-3. **Strategy 2** — per-generation Sobol (requires ``--generations >= 2``
-   at sample time).
-4. **Strategy 3** — per-lineage-seed Sobol (requires ``--n-init-sims >= 2``).
-5. **Strategy 4** — growth-stratified Sobol across ``n-bins`` cell-cycle
-   stages.
+1. **Rich terminal report** (printed to console):
+
+   * Surrogate quality panel — per-output training relative error and,
+     if the cache contains ``X_test``/``Y_test``, test relative error.
+   * Strategy 1 — population-averaged Sobol indices (bulk).
+   * Strategy 2 — per-generation Sobol (requires ``--generations >= 2``).
+   * Strategy 3 — per-lineage-seed Sobol (requires ``--n-init-sims >= 2``).
+   * Strategy 4 — growth-stratified Sobol across ``n-bins`` stages.
+
+2. **HTML report** (``report.html`` in the export directory):
+   automatically generated via ``uq report`` — a self-contained HTML
+   file with interactive SVG charts and a PCE surrogate explorer.
+   See ``uq report`` for details.
+
+``uq report``
+-------------
+
+Generate a self-contained HTML report from UQ export artifacts.
+Automatically run after ``uq quantify``, but can also be invoked
+standalone to regenerate a report from existing results.
+
+The report is a **single HTML file** with no external dependencies —
+inline SVG charts, CSS, and JavaScript.  It includes:
+
+* All 4 RFC006 strategies (population, by-generation, by-lineage,
+  growth-stratified) with bar charts, heatmaps, and ranking tables
+* Cross-strategy comparison with automatic insight callouts
+* Interactive PCE Explorer — drag parameter sliders to evaluate the
+  fitted surrogate in real time (client-side Legendre evaluation)
+* Experimental design section with parameter specs, SimData dot-paths,
+  and biological role descriptions
+* Provenance metadata (git SHAs, package versions, CLI command)
+
+.. code-block:: text
+
+   uv run uq report [OPTIONS]
+
+Options:
+
+``--results-path PATH``
+    Path to the UQ export directory (must contain ``uq_results.json``).
+    Default ``./uq_results``.
+
+``--output PATH``
+    Output HTML file path.  Default ``<results-path>/report.html``.
+
+``uq compare``
+--------------
+
+Side-by-side Sobol comparison across multiple UQ export directories.
+
+.. code-block:: text
+
+   uv run uq compare DIR1 DIR2 [DIR3 ...]
+
+``uq export-figures``
+---------------------
+
+Generate publication-ready PDFs and a LaTeX Sobol table from UQ results.
+Requires ``kaleido`` (``uv pip install kaleido``).
+
+.. code-block:: text
+
+   uv run uq export-figures [OPTIONS]
+
+Options:
+
+``--results-path PATH``
+    Path to the UQ export directory.  Default ``./uq_results``.
+
+``--output-dir PATH``
+    Output directory for generated files.  Default ``<results>/figures/``.
+
+Outputs: ``sobol_bar_chart.pdf``, ``spectrogram.pdf``,
+``response_curves.pdf``, ``sobol_table.tex``.
+
+``uq suggest-experiment``
+-------------------------
+
+Identify the parameter-space region where prediction uncertainty is
+highest — i.e. where additional experimental measurements would most
+reduce model uncertainty.
+
+.. code-block:: text
+
+   uv run uq suggest-experiment [OPTIONS]
+
+Options:
+
+``--results-path PATH``
+    Path to the UQ export directory.  Default ``./uq_results``.
+
+``--n-grid INTEGER``
+    Grid points for variance scanning.  Default ``1000``.
 
 ``uq show-config``
 ------------------
@@ -317,6 +409,15 @@ Launches ``app/gui.py`` as a marimo application:
 .. code-block:: text
 
    uv run uq gui
+
+``uq init``
+-----------
+
+Guided project setup wizard — interactively configure a UQ experiment.
+
+.. code-block:: text
+
+   uv run uq init
 
 Programmatic API
 ----------------
