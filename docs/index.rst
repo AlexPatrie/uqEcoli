@@ -57,14 +57,15 @@ User-facing entry points
 All four clients expose the same functionality as different shells over
 the workflow in ``uq.workflow``:
 
-============  =====================================  =========================================
-Client        Command                                Best for
-============  =====================================  =========================================
-CLI (Rich)    ``uv run uq sample`` / ``quantify``    Headless runs, scripts, CI
-TUI           ``uv run uq tui``                      Terminal dashboards with live progress
-GUI (marimo)  ``uv run uq gui``                      Reactive browser notebook
-Dashboard     ``uv run uq dashboard``                Draggable DAW-style result exploration
-============  =====================================  =========================================
+==============  =====================================  =========================================
+Client          Command                                Best for
+==============  =====================================  =========================================
+CLI (Rich)      ``uv run uq sample`` / ``quantify``    Headless runs, scripts, CI
+HTML Report     ``uv run uq report``                   Shareable, publication-ready results
+TUI             ``uv run uq tui``                      Terminal dashboards with live progress
+GUI (marimo)    ``uv run uq gui``                      Reactive browser notebook
+Dashboard       ``uv run uq dashboard``                Draggable DAW-style result exploration
+==============  =====================================  =========================================
 
 Documentation contents
 ----------------------

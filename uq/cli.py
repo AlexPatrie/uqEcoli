@@ -659,6 +659,13 @@ def quantify(
             _print_report(cond_result)
         _print_multi_condition_report(mc_result)
         console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+        # Generate HTML report for each condition
+        from uq.report import generate_html_report
+        for cond_id in mc_result.per_condition:
+            cond_dir = Path(export_path) / cond_id
+            if (cond_dir / "uq_results.json").exists():
+                rpt = generate_html_report(cond_dir)
+                console.print(f"  [green]Report:[/green] {rpt}")
         return
 
     result = wf_quantify(
@@ -674,6 +681,11 @@ def quantify(
     _print_report(result)
     _print_narrative(result)
     console.print(f"\n  [bold green]Artifacts exported to:[/bold green] {export_path}")
+
+    # Generate HTML report
+    from uq.report import generate_html_report
+    rpt = generate_html_report(export_path)
+    console.print(f"  [green]Report:[/green] {rpt}")
 
 
 # ── Report rendering ─────────────────────────────────────────────────
@@ -1177,6 +1189,24 @@ def export_figures(
     for p in generated:
         console.print(f"  [green]✓[/green] {p}")
     console.print(f"\n[bold green]{len(generated)} figures exported.[/bold green]")
+
+
+@app.command(name="report")
+def report(
+    results_path: str = typer.Option("./uq_results", help="Path to uq export directory"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output HTML path (default: <results>/report.html)"),
+) -> None:
+    """Generate a self-contained HTML report from UQ results.
+
+    \b
+    Reads uq_results.json and manifest.json from the export directory
+    and produces a single HTML file with inline SVG charts, parameter
+    rankings, spectrogram, and provenance metadata.
+    """
+    from uq.report import generate_html_report
+
+    path = generate_html_report(results_path, output)
+    console.print(f"[bold green]Report written to:[/bold green] {path}")
 
 
 @app.command(name="suggest-experiment")

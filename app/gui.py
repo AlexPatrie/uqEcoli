@@ -42,7 +42,31 @@ def _():
         ProgressBar as WProgressBar,
     )
 
-    return Path, TangleSlider, go, json, make_subplots, np, subprocess, sys
+    def legendre_eval(x_germ, coeffs, multi_indices):
+        """Evaluate PCE at a single point: sum c_alpha * prod P_{alpha_i}(x_i).
+
+        Args:
+            x_germ: 1-D array in [-1, 1] (germ space)
+            coeffs: 1-D array of PCE coefficients (n_terms,)
+            multi_indices: (n_terms, n_params) array
+        """
+        max_ord = int(multi_indices.max())
+        n_p = len(x_germ)
+        P = np.zeros((max_ord + 1, n_p))
+        P[0, :] = 1.0
+        if max_ord >= 1:
+            P[1, :] = x_germ
+        for n in range(2, max_ord + 1):
+            P[n, :] = ((2 * n - 1) * x_germ * P[n - 1, :] - (n - 1) * P[n - 2, :]) / n
+        result = 0.0
+        for t in range(len(coeffs)):
+            term = coeffs[t]
+            for p in range(n_p):
+                term *= P[multi_indices[t, p], p]
+            result += term
+        return result
+
+    return Path, TangleSlider, go, json, legendre_eval, make_subplots, np, subprocess, sys
 
 
 @app.cell
@@ -347,20 +371,32 @@ def _(Path, export_dir, json, mo, np):
     with open(_json_path) as _f:
         _data = json.load(_f)
 
-    # Load surrogate
+    # Load surrogates
     _pop_surr = _export / "population_surrogate"
     _surr = {"available": False}
     if (_pop_surr / "coefficients.npy").exists():
         _surr = {
             "available": True,
             "coeffs": np.load(_pop_surr / "coefficients.npy"),
+            "coeffs_per_output": np.load(_pop_surr / "coefficients_per_output.npy"),
             "mi": np.load(_pop_surr / "multi_indices.npy"),
             "bounds": np.load(_pop_surr / "input_bounds.npy"),
         }
 
+    _cc_surr = _export / "growth_stratified_surrogate"
+    _gs = {"available": False}
+    if (_cc_surr / "coefficients_per_output.npy").exists():
+        _gs = {
+            "available": True,
+            "coeffs_per_output": np.load(_cc_surr / "coefficients_per_output.npy"),
+            "mi": np.load(_cc_surr / "multi_indices.npy"),
+            "bounds": np.load(_cc_surr / "input_bounds.npy"),
+        }
+
     data = _data
     surr = _surr
-    return data, surr
+    gs_surr = _gs
+    return data, gs_surr, surr
 
 
 @app.cell
@@ -489,7 +525,7 @@ def _(TangleSlider, data, mo, surr):
 
 
 @app.cell
-def _(data, go, make_subplots, mo, np, param_sliders, surr):
+def _(data, go, legendre_eval, make_subplots, mo, np, param_sliders, surr):
     if not surr.get("available"):
         mo.stop(True)
 
@@ -521,17 +557,8 @@ def _(data, go, make_subplots, mo, np, param_sliders, surr):
         for _sv in _sweep_vals:
             _x_eval = _x_current.copy()
             _x_eval[_idx] = _sv
-            # Scale to germ space [-1, 1]
             _x_germ = 2.0 * (_x_eval - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-30) - 1.0
-            # Evaluate polynomial: sum(coeff * prod(x^mi))
-            _y = 0.0
-            for _k in range(len(_coeffs)):
-                _term = _coeffs[_k]
-                for _d in range(len(_params)):
-                    if _mi[_k, _d] > 0:
-                        _term *= _x_germ[_d] ** _mi[_k, _d]
-                _y += _term
-            _y_sweep.append(_y)
+            _y_sweep.append(legendre_eval(_x_germ, _coeffs, _mi))
 
         _figs.add_trace(
             go.Scatter(
@@ -563,6 +590,151 @@ def _(data, go, make_subplots, mo, np, param_sliders, surr):
         height=600,
     )
     _figs
+    return
+
+
+@app.cell
+def _(data, go, gs_surr, legendre_eval, mo, np, param_sliders, surr):
+    """Observable Waveform — per-stage Y(θ) prediction from growth-stratified surrogate."""
+    if data is None:
+        mo.stop(True)
+
+    _s4 = data.get("phase2_growth_stratified", {})
+    _stages = _s4.get("stages", [])
+    if not _stages:
+        mo.stop(True, mo.md("*No growth-stratified data for waveform*"))
+
+    _obs_names = data.get("observable_names", [])
+    _params = list(data["parameters"].keys())
+    _n_stages = len(_stages)
+    _n_obs = len(_obs_names)
+
+    if not _obs_names or not surr.get("available"):
+        mo.stop(True, mo.md("*Surrogate or observable names not available*"))
+
+    _bounds = surr["bounds"]
+    _x_current = np.array([param_sliders[p].value for p in _params])
+    _x_germ = 2.0 * (_x_current - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-30) - 1.0
+
+    # Midpoint for baseline comparison
+    _x_mid = (_bounds[:, 0] + _bounds[:, 1]) / 2.0
+    _x_mid_germ = 2.0 * (_x_mid - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-30) - 1.0
+
+    # --- Evaluate per-stage, per-observable predictions ---
+    # Growth-stratified surrogate: coefficients_per_output is (n_stages*n_obs, n_terms)
+    # Ordering: [stage0_obs0, stage0_obs1, ..., stage0_obsN, stage1_obs0, ...]
+    _modulated = np.zeros((_n_obs, _n_stages))
+    _baseline = np.zeros((_n_obs, _n_stages))
+
+    if gs_surr.get("available"):
+        _gs_cpo = gs_surr["coeffs_per_output"]
+        _gs_mi = gs_surr["mi"]
+        for _si in range(_n_stages):
+            for _oi in range(_n_obs):
+                _out_idx = _si * _n_obs + _oi
+                if _out_idx < _gs_cpo.shape[0]:
+                    _modulated[_oi, _si] = legendre_eval(_x_germ, _gs_cpo[_out_idx], _gs_mi)
+                    _baseline[_oi, _si] = legendre_eval(_x_mid_germ, _gs_cpo[_out_idx], _gs_mi)
+    else:
+        # Fallback: approximate using population PCE + per-stage Sobol weighting
+        _pop_coeffs_po = surr["coeffs_per_output"]
+        _pop_mi = surr["mi"]
+        for _oi in range(_n_obs):
+            _y_base = legendre_eval(_x_mid_germ, _pop_coeffs_po[_oi], _pop_mi)
+            _y_mod = legendre_eval(_x_germ, _pop_coeffs_po[_oi], _pop_mi)
+            _delta = _y_mod - _y_base
+
+            # Local sensitivity per param (finite diff)
+            _local_sens = {}
+            for _pi, _pname in enumerate(_params):
+                _lo, _hi = float(_bounds[_pi, 0]), float(_bounds[_pi, 1])
+                _eps = (_hi - _lo) * 0.005
+                _xp = _x_current.copy()
+                _xp[_pi] = min(_x_current[_pi] + _eps, _hi)
+                _xm = _x_current.copy()
+                _xm[_pi] = max(_x_current[_pi] - _eps, _lo)
+                _yp = legendre_eval(
+                    2.0 * (_xp - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-30) - 1.0,
+                    _pop_coeffs_po[_oi], _pop_mi,
+                )
+                _ym = legendre_eval(
+                    2.0 * (_xm - _bounds[:, 0]) / (_bounds[:, 1] - _bounds[:, 0] + 1e-30) - 1.0,
+                    _pop_coeffs_po[_oi], _pop_mi,
+                )
+                _local_sens[_pname] = abs(_yp - _ym) / (2 * _eps + 1e-12)
+
+            for _si in range(_n_stages):
+                _stage_sobol = _stages[_si].get("sobol_total_order", {})
+                _contrib = 0.0
+                for _pi, _pname in enumerate(_params):
+                    _dev = _x_germ[_pi]
+                    _s_ti = _stage_sobol.get(_pname, 0)
+                    _contrib += _local_sens[_pname] * _dev * _s_ti
+                _baseline[_oi, _si] = _y_base
+                _modulated[_oi, _si] = _y_base + _contrib
+
+    # --- Build waveform plot ---
+    _theta_labels = [
+        f"{_stages[j].get('theta_range', [0, 0])[0]:.0%}–{_stages[j].get('theta_range', [0, 0])[1]:.0%}"
+        for j in range(_n_stages)
+    ]
+    _theta_mids = [
+        (_stages[j].get("theta_range", [0, 0])[0] + _stages[j].get("theta_range", [0, 0])[1]) / 2
+        for j in range(_n_stages)
+    ]
+
+    _colors = ["#33ff99", "#ffaa00", "#00f0ff", "#ff3366", "#aa66ff"]
+
+    _fig = go.Figure()
+    for _oi in range(_n_obs):
+        _short = _obs_names[_oi].split("__")[-1] if "__" in _obs_names[_oi] else _obs_names[_oi]
+        _color = _colors[_oi % len(_colors)]
+
+        # Baseline (dashed)
+        _fig.add_trace(go.Scatter(
+            x=_theta_mids, y=_baseline[_oi].tolist(),
+            mode="lines",
+            line=dict(color=_color, width=1, dash="dash"),
+            name=f"{_short} (baseline)",
+            legendgroup=_short,
+            showlegend=True,
+            opacity=0.5,
+        ))
+
+        # Modulated (solid + markers)
+        _fig.add_trace(go.Scatter(
+            x=_theta_mids, y=_modulated[_oi].tolist(),
+            mode="lines+markers",
+            line=dict(color=_color, width=3),
+            marker=dict(size=7),
+            name=_short,
+            legendgroup=_short,
+            showlegend=True,
+        ))
+
+        # Fill between baseline and modulated
+        _fig.add_trace(go.Scatter(
+            x=_theta_mids + _theta_mids[::-1],
+            y=_modulated[_oi].tolist() + _baseline[_oi, ::-1].tolist(),
+            fill="toself",
+            fillcolor=_color,
+            opacity=0.08,
+            line=dict(width=0),
+            showlegend=False,
+            legendgroup=_short,
+            hoverinfo="skip",
+        ))
+
+    _fig.update_layout(
+        title="Observable Waveform — Y(θ) per stage (baseline vs current)",
+        xaxis_title="Growth progress θ (0 = birth, 1 = division)",
+        yaxis_title="Predicted value (physical units)",
+        template="plotly_dark",
+        height=500,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        hovermode="x unified",
+    )
+    _fig
     return
 
 
