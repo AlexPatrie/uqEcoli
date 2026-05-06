@@ -1131,6 +1131,32 @@ class UQDawApp:
         if path:
             self._load_file(path)
 
+    @staticmethod
+    def _normalize_json(data):
+        """Normalize uq_results.json keys to the format expected by the DAW.
+
+        Handles the schema produced by UQPCResult.export():
+          - parameters (dict) → parameter_names (list)
+          - phase2_growth_stratified.stages → phase2_cell_cycle_sobol_per_stage
+          - sobol_total_order → total_order (per-stage entries)
+          - growth_stratified_surrogate → cell_cycle_surrogate (dir name handled separately)
+        """
+        # parameter_names
+        if "parameter_names" not in data and "parameters" in data:
+            data["parameter_names"] = list(data["parameters"].keys())
+
+        # phase2_cell_cycle_sobol_per_stage
+        if "phase2_cell_cycle_sobol_per_stage" not in data:
+            s4 = data.get("phase2_growth_stratified", {})
+            stages = s4.get("stages", [])
+            # Rename sobol_total_order → total_order for each stage entry
+            for s in stages:
+                if "sobol_total_order" in s and "total_order" not in s:
+                    s["total_order"] = s["sobol_total_order"]
+            data["phase2_cell_cycle_sobol_per_stage"] = stages
+
+        return data
+
     def _load_file(self, path):
         path = Path(path)
         if not path.exists():
@@ -1138,7 +1164,7 @@ class UQDawApp:
             return
 
         with open(path) as f:
-            self.data = json.load(f)
+            self.data = self._normalize_json(json.load(f))
 
         # Load surrogates from sibling directory
         export_dir = path.parent
@@ -1157,7 +1183,10 @@ class UQDawApp:
 
     def _load_surrogates(self, export_dir):
         pop_dir = export_dir / "population_surrogate"
-        cc_dir = export_dir / "cell_cycle_surrogate"
+        # Support both old ("cell_cycle_surrogate") and current ("growth_stratified_surrogate") names
+        cc_dir = export_dir / "growth_stratified_surrogate"
+        if not cc_dir.exists():
+            cc_dir = export_dir / "cell_cycle_surrogate"
 
         if not pop_dir.exists() or not cc_dir.exists():
             return None
@@ -1171,6 +1200,11 @@ class UQDawApp:
             }
             bounds_path = pop_dir / "input_bounds.npy"
             result["bounds"] = np.load(bounds_path) if bounds_path.exists() else None
+            # Per-output coefficients for direct stage × observable evaluation
+            cc_cpo_path = cc_dir / "coefficients_per_output.npy"
+            result["cc_coeffs_per_output"] = np.load(cc_cpo_path) if cc_cpo_path.exists() else None
+            pop_cpo_path = pop_dir / "coefficients_per_output.npy"
+            result["pop_coeffs_per_output"] = np.load(pop_cpo_path) if pop_cpo_path.exists() else None
             return result
         except Exception:
             return None
@@ -1419,37 +1453,31 @@ class UQDawApp:
             stages, params, selected, param_positions=param_positions, stage_predictions=stage_predictions
         )
 
-        # Observable-domain heatmap: per-stage values in physical units
-        profile = self.data.get("cell_cycle_profile")
-        if profile and stage_data and local_sensitivity and param_effects:
-            n_stages_p = len(profile.get("stages", []))
-            # Collect observable names and baselines from profile
-            obs_names = []
-            baselines_list = []
-            for key in profile:
-                if key == "stages":
-                    continue
-                obs_names.append(key)
-                vals = profile[key]
-                baselines_list.append(np.array(vals[:n_stages_p], dtype=float))
+        # Observable waveform: per-stage, per-observable predictions from
+        # the growth-stratified surrogate's per-output coefficients.
+        # coefficients_per_output is (n_stages * n_obs, n_terms) in stage-major order:
+        #   [stage0_obs0, stage0_obs1, ..., stage0_obsN, stage1_obs0, ...]
+        obs_names = self.data.get("observable_names", [])
+        cc_cpo = self.surr_data.get("cc_coeffs_per_output") if self.surr_data else None
+        cc_mi = self.surr_data.get("cc_mi") if self.surr_data else None
 
-            if obs_names and baselines_list:
-                baselines = np.array(baselines_list)  # (n_obs, n_stages)
-                # Modulate baselines by slider-driven parameter effects
-                # Y_obs_k(x) = baseline_obs_k * (1 + sum_i [sens_i * dev_i * S_Ti^(k)])
-                modulated = baselines.copy()
-                for si in range(min(n_stages_p, len(stage_data))):
-                    modulation = 0.0
-                    for pname in params:
-                        s_ti = stage_data[si]["total_order"].get(pname, 0)
-                        modulation += param_effects.get(pname, 0) * s_ti
-                    # Scale modulation relative to baseline magnitude
-                    for oi in range(len(obs_names)):
-                        base_mag = abs(baselines[oi, si]) + 1e-12
-                        modulated[oi, si] = baselines[oi, si] * (1 + modulation / base_mag)
+        if cc_cpo is not None and cc_mi is not None and obs_names and stage_data:
+            n_stages_p = len(stage_data)
+            n_obs = len(obs_names)
+            x_mid = (bounds[:, 0] + bounds[:, 1]) / 2.0
+            x_mid_norm = normalize_to_germ(x_mid, bounds)
 
-                self.obs_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
-                self.waveform_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
+            modulated = np.zeros((n_obs, n_stages_p))
+            baselines = np.zeros((n_obs, n_stages_p))
+            for si in range(n_stages_p):
+                for oi in range(n_obs):
+                    out_idx = si * n_obs + oi
+                    if out_idx < cc_cpo.shape[0]:
+                        modulated[oi, si] = legendre_eval(x_norm, cc_cpo[out_idx], cc_mi)
+                        baselines[oi, si] = legendre_eval(x_mid_norm, cc_cpo[out_idx], cc_mi)
+
+            self.obs_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
+            self.waveform_canvas.set_data(obs_names, n_stages_p, modulated, baselines=baselines)
 
 
 # -- Entry point --------------------------------------------------------------
