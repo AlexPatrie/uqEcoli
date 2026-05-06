@@ -1123,20 +1123,23 @@ def generate_html_report(
                     'Only 1 generation available. Run with more generations to observe '
                     'how parameter importance evolves across cell divisions.</p>')
             return (
-                f'<div class="section">'
-                f'<h2>By Generation <span class="badge">Strategy 2</span></h2>'
+                f'<details class="accordion">'
+                f'<summary>By Generation <span class="badge">Strategy 2</span></summary>'
+                f'<div class="accordion-body">'
                 f'<p class="section-desc">{desc}</p>'
                 f'<div class="chart-container">{s2_single_bar}</div>'
                 f'{s2_single_rank}'
-                f'{note}</div>'
+                f'{note}</div></details>'
             )
         return (
-            f'<div class="section">'
-            f'<h2>By Generation <span class="badge">Strategy 2</span></h2>'
+            f'<details class="accordion">'
+            f'<summary>By Generation <span class="badge">Strategy 2</span></summary>'
+            f'<div class="accordion-body">'
             f'<p class="section-desc">{desc} '
             f'Does the dominant parameter change as cells age through divisions?</p>'
             f'<div class="chart-container">{s2_heatmap}</div>'
-            f'<div style="overflow-x:auto;margin-top:16px;">{s2_table}</div></div>'
+            f'<div style="overflow-x:auto;margin-top:16px;">{s2_table}</div>'
+            f'</div></details>'
         )
 
     def _s3_section() -> str:
@@ -1151,21 +1154,24 @@ def generate_html_report(
                     'Only 1 lineage seed available. Run with more seeds to assess '
                     'whether sensitivity depends on stochastic lineage history.</p>')
             return (
-                f'<div class="section">'
-                f'<h2>By Lineage <span class="badge">Strategy 3</span></h2>'
+                f'<details class="accordion">'
+                f'<summary>By Lineage <span class="badge">Strategy 3</span></summary>'
+                f'<div class="accordion-body">'
                 f'<p class="section-desc">{desc}</p>'
                 f'<div class="chart-container">{s3_single_bar}</div>'
                 f'{s3_single_rank}'
-                f'{note}</div>'
+                f'{note}</div></details>'
             )
         return (
-            f'<div class="section">'
-            f'<h2>By Lineage <span class="badge">Strategy 3</span></h2>'
+            f'<details class="accordion">'
+            f'<summary>By Lineage <span class="badge">Strategy 3</span></summary>'
+            f'<div class="accordion-body">'
             f'<p class="section-desc">{desc} '
             f'Is the sensitivity landscape consistent across independent lineages, '
             f'or do some lineages have unique dominant drivers?</p>'
             f'<div class="chart-container">{s3_heatmap}</div>'
-            f'<div style="overflow-x:auto;margin-top:16px;">{s3_table}</div></div>'
+            f'<div style="overflow-x:auto;margin-top:16px;">{s3_table}</div>'
+            f'</div></details>'
         )
 
     # ── Assemble HTML ──
@@ -1335,6 +1341,43 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
   border: 1px solid rgba(99,102,241,0.3);
 }}
 
+/* Accordion (strategy cards) */
+details.accordion {{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}}
+details.accordion > summary {{
+  padding: 20px 28px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  user-select: none;
+}}
+details.accordion > summary::-webkit-details-marker {{ display: none; }}
+details.accordion > summary::before {{
+  content: "\\25B6";
+  font-size: 12px;
+  color: var(--accent-light);
+  transition: transform 0.2s ease;
+  display: inline-block;
+}}
+details.accordion[open] > summary::before {{
+  transform: rotate(90deg);
+}}
+details.accordion > summary:hover {{
+  background: var(--surface2);
+}}
+details.accordion > .accordion-body {{
+  padding: 0 28px 28px;
+}}
+
 /* Divider */
 .strategy-divider {{
   text-align: center; color: var(--text-dim);
@@ -1478,15 +1521,17 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
 <div class="strategy-divider">Sensitivity by Aggregation Strategy</div>
 
 <!-- Strategy 1: Population -->
-<div class="section">
-  <h2>Population <span class="badge">Strategy 1</span></h2>
-  <p class="section-desc">
-    All cells pooled uniformly across every seed and generation.
-    Which parameters drive the most variance across the entire population?
-  </p>
-  <div class="chart-container">{s1_bar}</div>
-  {s1_rank}
-</div>
+<details class="accordion" open>
+  <summary>Population <span class="badge">Strategy 1</span></summary>
+  <div class="accordion-body">
+    <p class="section-desc">
+      All cells pooled uniformly across every seed and generation.
+      Which parameters drive the most variance across the entire population?
+    </p>
+    <div class="chart-container">{s1_bar}</div>
+    {s1_rank}
+  </div>
+</details>
 
 <!-- Strategy 2: By Generation -->
 {_s2_section()}
@@ -1513,16 +1558,18 @@ svg text {{ font-family: 'Inter', -apple-system, sans-serif; }}
 
 <div class="strategy-divider">Cell Cycle Resolution</div>
 
-<div class="section">
-  <h2>Growth-Stratified Sensitivity <span class="badge">Strategy 4</span></h2>
-  <p class="section-desc">
-    Total Sobol index (S_Ti) across {n_stages} cell cycle stages
-    (&theta; = growth progress from birth to division).
-    How does parameter importance evolve within a single cell cycle?
-  </p>
-  <div class="chart-container">{s4_heatmap}</div>
-  <div style="overflow-x:auto;margin-top:16px;">{s4_table}</div>
-</div>
+<details class="accordion">
+  <summary>Growth-Stratified Sensitivity <span class="badge">Strategy 4</span></summary>
+  <div class="accordion-body">
+    <p class="section-desc">
+      Total Sobol index (S_Ti) across {n_stages} cell cycle stages
+      (&theta; = growth progress from birth to division).
+      How does parameter importance evolve within a single cell cycle?
+    </p>
+    <div class="chart-container">{s4_heatmap}</div>
+    <div style="overflow-x:auto;margin-top:16px;">{s4_table}</div>
+  </div>
+</details>
 
 {"" if not surr else '''
 <div class="strategy-divider">Interactive PCE Explorer</div>
