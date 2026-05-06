@@ -90,7 +90,7 @@ For each parameter `p_i`, the dashboard sweeps `p_i` across its full range while
 
 ### Cost
 
-The polynomial evaluation is pure arithmetic — no simulation, no I/O. Each slider change triggers ~180 multiply-add operations (60 sweep points x 3 parameters). This is the design intent of the PCE surrogate approach: pay the simulation cost once during `uq generate-samples`, then explore the fitted response surface interactively.
+The polynomial evaluation is pure arithmetic — no simulation, no I/O. Each slider change triggers ~180 multiply-add operations (60 sweep points x 3 parameters). This is the design intent of the PCE surrogate approach: pay the simulation cost once during `uq sample`, then explore the fitted response surface interactively.
 
 ### Per-stage prediction curve
 
@@ -201,23 +201,20 @@ Writes artifacts to `examples/uq_artifacts/test_export_output/`. The dashboard d
 ### From real simulations
 
 ```bash
-# Stage 1: generate and cache LHS samples (compute-intensive)
-uv run uq generate-samples \
-    api_simulation_default mecillinam test_violacein_with_metabolism \
-    --sim-base-path /path/to/sims \
+# Stage 1: sample + run vEcoli (compute-intensive)
+uv run uq sample /path/to/simData.cPickle \
     --cache-dir ./uq_cache \
-    --n-samples 200 --live --max-workers 4
+    --n-samples 50
 
-# Stage 2: fit PCE and export (fast)
-uv run uq quantify \
-    api_simulation_default mecillinam test_violacein_with_metabolism \
-    --outdir-root /path/to/sims \
-    --precomputed-path ./uq_cache \
-    --export-path ./uq_output
+# Stage 2: fit PCE + export (fast, auto-generates report.html)
+uv run uq quantify /path/to/simData.cPickle \
+    --cache-dir ./uq_cache \
+    --export-path ./uq_results
 
-# View results
-uv run marimo run app/dashboard.py
-# Then paste the path to ./uq_output/uq_results.json in the file loader
+# View results — pick any surface
+uv run uq dashboard --results-path ./uq_results   # tkinter DAW
+uv run uq report --results-path ./uq_results       # standalone HTML report
+open ./uq_results/report.html                       # or just open the auto-generated report
 ```
 
 ### HPC batch workflow
