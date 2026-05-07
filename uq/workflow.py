@@ -74,8 +74,8 @@ class PCAReduction:
     """
 
     n_components: int
-    mean: np.ndarray                     # (n_obs,)
-    components: np.ndarray               # (n_components, n_obs) — loadings
+    mean: np.ndarray  # (n_obs,)
+    components: np.ndarray  # (n_components, n_obs) — loadings
     explained_variance_ratio: np.ndarray  # (n_components,)
     original_names: list[str]
 
@@ -93,8 +93,13 @@ class PCAReduction:
         pca_dir = out / "pca"
         pca_dir.mkdir(parents=True, exist_ok=True)
 
-        np.save(pca_dir / "components.npy", self.components)
+        # Spec-compliant names (B2)
+        np.save(pca_dir / "pca_loadings.npy", self.components)
+        np.save(pca_dir / "pca_explained_variance.npy", self.explained_variance_ratio)
         np.save(pca_dir / "mean.npy", self.mean)
+
+        # Backward-compatible aliases
+        np.save(pca_dir / "components.npy", self.components)
         np.save(pca_dir / "explained_variance_ratio.npy", self.explained_variance_ratio)
 
         # Top loadings per PC as JSON for the report
@@ -102,11 +107,10 @@ class PCAReduction:
         for k in range(self.n_components):
             top_loadings_data[f"PC{k + 1}"] = {
                 "explained_variance_pct": round(float(self.explained_variance_ratio[k]) * 100, 2),
-                "top_loadings": [
-                    {"observable": name, "loading": round(val, 4)}
-                    for name, val in self.top_loadings(k)
-                ],
+                "top_loadings": [{"observable": name, "loading": round(val, 4)} for name, val in self.top_loadings(k)],
             }
+        (pca_dir / "pca_top_loadings.json").write_text(json.dumps(top_loadings_data, indent=2))
+        # Backward-compatible alias
         (pca_dir / "pca_summary.json").write_text(json.dumps(top_loadings_data, indent=2))
         return pca_dir
 
@@ -1598,12 +1602,8 @@ class QuantifyResult:
             self.pca_info.export(out)
             summary["pca"] = {
                 "n_components": self.pca_info.n_components,
-                "explained_variance_pct": [
-                    round(float(v) * 100, 2) for v in self.pca_info.explained_variance_ratio
-                ],
-                "total_explained_pct": round(
-                    float(self.pca_info.explained_variance_ratio.sum()) * 100, 2
-                ),
+                "explained_variance_pct": [round(float(v) * 100, 2) for v in self.pca_info.explained_variance_ratio],
+                "total_explained_pct": round(float(self.pca_info.explained_variance_ratio.sum()) * 100, 2),
             }
             # Re-write summary with PCA info
             (out / "uq_results.json").write_text(json.dumps(summary, indent=2))
@@ -1629,11 +1629,16 @@ def _write_manifest(
 
     def _git_sha(repo_dir: str | Path) -> str:
         try:
-            return _subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(repo_dir),
-                stderr=_subprocess.DEVNULL,
-            ).decode().strip()
+            return (
+                _subprocess
+                .check_output(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=str(repo_dir),
+                    stderr=_subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
         except Exception:
             return "unknown"
 
@@ -1654,6 +1659,7 @@ def _write_manifest(
     vecoli_sha = "unknown"
     try:
         import ecoli  # type: ignore[import-not-found]
+
         vecoli_root = Path(ecoli.__file__).resolve().parent.parent
         vecoli_sha = _git_sha(vecoli_root)
     except ImportError:
@@ -1689,6 +1695,7 @@ def _write_manifest(
     # Embed full parameter specs (attr_path, bounds, description) if available
     try:
         from libuq.pipeline.param_loader import DEFAULT_SIM_DATA_PARAMETERS
+
         param_lookup = {p.name: p for p in DEFAULT_SIM_DATA_PARAMETERS}
         specs = []
         for name in cache.parameter_names:
@@ -1724,9 +1731,7 @@ def _write_manifest(
         except Exception:
             pass
 
-    (export_dir / "manifest.json").write_text(
-        _json.dumps(manifest, indent=2, default=str)
-    )
+    (export_dir / "manifest.json").write_text(_json.dumps(manifest, indent=2, default=str))
 
 
 def _adaptive_sampling_loop(
@@ -1796,7 +1801,9 @@ def _adaptive_sampling_loop(
 
         logger.info(
             "Adaptive sampling: %d samples, mean relerr=%.4f (tol=%.4f)",
-            germ.shape[0], mean_err, tol,
+            germ.shape[0],
+            mean_err,
+            tol,
         )
 
         if mean_err <= tol or n_remaining <= 0:
