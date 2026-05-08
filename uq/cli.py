@@ -1352,6 +1352,23 @@ def gui() -> None:
     )
 
 
+@app.command()
+def tutorial() -> None:
+    """Launch the interactive UQ tutorial (marimo).
+
+    \b
+    10-level interactive tutorial covering the complete uq CLI —
+    parameter space, sampling, PCE, Sobol, 4 strategies, advanced features,
+    and every command. Opens in the browser.
+    """
+    import subprocess as _sp
+
+    _sp.run(
+        ["uv", "run", "marimo", "run", "--no-token", "app/tutorial.py"],  # noqa: S607
+        check=True,
+    )
+
+
 @app.command(name="show-config")
 def show_config(
     sim_data_path: str = typer.Argument(..., help="Path to simData.cPickle"),
